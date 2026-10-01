@@ -1,0 +1,430 @@
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:drift/drift.dart';
+import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+part 'data.g.dart';
+
+String dayKey(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+DateTime calendarDate(String s) => DateTime.parse(s);
+String newId() =>
+    '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+String elapsed(int seconds) =>
+    '${(seconds ~/ 3600).toString().padLeft(2, '0')}:${(seconds ~/ 60 % 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+const currencyDigits = {
+  'PHP': 2,
+  'USD': 2,
+  'EUR': 2,
+  'GBP': 2,
+  'JPY': 0,
+  'KRW': 0,
+  'KWD': 3,
+};
+int parseMoney(String value, String currency) {
+  final digits = currencyDigits[currency] ?? 2;
+  if (!RegExp(r'^\d+(\.\d+)?$').hasMatch(value.trim())) {
+    throw const FormatException('Enter a positive amount.');
+  }
+  final parts = value.trim().split('.');
+  final fraction = parts.length == 2 ? parts[1] : '';
+  if (fraction.length > digits) {
+    throw FormatException('Use at most $digits decimal places.');
+  }
+  final result =
+      BigInt.parse(parts[0]) * BigInt.from(pow(10, digits).toInt()) +
+      BigInt.from(digits == 0 ? 0 : int.parse(fraction.padRight(digits, '0')));
+  if (result > BigInt.from(9000000000000000)) {
+    throw const FormatException('Amount is too large.');
+  }
+  return result.toInt();
+}
+
+String money(int minor, String currency) {
+  final digits = currencyDigits[currency] ?? 2;
+  final scale = pow(10, digits).toInt();
+  final absolute = minor.abs();
+  final symbol =
+      {
+        'PHP': '₱',
+        'USD': '\$',
+        'EUR': '€',
+        'GBP': '£',
+        'JPY': '¥',
+        'KRW': '₩',
+        'KWD': 'KD ',
+      }[currency] ??
+      '$currency ';
+  return '${minor < 0 ? '−' : ''}$symbol${NumberFormat('#,##0').format(absolute ~/ scale)}${digits == 0 ? '' : '.${(absolute % scale).toString().padLeft(digits, '0')}'}';
+}
+
+String editableMoney(int minor, String currency) {
+  final digits = currencyDigits[currency] ?? 2;
+  final scale = pow(10, digits).toInt();
+  return '${minor ~/ scale}${digits == 0 ? '' : '.${(minor.abs() % scale).toString().padLeft(digits, '0')}'}';
+}
+
+class Sessions extends Table {
+  TextColumn get id => text()();
+  TextColumn get day => text()();
+  TextColumn get kind => text().withDefault(const Constant('OJT'))();
+  IntColumn get started => integer()();
+  IntColumn get ended => integer().nullable()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Entries extends Table {
+  TextColumn get id => text()();
+  TextColumn get day => text()();
+  TextColumn get kind => text()();
+  IntColumn get amount => integer()();
+  TextColumn get currency => text().withDefault(const Constant('PHP'))();
+  TextColumn get category => text()();
+  TextColumn get method => text()();
+  TextColumn get note => text().withDefault(const Constant(''))();
+  TextColumn get occurrence => text().nullable().unique()();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Rules extends Table {
+  TextColumn get id => text()();
+  TextColumn get title => text()();
+  TextColumn get kind => text()();
+  IntColumn get amount => integer()();
+  TextColumn get currency => text().withDefault(const Constant('PHP'))();
+  IntColumn get quantity => integer().withDefault(const Constant(1))();
+  TextColumn get basis => text().withDefault(const Constant('fixed'))();
+  TextColumn get cadence => text().withDefault(const Constant('monthly'))();
+  TextColumn get start => text()();
+  TextColumn get finish => text().nullable()();
+  TextColumn get category => text()();
+  TextColumn get method => text()();
+  IntColumn get position => integer().withDefault(const Constant(0))();
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+class Preferences extends Table {
+  TextColumn get key => text()();
+  TextColumn get value => text()();
+  @override
+  Set<Column> get primaryKey => {key};
+}
+
+@DriftDatabase(tables: [Sessions, Entries, Rules, Preferences])
+class AppDatabase extends _$AppDatabase {
+  AppDatabase() : super(driftDatabase(name: 'frekihub'));
+  @override
+  int get schemaVersion => 1;
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) async {
+      await m.createAll();
+      await customStatement(
+        'CREATE UNIQUE INDEX one_running_session ON sessions ((1)) WHERE ended IS NULL',
+      );
+    },
+  );
+  Stream<AppData> watchAll() => customSelect(
+    'SELECT (SELECT count(*) FROM sessions) + (SELECT count(*) FROM entries) + (SELECT count(*) FROM rules) + (SELECT count(*) FROM preferences) AS n',
+    readsFrom: {sessions, entries, rules, preferences},
+  ).watch().asyncMap((_) => readAll());
+  Future<AppData> readAll() async => AppData(
+    await select(sessions).get(),
+    await select(entries).get(),
+    await select(rules).get(),
+    {for (final p in await select(preferences).get()) p.key: p.value},
+  );
+  Future<void> pref(String key, Object value) => into(preferences)
+      .insertOnConflictUpdate(Preference(key: key, value: value.toString()));
+  Future<Session> clockIn(String note) => transaction(() async {
+    final existing =
+        await (select(sessions)..where(
+              (s) => s.ended.isNull() | s.day.equals(dayKey(DateTime.now())),
+            ))
+            .get();
+    if (existing.isNotEmpty) {
+      throw StateError(
+        'A session already exists for today. Open it to edit or resume your records.',
+      );
+    }
+    final s = Session(
+      id: newId(),
+      day: dayKey(DateTime.now()),
+      kind: 'OJT',
+      started: DateTime.now().millisecondsSinceEpoch,
+      ended: null,
+      note: note,
+    );
+    await into(sessions).insert(s);
+    return s;
+  });
+  Future<void> clockOut(String id, {int? at}) =>
+      (update(
+        sessions,
+      )..where((s) => s.id.equals(id) & s.ended.isNull())).write(
+        SessionsCompanion(
+          ended: Value(at ?? DateTime.now().millisecondsSinceEpoch),
+        ),
+      );
+  Future<void> clear() => transaction(() async {
+    await delete(entries).go();
+    await delete(sessions).go();
+    await delete(rules).go();
+    await delete(preferences).go();
+  });
+  Future<String> backup() async {
+    final d = await readAll();
+    return jsonEncode({
+      'format': 'frekihub',
+      'version': 1,
+      'sessions': d.sessions.map((s) => s.toJson()).toList(),
+      'entries': d.entries.map((e) => e.toJson()).toList(),
+      'rules': d.rules.map((r) => r.toJson()).toList(),
+      'preferences': d.prefs,
+    });
+  }
+
+  Future<void> restore(String source) async {
+    final raw = jsonDecode(source);
+    if (raw is! Map<String, dynamic> ||
+        raw['format'] != 'frekihub' ||
+        raw['version'] != 1) {
+      throw const FormatException('This is not a supported FrekiHub backup.');
+    }
+    final ss = (raw['sessions'] as List)
+        .map((e) => Session.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final ee = (raw['entries'] as List)
+        .map((e) => Entry.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final rr = (raw['rules'] as List)
+        .map((e) => Rule.fromJson(e as Map<String, dynamic>))
+        .toList();
+    final pp = Map<String, String>.from(raw['preferences'] as Map);
+    if (pp.containsKey('currency') &&
+            !currencyDigits.containsKey(pp['currency']) ||
+        pp.containsKey('theme') &&
+            !['light', 'dark', 'system'].contains(pp['theme']) ||
+        pp.containsKey('dateFormat') &&
+            ![
+              'EEE, d MMM',
+              'dd/MM/yyyy',
+              'MM/dd/yyyy',
+              'd MMM yyyy',
+              'yyyy-MM-dd',
+              'relative',
+            ].contains(pp['dateFormat'])) {
+      throw const FormatException('Invalid settings in backup.');
+    }
+    for (final key in ['categories', 'methods']) {
+      if (pp.containsKey(key)) {
+        final values = jsonDecode(pp[key]!);
+        if (values is! List ||
+            values.isEmpty ||
+            values.any((v) => v is! String || v.trim().isEmpty)) {
+          throw const FormatException(
+            'Invalid category or payment method list.',
+          );
+        }
+      }
+    }
+    void validateDay(String s) {
+      final d = calendarDate(s);
+      if (dayKey(d) != s) {
+        throw const FormatException('Invalid calendar date in backup.');
+      }
+    }
+
+    for (final s in ss) {
+      validateDay(s.day);
+      if (s.started < 0 || (s.ended != null && s.ended! < s.started)) {
+        throw const FormatException('Invalid session.');
+      }
+    }
+    if (ss.where((s) => s.ended == null).length > 1) {
+      throw const FormatException('Backup contains multiple running sessions.');
+    }
+    for (final e in ee) {
+      validateDay(e.day);
+      if (e.amount < 0 ||
+          e.amount > 9000000000000000 ||
+          !currencyDigits.containsKey(e.currency) ||
+          !['income', 'expense', 'savings'].contains(e.kind)) {
+        throw const FormatException('Invalid transaction.');
+      }
+    }
+    for (final r in rr) {
+      validateDay(r.start);
+      if (r.finish != null) {
+        validateDay(r.finish!);
+      }
+      if (r.amount < 0 ||
+          BigInt.from(r.amount) * BigInt.from(r.quantity) >
+              BigInt.from(9000000000000000) ||
+          (r.basis != 'fixed' && r.amount > 10000) ||
+          r.quantity < 1 ||
+          r.quantity > 100000 ||
+          !currencyDigits.containsKey(r.currency) ||
+          !['income', 'expense', 'savings'].contains(r.kind) ||
+          (r.finish != null && r.finish!.compareTo(r.start) < 0) ||
+          !['once', 'daily', 'weekly', 'monthly'].contains(r.cadence) ||
+          !['fixed', 'income', 'expenses', 'net'].contains(r.basis)) {
+        throw const FormatException('Invalid planner rule.');
+      }
+    }
+    await transaction(() async {
+      await clear();
+      for (final s in ss) {
+        await into(sessions).insert(s);
+      }
+      for (final e in ee) {
+        await into(entries).insert(e);
+      }
+      for (final r in rr) {
+        await into(rules).insert(r);
+      }
+      for (final p in pp.entries) {
+        await pref(p.key, p.value);
+      }
+    });
+  }
+}
+
+class AppData {
+  final List<Session> sessions;
+  final List<Entry> entries;
+  final List<Rule> rules;
+  final Map<String, String> prefs;
+  AppData(this.sessions, this.entries, this.rules, this.prefs);
+  String get currency => prefs['currency'] ?? 'PHP';
+  List<String> get categories => list('categories', [
+    'Food',
+    'Transport',
+    'Home',
+    'Personal',
+    'Work',
+    'Salary',
+    'Savings',
+    'Other',
+  ]);
+  List<String> get methods =>
+      list('methods', ['Cash', 'GCash', 'Maya', 'Bank', 'Card']);
+  List<String> list(String key, List<String> fallback) {
+    try {
+      final values = List<String>.from(jsonDecode(prefs[key]!) as List);
+      return values.isEmpty ? fallback : values;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  Session? get running {
+    for (final s in sessions) {
+      if (s.ended == null) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  int total(String kind, {String? month}) => entries
+      .where(
+        (e) =>
+            e.currency == currency &&
+            e.kind == kind &&
+            (month == null || e.day.startsWith(month)),
+      )
+      .fold(0, (sum, e) => sum + e.amount);
+}
+
+class Projection {
+  final Rule rule;
+  final String day;
+  final int amount;
+  final String status;
+  Projection(this.rule, this.day, this.amount, this.status);
+  String get key => '${rule.id}:$day';
+}
+
+List<Projection> project(AppData data, DateTime from, DateTime until) {
+  final result = <Projection>[];
+  for (final r in data.rules.where((r) => r.currency == data.currency)) {
+    final start = calendarDate(r.start);
+    for (
+      var d = DateTime(from.year, from.month, from.day);
+      !d.isAfter(until);
+      d = DateTime(d.year, d.month, d.day + 1)
+    ) {
+      if (d.isBefore(start) ||
+          (r.finish != null && d.isAfter(calendarDate(r.finish!)))) {
+        continue;
+      }
+      final days = DateTime.utc(
+        d.year,
+        d.month,
+        d.day,
+      ).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
+      final match = switch (r.cadence) {
+        'once' => days == 0,
+        'daily' => true,
+        'weekly' => days % 7 == 0,
+        _ => d.day == min(start.day, DateTime(d.year, d.month + 1, 0).day),
+      };
+      if (!match) {
+        continue;
+      }
+      final month = dayKey(d).substring(0, 7);
+      final income = data.total('income', month: month);
+      final expenses = data.total('expense', month: month);
+      final base = switch (r.basis) {
+        'income' => income,
+        'expenses' => expenses,
+        'net' => max(0, income - expenses),
+        _ => 0,
+      };
+      final amount = r.basis == 'fixed'
+          ? r.amount * r.quantity
+          : ((BigInt.from(base) *
+                            BigInt.from(r.amount) *
+                            BigInt.from(r.quantity) +
+                        BigInt.from(5000)) ~/
+                    BigInt.from(10000))
+                .toInt();
+      final key = '${r.id}:${dayKey(d)}';
+      final recorded = data.entries.any((e) => e.occurrence == key);
+      result.add(
+        Projection(
+          r,
+          dayKey(d),
+          amount,
+          recorded
+              ? 'complete'
+              : ['skipped', 'cancelled'].contains(data.prefs['status:$key'])
+              ? data.prefs['status:$key']!
+              : 'planned',
+        ),
+      );
+    }
+  }
+  result.sort((a, b) {
+    final date = a.day.compareTo(b.day);
+    return date == 0 ? a.rule.position.compareTo(b.rule.position) : date;
+  });
+  return result;
+}
+
+final databaseProvider = Provider<AppDatabase>((ref) {
+  final db = AppDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
+final dataProvider = StreamProvider<AppData>(
+  (ref) => ref.watch(databaseProvider).watchAll(),
+);
