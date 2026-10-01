@@ -8,353 +8,259 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
-  int year = DateTime.now().year;
-  final filters = {'sessions', 'expense', 'income'};
-  String? pulse;
-  int pulseVersion = 0;
-  @override
-  void didUpdateWidget(CalendarScreen old) {
-    super.didUpdateWidget(old);
-    final newIds = widget.data.entries
-        .where((e) => !old.data.entries.any((p) => p.id == e.id))
-        .toList();
-    if (newIds.isNotEmpty) {
-      pulse = newIds.last.day;
-      pulseVersion++;
-    }
-    final newSessions = widget.data.sessions
-        .where((e) => !old.data.sessions.any((p) => p.id == e.id))
-        .toList();
-    if (newSessions.isNotEmpty) {
-      pulse = newSessions.last.day;
-      pulseVersion++;
-    }
-  }
+  DateTime selected = DateUtils.dateOnly(DateTime.now());
+  int mode = 1;
+  bool collapsed = false;
+  bool labels = false;
+  static const blue = Color(0xff4788ff);
 
-  void openDay(String day) =>
-      panel(context, DayPanel(day: day, initialData: widget.data));
-  void monthSummary(int month) {
-    final controller = PageController(initialPage: month - 1);
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Close month summary',
-      barrierColor: Colors.black.withValues(alpha: .3),
-      transitionDuration: Motion.duration(context),
-      transitionBuilder: (c, a, b, child) => FadeTransition(
-        opacity: a,
-        child: ScaleTransition(
-          scale: Tween(
-            begin: .96,
-            end: 1.0,
-          ).animate(CurvedAnimation(parent: a, curve: Motion.curve)),
-          child: child,
-        ),
-      ),
-      pageBuilder: (c, a, b) => Center(
-        child: SizedBox(
-          height: 460,
-          width: math.min(MediaQuery.sizeOf(c).width - 32, 520),
-          child: PageView.builder(
-            controller: controller,
-            itemCount: 12,
-            itemBuilder: (c, i) {
-              final key = '$year-${(i + 1).toString().padLeft(2, '0')}';
-              final d = widget.data;
-              final income = d.total('income', month: key),
-                  expense = d.total('expense', month: key);
-              final count = DateTime(year, i + 2, 0).day;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Surface(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                DateFormat('MMMM yyyy')
-                                    .format(DateTime(year, i + 1)),
-                                style: Theme.of(c).textTheme.titleLarge,
-                              ),
-                            ),
-                            IconButton(
-                              tooltip: 'Close',
-                              onPressed: withFeedback(() => Navigator.pop(c)),
-                              icon: const Icon(LucideIcons.x),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Text('Income  ${money(income, d.currency)}'),
-                        const SizedBox(height: 8),
-                        Text('Spending  ${money(expense, d.currency)}'),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Net  ${money(income - expense, d.currency)}',
-                          style: const TextStyle(fontFamily: 'Geist Mono'),
-                        ),
-                        const SizedBox(height: 26),
-                        const Text('Session hours by day'),
-                        const SizedBox(height: 16),
-                        Expanded(
-                          child: BarChart(
-                            BarChartData(
-                              barTouchData: BarTouchData(enabled: true),
-                              gridData: const FlGridData(show: false),
-                              borderData: FlBorderData(show: false),
-                              titlesData: const FlTitlesData(show: false),
-                              barGroups: List.generate(count, (day) {
-                                final dk =
-                                    '$key-${(day + 1).toString().padLeft(2, '0')}';
-                                final hours =
-                                    d.sessions
-                                        .where((s) => s.day == dk)
-                                        .fold(
-                                          0,
-                                          (sum, s) => sum + durationOf(s),
-                                        ) /
-                                    3600;
-                                return BarChartGroupData(
-                                  x: day + 1,
-                                  barRods: [
-                                    BarChartRodData(
-                                      toY: hours,
-                                      color: Theme.of(c).colorScheme.primary,
-                                      width: 4,
-                                      borderRadius: BorderRadius.circular(5),
-                                    ),
-                                  ],
-                                );
-                              }),
-                            ),
-                            duration: Motion.duration(c),
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        const Center(
-                          child: Text(
-                            'Swipe to explore another month',
-                            style: TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
+  List<Session> sessions(DateTime date) =>
+      widget.data.sessions.where((s) => s.day == dayKey(date)).toList();
+  List<Entry> entries(DateTime date) =>
+      widget.data.entries.where((e) => e.day == dayKey(date)).toList();
+  List<String> records(DateTime date) => [
+    ...sessions(date).map((s) => s.kind),
+    ...entries(date).map((e) => e.category),
+  ];
+  void choose(DateTime date) => setState(() => selected = date);
+  void shift(int direction) => setState(() {
+    selected = mode == 0
+        ? DateTime(selected.year + direction, selected.month, selected.day)
+        : mode == 1
+        ? DateTime(selected.year, selected.month + direction)
+        : selected.add(Duration(days: direction * (mode == 2 ? 7 : 1)));
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final colors = Theme.of(c).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 112),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 56),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    mode == 0
+                        ? '${selected.year}'
+                        : '${selected.year} / ${selected.month.toString().padLeft(2, '0')}',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Add to selected day',
+                  onPressed: withFeedback(
+                    () => quickAdd(c, widget.data, dayKey(selected)),
+                  ),
+                  icon: const Icon(LucideIcons.plus),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Calendar options',
+                  onSelected: (value) {
+                    ActionFeedback.tap();
+                    setState(() {
+                      if (value == 'today') {
+                        selected = DateUtils.dateOnly(DateTime.now());
+                      } else {
+                        labels = !labels;
+                      }
+                    });
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'today',
+                      child: Text('Go to today'),
                     ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext c) => PageBody(
-    title: '$year, at a glance.',
-    subtitle: 'Your year in days',
-    action: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: 'Previous year',
-          onPressed: withFeedback(() => setState(() => year--)),
-          icon: const Icon(LucideIcons.chevronLeft),
-        ),
-        IconButton(
-          tooltip: 'Next year',
-          onPressed: withFeedback(() => setState(() => year++)),
-          icon: const Icon(LucideIcons.chevronRight),
-        ),
-      ],
-    ),
-    children: [
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: ['sessions', 'expense', 'income']
-            .map(
-              (f) => BounceFilterChip(
-                label: Text(
-                  f == 'sessions'
-                      ? 'OJT & sessions'
-                      : f == 'expense'
-                      ? 'Expenses'
-                      : 'Income',
-                ),
-                selected: filters.contains(f),
-                onSelected: (v) {
-                  ActionFeedback.tap();
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    v ? filters.add(f) : filters.remove(f);
-                  });
-                },
-              ),
-            )
-            .toList(),
-      ),
-      LayoutBuilder(
-        builder: (c, constraints) {
-          final columns = constraints.maxWidth >= 750
-              ? 4
-              : constraints.maxWidth >= 480
-              ? 3
-              : 2;
-          final width = (constraints.maxWidth - 14 * (columns - 1)) / columns;
-          return Wrap(
-            spacing: 14,
-            runSpacing: 20,
-            children: List.generate(
-              12,
-              (i) => SizedBox(
-                width: width,
-                child: Surface(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    children: [
-                      InkWell(
-                        onTap: withFeedback(() => monthSummary(i + 1)),
-                        borderRadius: BorderRadius.circular(20),
-                        child: SizedBox(
-                          height: 44,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  DateFormat('MMMM')
-                                      .format(DateTime(year, i + 1)),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const Icon(LucideIcons.arrowUpRight, size: 14),
-                            ],
-                          ),
-                        ),
+                    PopupMenuItem(
+                      value: 'labels',
+                      child: Text(
+                        labels ? 'Show record dots' : 'Show record labels',
                       ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: 'MTWTFSS'
-                            .split('')
-                            .map(
-                              (s) => Expanded(
-                                child: Text(
-                                  s,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Theme.of(c)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 8),
-                      monthGrid(c, i + 1),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ),
+              ],
             ),
-          );
-        },
-      ),
-      const Text(
-        'Tap a date for details. Tap a month for its summary.',
-        style: TextStyle(fontSize: 12),
-      ),
-      OutlinedButton.icon(
-        onPressed: withFeedback(
-          () => quickAdd(c, widget.data, dayKey(DateTime.now())),
-        ),
-        icon: const Icon(LucideIcons.plus, size: 18),
-        label: const Text('Add a record'),
-      ),
-    ],
-  );
-  Widget monthGrid(BuildContext c, int month) {
-    final offset = DateTime(year, month).weekday - 1;
-    final days = DateTime(year, month + 1, 0).day;
-    return Column(
-      children: List.generate(
-        6,
-        (row) => Row(
-          children: List.generate(7, (column) {
-            final day = row * 7 + column - offset + 1;
-            if (day < 1 || day > days) {
-              return const Expanded(child: SizedBox(height: 28));
-            }
-            final key = dayKey(DateTime(year, month, day));
-            final session =
-                filters.contains('sessions') &&
-                widget.data.sessions.any((s) => s.day == key);
-            final expense =
-                filters.contains('expense') &&
-                widget.data.entries.any(
-                  (e) =>
-                      e.day == key &&
-                      e.kind == 'expense' &&
-                      e.currency == widget.data.currency,
-                );
-            final income =
-                filters.contains('income') &&
-                widget.data.entries.any(
-                  (e) =>
-                      e.day == key &&
-                      e.kind == 'income' &&
-                      e.currency == widget.data.currency,
-                );
-            final today = key == dayKey(DateTime.now());
-            return Expanded(
-              child: Semantics(
-                label:
-                    '$key${session ? ', has sessions' : ''}${expense ? ', expenses' : ''}${income ? ', income' : ''}',
-                button: true,
-                child: InkWell(
-                  onTap: withFeedback(() => openDay(key)),
-                  borderRadius: BorderRadius.circular(14),
-                  child: TweenAnimationBuilder<double>(
-                    key: ValueKey('$key:${pulse == key ? pulseVersion : 0}'),
-                    tween: Tween(begin: pulse == key ? 1.3 : 1, end: 1),
-                    curve: Motion.settle,
-                    duration: Motion.duration(c, 500),
-                    builder: (c, scale, child) =>
-                        Transform.scale(scale: scale, child: child),
-                    child: Container(
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: today ? Theme.of(c).colorScheme.primary : null,
-                        borderRadius: BorderRadius.circular(14),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                tooltip: 'Previous ${['year', 'month', 'week', 'day'][mode]}',
+                onPressed: withFeedback(() => shift(-1)),
+                icon: const Icon(LucideIcons.chevronLeft, size: 18),
+              ),
+              Text(
+                DateFormat(mode == 0 ? 'yyyy' : 'MMMM yyyy').format(selected),
+                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+              ),
+              IconButton(
+                tooltip: 'Next ${['year', 'month', 'week', 'day'][mode]}',
+                onPressed: withFeedback(() => shift(1)),
+                icon: const Icon(LucideIcons.chevronRight, size: 18),
+              ),
+            ],
+          ),
+          Expanded(
+            child: mode == 0
+                ? yearView(c)
+                : LayoutBuilder(
+                    builder: (c, constraints) {
+                      final start = DateTime(selected.year, selected.month);
+                      final monthStart = start.subtract(
+                        Duration(days: start.weekday % 7),
+                      );
+                      final rows =
+                          ((DateTime(selected.year, selected.month + 1, 0).day +
+                                      start.weekday % 7) /
+                                  7)
+                              .ceil();
+                      final week = selected.subtract(
+                        Duration(days: selected.weekday % 7),
+                      );
+                      final single = collapsed || mode == 2;
+                      final rowHeight = (constraints.maxHeight * .64 / rows)
+                          .clamp(48.0, labels ? 108.0 : 84.0);
+                      return Column(
+                        children: [
+                          if (mode != 3) ...[
+                            weekdays(c, false),
+                            AnimatedSize(
+                              duration: Motion.duration(c, 250),
+                              curve: Motion.curve,
+                              alignment: Alignment.topCenter,
+                              child: SizedBox(
+                                height: rowHeight * (single ? 1 : rows),
+                                child: Column(
+                                  children: List.generate(
+                                    single ? 1 : rows,
+                                    (row) => SizedBox(
+                                      height: rowHeight,
+                                      child: Row(
+                                        children: List.generate(
+                                          7,
+                                          (col) => Expanded(
+                                            child: dateCell(
+                                              c,
+                                              (single ? week : monthStart).add(
+                                                Duration(days: row * 7 + col),
+                                              ),
+                                              false,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onVerticalDragUpdate: mode == 1
+                                  ? (details) {
+                                      if (details.delta.dy.abs() > 1) {
+                                        setState(
+                                          () =>
+                                              collapsed = details.delta.dy < 0,
+                                        );
+                                      }
+                                    }
+                                  : null,
+                              child: Semantics(
+                                button: true,
+                                label: collapsed
+                                    ? 'Expand month'
+                                    : 'Collapse to week',
+                                child: InkWell(
+                                  onTap: mode == 1
+                                      ? withFeedback(
+                                          () => setState(
+                                            () => collapsed = !collapsed,
+                                          ),
+                                        )
+                                      : null,
+                                  child: SizedBox(
+                                    height: 32,
+                                    width: double.infinity,
+                                    child: Center(
+                                      child: Container(
+                                        width: 36,
+                                        height: 4,
+                                        decoration: BoxDecoration(
+                                          color: colors.onSurface.withValues(
+                                            alpha: .18,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ] else
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  DateFormat('EEEE, d MMMM').format(selected),
+                                  style: Theme.of(c).textTheme.titleLarge,
+                                ),
+                              ),
+                            ),
+                          Expanded(
+                            child: mode == 2
+                                ? weekTimeline(c, week)
+                                : agenda(c),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              children: List.generate(
+                4,
+                (i) => Expanded(
+                  child: Semantics(
+                    selected: mode == i,
+                    child: TextButton(
+                      onPressed: withFeedback(
+                        () => setState(() {
+                          mode = i;
+                          collapsed = false;
+                        }),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: mode == i
+                            ? colors.onSurface
+                            : colors.onSurfaceVariant,
                       ),
                       child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            '$day',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontFamily: 'Geist Mono',
-                              color: today
-                                  ? Theme.of(c).colorScheme.onPrimary
-                                  : null,
-                            ),
+                          Icon(
+                            [
+                              LucideIcons.calendarDays,
+                              LucideIcons.calendar,
+                              LucideIcons.columns3,
+                              LucideIcons.calendarCheck,
+                            ][i],
+                            size: 20,
                           ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (session) mark(c, today, 0),
-                              if (expense) mark(c, today, 1),
-                              if (income) mark(c, today, 2),
-                            ],
+                          const SizedBox(height: 5),
+                          Text(
+                            ['Year', 'Month', 'Week', 'Day'][i],
+                            style: const TextStyle(fontSize: 11),
                           ),
                         ],
                       ),
@@ -362,26 +268,525 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                 ),
               ),
-            );
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget weekdays(BuildContext c, bool small) => Row(
+    children:
+        (small
+                ? ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+                : ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])
+            .map(
+              (d) => Expanded(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: small ? 6 : 12),
+                  child: Text(
+                    d,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: small ? 8 : 11,
+                      color: Theme.of(c).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+  );
+
+  Widget yearView(BuildContext c) => LayoutBuilder(
+    builder: (c, constraints) => SingleChildScrollView(
+      child: Wrap(
+        spacing: 16,
+        runSpacing: 24,
+        children: List.generate(12, (index) {
+          final month = index + 1;
+          final first = DateTime(selected.year, month);
+          final offset = first.weekday % 7;
+          final count = DateTime(selected.year, month + 1, 0).day;
+          return SizedBox(
+            width: (constraints.maxWidth - 32) / 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                InkWell(
+                  onTap: withFeedback(
+                    () => setState(() {
+                      selected = first;
+                      mode = 1;
+                    }),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      DateFormat('MMM').format(first),
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w500,
+                        color: month == selected.month ? blue : null,
+                      ),
+                    ),
+                  ),
+                ),
+                weekdays(c, true),
+                ...List.generate(
+                  6,
+                  (row) => Row(
+                    children: List.generate(7, (col) {
+                      final day = row * 7 + col - offset + 1;
+                      return Expanded(
+                        child: day < 1 || day > count
+                            ? const SizedBox(height: 23)
+                            : dateCell(
+                                c,
+                                DateTime(selected.year, month, day),
+                                true,
+                              ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    ),
+  );
+
+  Widget dateCell(BuildContext c, DateTime date, bool small) {
+    final active = DateUtils.isSameDay(date, selected);
+    final today = DateUtils.isSameDay(date, DateTime.now());
+    final outside = date.month != selected.month;
+    final items = records(date);
+    final foreground = Theme.of(c).colorScheme.onSurface;
+    final weekend = date.weekday == 6 || date.weekday == 7;
+    return Semantics(
+      label:
+          '${DateFormat('EEEE, d MMMM yyyy').format(date)}, ${items.length} records',
+      selected: active,
+      button: true,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(small ? 4 : 12),
+        onTap: withFeedback(
+          () => setState(() {
+            selected = date;
+            if (small) mode = 1;
           }),
+        ),
+        onLongPress: withFeedback(
+          () => panel(c, DayPanel(day: dayKey(date), initialData: widget.data)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              height: small
+                  ? 23
+                  : labels
+                  ? 28
+                  : 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: active || (small && today) ? blue : null,
+                borderRadius: BorderRadius.circular(small ? 4 : 12),
+              ),
+              child: Text(
+                '${date.day}',
+                style: TextStyle(
+                  fontSize: small ? 9 : 20,
+                  fontWeight: FontWeight.w500,
+                  color: active || (small && today)
+                      ? Colors.white
+                      : outside && !small
+                      ? foreground.withValues(alpha: .25)
+                      : weekend
+                      ? blue
+                      : foreground,
+                ),
+              ),
+            ),
+            if (!small && labels && items.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(2, 3, 2, 0),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 3,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: blue.withValues(alpha: .24),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    items.first,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 9),
+                  ),
+                ),
+              ),
+            if (!small && labels && items.length > 1)
+              Text(
+                '+${items.length - 1}',
+                style: const TextStyle(fontSize: 9, color: blue),
+              ),
+            if (!small && !labels)
+              Container(
+                width: 3,
+                height: 3,
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: items.isNotEmpty
+                      ? blue
+                      : foreground.withValues(alpha: .2),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  Widget mark(BuildContext c, bool today, int kind) => Container(
-    width: kind == 0 ? 4 : 3,
-    height: 3,
-    margin: const EdgeInsets.symmetric(horizontal: 1),
+  Widget dailyCover(BuildContext c) => Container(
+    height: MediaQuery.sizeOf(c).height * .43,
+    margin: const EdgeInsets.only(bottom: 14),
+    padding: const EdgeInsets.all(24),
     decoration: BoxDecoration(
-      color: today
-          ? Theme.of(c).colorScheme.onPrimary
-          : kind == 0
-          ? Theme.of(c).colorScheme.primary
-          : Design.chart[kind],
-      shape: kind == 1 ? BoxShape.rectangle : BoxShape.circle,
+      borderRadius: BorderRadius.circular(24),
+      gradient: const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xff173b53),
+          Color(0xff526c86),
+          Color(0xffb59b97),
+          Color(0xff314e42),
+        ],
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          DateFormat('yyyy / MM').format(selected),
+          style: const TextStyle(color: Colors.white, fontSize: 20),
+        ),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Text(
+                '${selected.day}',
+                style: const TextStyle(
+                  fontSize: 92,
+                  color: Colors.white,
+                  height: 1.2,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Text(
+                DateFormat('EEEE').format(selected),
+                style: const TextStyle(color: Colors.white70),
+              ),
+            ),
+          ],
+        ),
+      ],
     ),
   );
+
+  Widget weekTimeline(BuildContext c, DateTime week) {
+    final colors = Theme.of(c).colorScheme;
+    final dates = List.generate(7, (i) => week.add(Duration(days: i)));
+    final now = DateTime.now();
+    const hourHeight = 56.0;
+    return Column(
+      children: [
+        SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 40,
+                child: Text(
+                  'Budget',
+                  style: TextStyle(fontSize: 9, color: colors.onSurfaceVariant),
+                ),
+              ),
+              ...dates.map(
+                (date) => Expanded(
+                  child: InkWell(
+                    onTap: withFeedback(() {
+                      choose(date);
+                      panel(
+                        c,
+                        DayPanel(day: dayKey(date), initialData: widget.data),
+                      );
+                    }),
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (entries(date).isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                color: blue.withValues(alpha: .25),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                entries(date).first.category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 9),
+                              ),
+                            ),
+                          if (entries(date).length > 1)
+                            Text(
+                              '+${entries(date).length - 1}',
+                              style: const TextStyle(fontSize: 9, color: blue),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            child: SizedBox(
+              height: hourHeight * 24,
+              child: LayoutBuilder(
+                builder: (c, constraints) {
+                  final columnWidth = (constraints.maxWidth - 40) / 7;
+                  return Stack(
+                    children: [
+                      ...List.generate(
+                        24,
+                        (hour) => Positioned(
+                          top: hour * hourHeight,
+                          left: 0,
+                          right: 0,
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 40,
+                                child: Text(
+                                  '${hour.toString().padLeft(2, '0')}:00',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: colors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(
+                                  height: 1,
+                                  color: colors.outlineVariant.withValues(
+                                    alpha: .4,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      ...List.generate(
+                        8,
+                        (i) => Positioned(
+                          left: 40 + columnWidth * i,
+                          top: 0,
+                          bottom: 0,
+                          child: VerticalDivider(
+                            width: 1,
+                            color: colors.outlineVariant.withValues(alpha: .4),
+                          ),
+                        ),
+                      ),
+                      for (var i = 0; i < 7; i++)
+                        ...widget.data.sessions
+                            .where((s) {
+                              final start = DateTime.fromMillisecondsSinceEpoch(
+                                s.started,
+                              );
+                              final end = DateTime.fromMillisecondsSinceEpoch(
+                                s.ended ?? now.millisecondsSinceEpoch,
+                              );
+                              return start.isBefore(
+                                    dates[i].add(const Duration(days: 1)),
+                                  ) &&
+                                  end.isAfter(dates[i]);
+                            })
+                            .map((s) {
+                              final start = DateTime.fromMillisecondsSinceEpoch(
+                                s.started,
+                              );
+                              final end = DateTime.fromMillisecondsSinceEpoch(
+                                s.ended ?? now.millisecondsSinceEpoch,
+                              );
+                              final startMinute = start.isBefore(dates[i])
+                                  ? 0
+                                  : start.hour * 60 + start.minute;
+                              final endMinute =
+                                  end.isAfter(
+                                    dates[i].add(const Duration(days: 1)),
+                                  )
+                                  ? 1440
+                                  : end.hour * 60 + end.minute;
+                              final blockHeight = math.max(
+                                22.0,
+                                (endMinute - startMinute) / 60 * hourHeight,
+                              );
+                              return Positioned(
+                                left: 41 + i * columnWidth,
+                                width: math.max(1, columnWidth - 2),
+                                top: startMinute / 60 * hourHeight,
+                                height: math.min(
+                                  blockHeight,
+                                  24 * hourHeight -
+                                      startMinute / 60 * hourHeight,
+                                ),
+                                child: Material(
+                                  color: blue.withValues(alpha: .35),
+                                  borderRadius: BorderRadius.circular(4),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: withFeedback(
+                                      () => panel(
+                                        c,
+                                        SessionForm(
+                                          data: widget.data,
+                                          day: s.day,
+                                          session: s,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(3),
+                                      child: Text(
+                                        '${s.kind}\n${clockTime(widget.data, s.started)}',
+                                        style: const TextStyle(fontSize: 9),
+                                        overflow: TextOverflow.fade,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }),
+                      if (dates.any((d) => DateUtils.isSameDay(d, now)))
+                        Positioned(
+                          left: 40 + (now.weekday % 7) * columnWidth,
+                          width: columnWidth,
+                          top: (now.hour + now.minute / 60) * hourHeight,
+                          child: const Divider(
+                            height: 1,
+                            thickness: 2,
+                            color: Colors.redAccent,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget agenda(BuildContext c) {
+    final ss = sessions(selected)
+      ..sort((a, b) => a.started.compareTo(b.started));
+    final es = entries(selected);
+    final colors = Theme.of(c).colorScheme;
+    Widget card(String title, String subtitle, VoidCallback tap) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(20),
+        child: ListTile(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 10,
+          ),
+          minLeadingWidth: 8,
+          leading: const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Icon(Icons.circle, size: 6, color: blue),
+          ),
+          title: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          subtitle: Text(subtitle),
+          onTap: withFeedback(tap),
+        ),
+      ),
+    );
+    return ListView(
+      padding: const EdgeInsets.only(top: 8),
+      children: [
+        if (mode == 3) dailyCover(c),
+        if (ss.isEmpty && es.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Column(
+              children: [
+                Text(
+                  'No records for ${DateFormat('d MMM').format(selected)}',
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+                TextButton.icon(
+                  onPressed: withFeedback(
+                    () => quickAdd(c, widget.data, dayKey(selected)),
+                  ),
+                  icon: const Icon(LucideIcons.plus, size: 16),
+                  label: const Text('Add a record'),
+                ),
+              ],
+            ),
+          ),
+        ...ss.map(
+          (s) => card(
+            s.note.isEmpty ? '${s.kind} session' : s.note,
+            '${clockTime(widget.data, s.started)} – ${s.ended == null ? 'In progress' : clockTime(widget.data, s.ended!)}',
+            () => panel(
+              c,
+              SessionForm(data: widget.data, day: s.day, session: s),
+            ),
+          ),
+        ),
+        ...es.map(
+          (e) => card(
+            e.category,
+            '${e.kind} · ${money(e.amount, e.currency)}${e.note.isEmpty ? '' : ' · ${e.note}'}',
+            () => panel(
+              c,
+              EntryForm(data: widget.data, day: e.day, kind: e.kind, entry: e),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class DayPanel extends ConsumerWidget {
@@ -396,9 +801,7 @@ class DayPanel extends ConsumerWidget {
       .95,
     );
     final sessions = d.sessions.where((s) => s.day == day).toList();
-    final entries = d.entries
-        .where((e) => e.day == day && e.currency == d.currency)
-        .toList();
+    final entries = d.entries.where((e) => e.day == day).toList();
     return NotificationListener<DraggableScrollableNotification>(
       onNotification: (n) {
         ref.read(databaseProvider).pref('dayPanel', n.extent);
@@ -459,7 +862,7 @@ class DayPanel extends ConsumerWidget {
                     '${e.kind} · ${e.method}${e.note.isEmpty ? '' : '\n${e.note}'}',
                   ),
                   trailing: Text(
-                    money(e.amount, d.currency),
+                    money(e.amount, e.currency),
                     style: const TextStyle(
                       fontFamily: 'Geist Mono',
                       fontSize: 12,

@@ -48,3 +48,6 @@ app.*.map.json
 # Widget Preview related
 .widget_preview/
 .tmp/
+
+# Screenshots attached through Codex
+.codex-remote-attachments/
