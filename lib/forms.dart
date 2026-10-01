@@ -141,7 +141,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
         ),
         spaced(
           OutlinedButton(
-            onPressed: () => time(false),
+            onPressed: withFeedback(() => time(false)),
             child: Text(
               'Clock in · ${DateFormat('d MMM yyyy, HH:mm').format(start)}',
             ),
@@ -149,7 +149,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
         ),
         spaced(
           OutlinedButton(
-            onPressed: () => time(true),
+            onPressed: withFeedback(() => time(true)),
             child: Text(
               'Clock out · ${end == null ? 'Still running' : DateFormat('d MMM yyyy, HH:mm').format(end!)}',
             ),
@@ -158,7 +158,9 @@ class _SessionFormState extends ConsumerState<SessionForm> {
         if (widget.session?.ended == null && widget.session != null)
           spaced(
             TextButton(
-              onPressed: () => setState(() => end = DateTime.now()),
+              onPressed: withFeedback(
+                () => setState(() => end = DateTime.now()),
+              ),
               child: const Text('End now'),
             ),
           ),
@@ -178,24 +180,24 @@ class _SessionFormState extends ConsumerState<SessionForm> {
             ),
           ),
         FilledButton(
-          onPressed: saving ? null : save,
+          onPressed: withFeedback(saving ? null : save),
           child: Text(saving ? 'Saving…' : 'Save session'),
         ),
         if (widget.session != null)
           TextButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               final deleted = await deleteSession(c, ref, widget.session!);
               if (deleted && c.mounted) {
                 Navigator.pop(c);
               }
-            },
+            }),
             child: Text(
               'Delete session',
               style: TextStyle(color: Theme.of(c).colorScheme.error),
             ),
           ),
         TextButton(
-          onPressed: () => Navigator.pop(c),
+          onPressed: withFeedback(() => Navigator.pop(c)),
           child: const Text('Cancel'),
         ),
       ],
@@ -322,7 +324,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
         ),
         spaced(
           OutlinedButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               final d = await showDatePicker(
                 context: c,
                 initialDate: calendarDate(day),
@@ -332,7 +334,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
               if (d != null) {
                 setState(() => day = dayKey(d));
               }
-            },
+            }),
             child: Text(
               DateFormat('EEEE, d MMMM yyyy').format(calendarDate(day)),
             ),
@@ -362,12 +364,12 @@ class _EntryFormState extends ConsumerState<EntryForm> {
           ),
         ),
         FilledButton(
-          onPressed: busy ? null : save,
+          onPressed: withFeedback(busy ? null : save),
           child: Text(busy ? 'Saving…' : 'Save transaction'),
         ),
         if (widget.entry != null)
           TextButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               if (await confirm(
                 c,
                 'Delete transaction?',
@@ -381,14 +383,14 @@ class _EntryFormState extends ConsumerState<EntryForm> {
                   Navigator.pop(c);
                 }
               }
-            },
+            }),
             child: Text(
               'Delete transaction',
               style: TextStyle(color: Theme.of(c).colorScheme.error),
             ),
           ),
         TextButton(
-          onPressed: () => Navigator.pop(c),
+          onPressed: withFeedback(() => Navigator.pop(c)),
           child: const Text('Cancel'),
         ),
       ],
@@ -582,7 +584,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
         ),
         spaced(
           OutlinedButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               final d = await showDatePicker(
                 context: c,
                 initialDate: calendarDate(start),
@@ -592,14 +594,14 @@ class _RuleFormState extends ConsumerState<RuleForm> {
               if (d != null) {
                 setState(() => start = dayKey(d));
               }
-            },
+            }),
             child: Text('Starts · $start'),
           ),
         ),
         if (cadence != 'once')
           spaced(
             OutlinedButton(
-              onPressed: () async {
+              onPressed: withFeedback(() async {
                 final d = await showDatePicker(
                   context: c,
                   initialDate: calendarDate(finish ?? start),
@@ -609,13 +611,13 @@ class _RuleFormState extends ConsumerState<RuleForm> {
                 if (d != null) {
                   setState(() => finish = dayKey(d));
                 }
-              },
+              }),
               child: Text('Ends · ${finish ?? 'No end date'}'),
             ),
           ),
         if (finish != null)
           TextButton(
-            onPressed: () => setState(() => finish = null),
+            onPressed: withFeedback(() => setState(() => finish = null)),
             child: const Text('Remove end date'),
           ),
         spaced(
@@ -642,11 +644,11 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             ),
           ),
         FilledButton(
-          onPressed: saving ? null : save,
+          onPressed: withFeedback(saving ? null : save),
           child: Text(saving ? 'Saving…' : 'Save rule'),
         ),
         TextButton(
-          onPressed: () => Navigator.pop(c),
+          onPressed: withFeedback(() => Navigator.pop(c)),
           child: const Text('Cancel'),
         ),
       ],

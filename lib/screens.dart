@@ -65,6 +65,7 @@ Widget selectField(
   items: values.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
   onChanged: (v) {
     if (v != null) {
+      ActionFeedback.tap();
       changed(v);
     }
   },
@@ -138,7 +139,7 @@ Widget sessionTile(
   ),
   closedBuilder: (c, open) => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    onTap: open,
+    onTap: withFeedback(open),
     leading: Icon(s.ended == null ? LucideIcons.timer : LucideIcons.clock3),
     title: Text(sessionDate(data, s)),
     subtitle: Text(
@@ -166,14 +167,14 @@ Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
         for (final kind in ['expense', 'income', 'savings', 'session'])
           spaced(
             OutlinedButton(
-              onPressed: () {
+              onPressed: withFeedback(() {
                 Navigator.pop(c);
                 if (kind == 'session') {
                   panel(c, SessionForm(data: data, day: day));
                 } else {
                   panel(c, EntryForm(data: data, day: day, kind: kind));
                 }
-              },
+              }),
               child: Text('Add $kind'),
             ),
           ),

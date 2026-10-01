@@ -6,6 +6,8 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import 'services.dart';
+
 abstract final class Motion {
   static const curve = Cubic(.22, 1, .36, 1);
   static const settle = Cubic(.34, 1.36, .64, 1);
@@ -253,28 +255,31 @@ class PageBody extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(24, 24, 24, 126),
     children: [
       Entrance(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    subtitle.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      letterSpacing: 2,
-                      color: Theme.of(c).colorScheme.onSurfaceVariant,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 56),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      subtitle.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        letterSpacing: 2,
+                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(title, style: Theme.of(c).textTheme.headlineLarge),
-                ],
+                    const SizedBox(height: 8),
+                    Text(title, style: Theme.of(c).textTheme.headlineLarge),
+                  ],
+                ),
               ),
-            ),
-            ?action,
-          ],
+              ?action,
+            ],
+          ),
         ),
       ),
       const SizedBox(height: 28),
@@ -365,18 +370,21 @@ class PillNavigation extends StatefulWidget {
 }
 
 class _PillNavigationState extends State<PillNavigation> {
-  final keys = List.generate(5, (_) => GlobalKey());
+  final keys = List.generate(4, (_) => GlobalKey());
   final track = GlobalKey();
   Rect? rect;
-  static const labels = ['Today', 'Calendar', 'Sessions', 'Budget', 'Settings'];
+  static const labels = ['Today', 'Calendar', 'Sessions', 'Budget'];
   static const icons = [
     LucideIcons.clock3,
     LucideIcons.calendarDays,
     LucideIcons.table2,
     LucideIcons.wallet,
-    LucideIcons.settings2,
   ];
   void measure() {
+    if (widget.index >= keys.length) {
+      if (rect != null && mounted) setState(() => rect = null);
+      return;
+    }
     final parent = track.currentContext?.findRenderObject() as RenderBox?;
     final selected =
         keys[widget.index].currentContext?.findRenderObject() as RenderBox?;
@@ -421,7 +429,7 @@ class _PillNavigationState extends State<PillNavigation> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: List.generate(
-                  5,
+                  labels.length,
                   (i) => Flexible(
                     child: Semantics(
                       selected: widget.index == i,
@@ -480,11 +488,11 @@ Future<bool> confirm(
         content: Text(detail),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(c, false),
+            onPressed: withFeedback(() => Navigator.pop(c, false)),
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(c, true),
+            onPressed: withFeedback(() => Navigator.pop(c, true)),
             child: Text(action),
           ),
         ],
@@ -628,6 +636,7 @@ class _BounceFilterChipState extends State<BounceFilterChip> {
       label: widget.label,
       selected: widget.selected,
       onSelected: (v) {
+        ActionFeedback.tap();
         widget.onSelected(v);
         if (!MediaQuery.disableAnimationsOf(c)) {
           setState(() => scale = 1.08);

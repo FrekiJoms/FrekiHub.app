@@ -23,51 +23,53 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           const SizedBox(height: 20),
           if (p.status != 'complete')
             FilledButton(
-              onPressed: p.amount == 0
-                  ? null
-                  : () async {
-                      final db = ref.read(databaseProvider);
-                      await guarded(context, () async {
-                        await db.transaction(() async {
-                          await db
-                              .into(db.entries)
-                              .insert(
-                                Entry(
-                                  id: newId(),
-                                  day: p.day,
-                                  kind: p.rule.kind,
-                                  amount: p.amount,
-                                  currency: p.rule.currency,
-                                  category: p.rule.category,
-                                  method: p.rule.method,
-                                  note: p.rule.title,
-                                  occurrence: p.key,
-                                ),
-                                mode: InsertMode.insertOrIgnore,
-                              );
-                          await db.pref('status:${p.key}', 'planned');
-                        });
-                        if (mounted) {
-                          Navigator.pop(context);
-                        }
-                      }, success: 'Recorded exactly once');
-                    },
+              onPressed: withFeedback(
+                p.amount == 0
+                    ? null
+                    : () async {
+                        final db = ref.read(databaseProvider);
+                        await guarded(context, () async {
+                          await db.transaction(() async {
+                            await db
+                                .into(db.entries)
+                                .insert(
+                                  Entry(
+                                    id: newId(),
+                                    day: p.day,
+                                    kind: p.rule.kind,
+                                    amount: p.amount,
+                                    currency: p.rule.currency,
+                                    category: p.rule.category,
+                                    method: p.rule.method,
+                                    note: p.rule.title,
+                                    occurrence: p.key,
+                                  ),
+                                  mode: InsertMode.insertOrIgnore,
+                                );
+                            await db.pref('status:${p.key}', 'planned');
+                          });
+                          if (mounted) {
+                            Navigator.pop(context);
+                          }
+                        }, success: 'Recorded exactly once');
+                      },
+              ),
               child: const Text('Mark complete & record'),
             ),
           if (p.status != 'complete')
             ...['skipped', 'cancelled', 'planned'].map(
               (s) => TextButton(
-                onPressed: () async {
+                onPressed: withFeedback(() async {
                   await ref.read(databaseProvider).pref('status:${p.key}', s);
                   if (mounted) {
                     Navigator.pop(context);
                   }
-                },
+                }),
                 child: Text(s == 'planned' ? 'Reset to planned' : 'Mark $s'),
               ),
             ),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: withFeedback(() => Navigator.pop(context)),
             child: const Text('Close'),
           ),
         ],
@@ -85,14 +87,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           Text(r.title, style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 16),
           OutlinedButton(
-            onPressed: () {
+            onPressed: withFeedback(() {
               Navigator.pop(context);
               panel(context, RuleForm(data: widget.data, rule: r));
-            },
+            }),
             child: const Text('Edit rule'),
           ),
           TextButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               final db = ref.read(databaseProvider);
               await db
                   .into(db.rules)
@@ -106,11 +108,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               if (mounted) {
                 Navigator.pop(context);
               }
-            },
+            }),
             child: const Text('Duplicate'),
           ),
           TextButton(
-            onPressed: () async {
+            onPressed: withFeedback(() async {
               if (!await confirm(
                 context,
                 'Delete planner rule?',
@@ -123,7 +125,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               if (mounted) {
                 Navigator.pop(context);
               }
-            },
+            }),
             child: Text(
               'Delete rule',
               style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -187,8 +189,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         e.day,
         ListTile(
           contentPadding: EdgeInsets.zero,
-          onTap: () =>
-              panel(c, EntryForm(data: d, day: e.day, kind: e.kind, entry: e)),
+          onTap: withFeedback(
+            () => panel(
+              c,
+              EntryForm(data: d, day: e.day, kind: e.kind, entry: e),
+            ),
+          ),
           leading: Icon(
             e.kind == 'income'
                 ? LucideIcons.arrowDownLeft
@@ -211,7 +217,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         p.day,
         ListTile(
           contentPadding: EdgeInsets.zero,
-          onTap: () => occurrence(p),
+          onTap: withFeedback(() => occurrence(p)),
           leading: Icon(
             p.status == 'complete'
                 ? LucideIcons.circleCheck
@@ -239,7 +245,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       subtitle: 'Your money, clearly',
       action: IconButton(
         tooltip: 'Add transaction',
-        onPressed: () => quickAdd(c, d, today),
+        onPressed: withFeedback(() => quickAdd(c, d, today)),
         icon: const Icon(LucideIcons.plus),
       ),
       children: [
@@ -248,8 +254,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             children: [
               IconButton(
                 tooltip: 'Previous month',
-                onPressed: () => setState(
-                  () => period = DateTime(period.year, period.month - 1),
+                onPressed: withFeedback(
+                  () => setState(
+                    () => period = DateTime(period.year, period.month - 1),
+                  ),
                 ),
                 icon: const Icon(LucideIcons.chevronLeft),
               ),
@@ -262,8 +270,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               ),
               IconButton(
                 tooltip: 'Next month',
-                onPressed: () => setState(
-                  () => period = DateTime(period.year, period.month + 1),
+                onPressed: withFeedback(
+                  () => setState(
+                    () => period = DateTime(period.year, period.month + 1),
+                  ),
                 ),
                 icon: const Icon(LucideIcons.chevronRight),
               ),
@@ -362,7 +372,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 'A future cushion.',
                 trailing: IconButton(
                   tooltip: 'Set savings goal',
-                  onPressed: () => savingsGoal(c),
+                  onPressed: withFeedback(() => savingsGoal(c)),
                   icon: const Icon(LucideIcons.pencilLine, size: 18),
                 ),
               ),
@@ -474,7 +484,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           'Give your money a plan.',
           trailing: IconButton(
             tooltip: 'Add planner rule',
-            onPressed: () => panel(c, RuleForm(data: d)),
+            onPressed: withFeedback(() => panel(c, RuleForm(data: d))),
             icon: const Icon(LucideIcons.plus),
           ),
         ),
@@ -512,7 +522,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       subtitle: Text(
                         '${r.cadence} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
                       ),
-                      onTap: () => ruleMenu(r),
+                      onTap: withFeedback(() => ruleMenu(r)),
                       trailing: ReorderableDragStartListener(
                         index: i,
                         child: const Padding(
@@ -605,7 +615,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ),
                 const SizedBox(height: 20),
                 FilledButton(
-                  onPressed: () async {
+                  onPressed: withFeedback(() async {
                     try {
                       final amount = parseMoney(
                         field.text,
@@ -622,7 +632,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         toast(c, e.message);
                       }
                     }
-                  },
+                  }),
                   child: const Text('Save goal'),
                 ),
               ],

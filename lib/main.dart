@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'data.dart';
 import 'design.dart';
@@ -26,6 +26,7 @@ Future<void> main() async {
 }
 
 final _router = GoRouter(
+  observers: [FeedbackNavigatorObserver()],
   routes: [GoRoute(path: '/', builder: (c, s) => const AppShell())],
 );
 
@@ -34,6 +35,8 @@ class FrekiHubApp extends ConsumerWidget {
   @override
   Widget build(BuildContext c, WidgetRef ref) {
     final mode = ref.watch(dataProvider).value?.prefs['theme'] ?? 'system';
+    ActionFeedback.soundEnabled =
+        ref.watch(dataProvider).value?.prefs['sound'] == 'true';
     return MaterialApp.router(
       title: 'FrekiHub',
       debugShowCheckedModeBanner: false,
@@ -61,6 +64,7 @@ class AppShell extends ConsumerStatefulWidget {
 class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int index = 0;
+  int lastTab = 0;
   String? lastRunning;
   @override
   void initState() {
@@ -166,9 +170,39 @@ class _AppShellState extends ConsumerState<AppShell>
                       child: PillNavigation(
                         index: index,
                         onChanged: (i) {
-                          HapticFeedback.selectionClick();
-                          setState(() => index = i);
+                          if (i == index) return;
+                          ActionFeedback.tap(transition: true);
+                          setState(() {
+                            index = i;
+                            lastTab = i;
+                          });
                         },
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: SizedBox.square(
+                    dimension: 48,
+                    child: GlassContainer(
+                      useOwnLayer: true,
+                      shape: const LiquidOval(),
+                      settings: const LiquidGlassSettings(
+                        blur: 12,
+                        thickness: 24,
+                      ),
+                      child: Semantics(
+                        selected: index == 4,
+                        child: IconButton(
+                          tooltip: index == 4 ? 'Close settings' : 'Settings',
+                          icon: const Icon(LucideIcons.settings2, size: 22),
+                          onPressed: () {
+                            ActionFeedback.tap(transition: true);
+                            setState(() => index = index == 4 ? lastTab : 4);
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -186,7 +220,9 @@ class _AppShellState extends ConsumerState<AppShell>
                     const SizedBox(height: 16),
                     Text('$e'),
                     TextButton(
-                      onPressed: () => ref.invalidate(dataProvider),
+                      onPressed: withFeedback(
+                        () => ref.invalidate(dataProvider),
+                      ),
                       child: const Text('Retry'),
                     ),
                   ],

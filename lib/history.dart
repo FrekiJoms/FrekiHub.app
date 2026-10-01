@@ -117,12 +117,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 trailing: (widget.data.prefs['dateFormat'] ?? 'EEE, d MMM') == f
                     ? const Icon(LucideIcons.check, size: 18)
                     : null,
-                onTap: () async {
+                onTap: withFeedback(() async {
                   await ref.read(databaseProvider).pref('dateFormat', f);
                   if (c.mounted) {
                     Navigator.pop(c);
                   }
-                },
+                }),
               ),
             const Divider(),
             Wrap(
@@ -188,9 +188,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       subtitle: 'Session history',
       action: IconButton(
         tooltip: 'Add session',
-        onPressed: () => panel(
-          c,
-          SessionForm(data: widget.data, day: dayKey(DateTime.now())),
+        onPressed: withFeedback(
+          () => panel(
+            c,
+            SessionForm(data: widget.data, day: dayKey(DateTime.now())),
+          ),
         ),
         icon: const Icon(LucideIcons.plus),
       ),
@@ -205,10 +207,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 ? null
                 : IconButton(
                     tooltip: 'Clear search',
-                    onPressed: () {
+                    onPressed: withFeedback(() {
                       search.clear();
                       setState(() {});
-                    },
+                    }),
                     icon: const Icon(LucideIcons.x, size: 18),
                   ),
           ),
@@ -259,27 +261,30 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           runSpacing: 8,
           children: [
             OutlinedButton.icon(
-              onPressed: formats,
+              onPressed: withFeedback(formats),
               icon: const Icon(LucideIcons.calendarDays, size: 16),
               label: const Text('Date & time'),
             ),
             OutlinedButton.icon(
-              onPressed: () => setState(() {
-                selection = !selection;
-                selected.clear();
-              }),
+              onPressed: withFeedback(
+                () => setState(() {
+                  selection = !selection;
+                  selected.clear();
+                }),
+              ),
               icon: const Icon(LucideIcons.listChecks, size: 16),
               label: Text(selection ? 'Done selecting' : 'Select'),
             ),
             if (selection)
               OutlinedButton(
-                onPressed: () =>
-                    setState(() => selected.addAll(list.map((s) => s.id))),
+                onPressed: withFeedback(
+                  () => setState(() => selected.addAll(list.map((s) => s.id))),
+                ),
                 child: const Text('Select visible'),
               ),
             if (selected.isNotEmpty)
               FilledButton(
-                onPressed: bulkDelete,
+                onPressed: withFeedback(bulkDelete),
                 child: Text('Delete ${selected.length}'),
               ),
           ],
@@ -323,14 +328,16 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                 children: [
                                   Expanded(
                                     child: InkWell(
-                                      onTap: () => setState(() {
-                                        if (sortColumn == i) {
-                                          ascending = !ascending;
-                                        } else {
-                                          sortColumn = i;
-                                          ascending = true;
-                                        }
-                                      }),
+                                      onTap: withFeedback(
+                                        () => setState(() {
+                                          if (sortColumn == i) {
+                                            ascending = !ascending;
+                                          } else {
+                                            sortColumn = i;
+                                            ascending = true;
+                                          }
+                                        }),
+                                      ),
                                       child: Padding(
                                         padding: const EdgeInsets.all(10),
                                         child: Row(
@@ -428,7 +435,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                               s.note.isEmpty ? '—' : s.note,
                             ];
                             return InkWell(
-                              onTap: () {
+                              onTap: withFeedback(() {
                                 if (selection) {
                                   setState(() {
                                     selected.contains(s.id)
@@ -445,7 +452,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                     ),
                                   );
                                 }
-                              },
+                              }),
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: selected.contains(s.id)

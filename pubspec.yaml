@@ -49,7 +49,6 @@ dependencies:
   animations: ^3.0.0
   flutter_animate: ^4.5.2
   path_provider: ^2.1.6
-  soundpool: ^2.4.1
 
 dev_dependencies:
   flutter_test:

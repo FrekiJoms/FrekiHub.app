@@ -4,11 +4,17 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.media.AudioAttributes
+import android.media.SoundPool
+import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var soundPool: SoundPool? = null
+    private val soundIds = mutableMapOf<String, Int>()
+    private val readySounds = mutableSetOf<Int>()
     private var pendingResult: MethodChannel.Result? = null
     private var startData: Map<*, *>? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -16,6 +22,10 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             when (call.method) {
+                "sound" -> {
+                    try { playSound(call.arguments as? String); result.success(null) }
+                    catch (e: Exception) { result.error("sound", e.message, null) }
+                }
                 "start" -> {
                     val data = call.arguments as Map<*, *>
                     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -29,6 +39,43 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+    private fun playSound(name: String?) {
+        val assetName = when (name) {
+            "click" -> "clock-in"
+            "transition" -> "clock-out"
+            "clock-in", "clock-out" -> name
+            else -> return
+        }
+        val volume = if (name == "click" || name == "transition") 0.25f else 0.7f
+        val rate = if (name == "click") 1.4f else if (name == "transition") 0.85f else 1f
+        val pool = soundPool ?: SoundPool.Builder().setMaxStreams(2)
+            .setAudioAttributes(AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+            .build().also { created ->
+                soundPool = created
+                created.setOnLoadCompleteListener { loadedPool, id, status ->
+                    if (status == 0) {
+                        readySounds.add(id)
+                        val key = soundIds.entries.firstOrNull { it.value == id }?.key
+                        val level = if (key == "click" || key == "transition") 0.25f else 0.7f
+                        val speed = if (key == "click") 1.4f else if (key == "transition") 0.85f else 1f
+                        loadedPool.play(id, level, level, 1, 0, speed)
+                    }
+                }
+            }
+        val existing = soundIds[name]
+        if (existing != null) {
+            if (existing in readySounds) pool.play(existing, volume, volume, 1, 0, rate)
+        } else {
+            val asset = FlutterInjector.instance().flutterLoader().getLookupKeyForAsset("assets/sounds/$assetName.wav")
+            assets.openFd(asset).use { soundIds[name!!] = pool.load(it, 1) }
+        }
+    }
+    override fun onDestroy() {
+        soundPool?.release(); soundPool = null; soundIds.clear(); readySounds.clear()
+        super.onDestroy()
     }
     private fun startTimer(data: Map<*, *>) {
         val id = data["id"] as String

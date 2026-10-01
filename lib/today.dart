@@ -76,12 +76,12 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
             content: Text(e.message.toString()),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(c),
+                onPressed: withFeedback(() => Navigator.pop(c)),
                 child: const Text('Close'),
               ),
               if (existing != null)
                 FilledButton(
-                  onPressed: () {
+                  onPressed: withFeedback(() {
                     Navigator.pop(c);
                     panel(
                       context,
@@ -91,7 +91,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                         session: existing,
                       ),
                     );
-                  },
+                  }),
                   child: const Text('Open session'),
                 ),
             ],
@@ -124,7 +124,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       action: IconButton(
         tooltip: 'Add record',
         icon: const Icon(LucideIcons.plus),
-        onPressed: () => quickAdd(c, d, today),
+        onPressed: withFeedback(() => quickAdd(c, d, today)),
       ),
       children: [
         if (offline)

@@ -83,7 +83,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             ),
                             IconButton(
                               tooltip: 'Close',
-                              onPressed: () => Navigator.pop(c),
+                              onPressed: withFeedback(() => Navigator.pop(c)),
                               icon: const Icon(LucideIcons.x),
                             ),
                           ],
@@ -162,12 +162,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       children: [
         IconButton(
           tooltip: 'Previous year',
-          onPressed: () => setState(() => year--),
+          onPressed: withFeedback(() => setState(() => year--)),
           icon: const Icon(LucideIcons.chevronLeft),
         ),
         IconButton(
           tooltip: 'Next year',
-          onPressed: () => setState(() => year++),
+          onPressed: withFeedback(() => setState(() => year++)),
           icon: const Icon(LucideIcons.chevronRight),
         ),
       ],
@@ -188,6 +188,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 ),
                 selected: filters.contains(f),
                 onSelected: (v) {
+                  ActionFeedback.tap();
                   HapticFeedback.selectionClick();
                   setState(() {
                     v ? filters.add(f) : filters.remove(f);
@@ -217,7 +218,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   child: Column(
                     children: [
                       InkWell(
-                        onTap: () => monthSummary(i + 1),
+                        onTap: withFeedback(() => monthSummary(i + 1)),
                         borderRadius: BorderRadius.circular(20),
                         child: SizedBox(
                           height: 44,
@@ -272,7 +273,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         style: TextStyle(fontSize: 12),
       ),
       OutlinedButton.icon(
-        onPressed: () => quickAdd(c, widget.data, dayKey(DateTime.now())),
+        onPressed: withFeedback(
+          () => quickAdd(c, widget.data, dayKey(DateTime.now())),
+        ),
         icon: const Icon(LucideIcons.plus, size: 18),
         label: const Text('Add a record'),
       ),
@@ -317,7 +320,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     '$key${session ? ', has sessions' : ''}${expense ? ', expenses' : ''}${income ? ', income' : ''}',
                 button: true,
                 child: InkWell(
-                  onTap: () => openDay(key),
+                  onTap: withFeedback(() => openDay(key)),
                   borderRadius: BorderRadius.circular(14),
                   child: TweenAnimationBuilder<double>(
                     key: ValueKey('$key:${pulse == key ? pulseVersion : 0}'),
@@ -418,7 +421,7 @@ class DayPanel extends ConsumerWidget {
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: () => quickAdd(c, d, day),
+              onPressed: withFeedback(() => quickAdd(c, d, day)),
               icon: const Icon(LucideIcons.plus, size: 18),
               label: const Text('Add to this day'),
             ),
@@ -438,9 +441,11 @@ class DayPanel extends ConsumerWidget {
               ...entries.map(
                 (e) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  onTap: () => panel(
-                    c,
-                    EntryForm(data: d, day: day, kind: e.kind, entry: e),
+                  onTap: withFeedback(
+                    () => panel(
+                      c,
+                      EntryForm(data: d, day: day, kind: e.kind, entry: e),
+                    ),
                   ),
                   leading: Icon(
                     e.kind == 'income'

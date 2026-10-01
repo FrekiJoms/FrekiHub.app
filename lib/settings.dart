@@ -11,7 +11,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool busy = false;
   Offset themeOrigin = const Offset(160, 230);
   Future<void> changeTheme(String mode) async {
-    HapticFeedback.selectionClick();
+    ActionFeedback.tap(transition: true);
     await ThemeReveal.change(
       context,
       themeOrigin,
@@ -111,13 +111,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(c, false),
+              onPressed: withFeedback(() => Navigator.pop(c, false)),
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: typed.text == 'DELETE'
-                  ? () => Navigator.pop(c, true)
-                  : null,
+              onPressed: withFeedback(
+                typed.text == 'DELETE' ? () => Navigator.pop(c, true) : null,
+              ),
               child: const Text('Clear all data'),
             ),
           ],
@@ -197,7 +197,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Categories'),
                 subtitle: Text('${d.categories.length} categories'),
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                onTap: () => manage('categories', d.categories),
+                onTap: withFeedback(() => manage('categories', d.categories)),
               ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -205,15 +205,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Payment methods'),
                 subtitle: Text('${d.methods.length} ways to pay'),
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                onTap: () => manage('methods', d.methods),
+                onTap: withFeedback(() => manage('methods', d.methods)),
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 secondary: const Icon(LucideIcons.volume2, size: 20),
                 title: const Text('Sound effects'),
-                subtitle: const Text('Soft feedback for clock in and out'),
+                subtitle: const Text(
+                  'Soft clicks, transitions, and timer cues',
+                ),
                 value: d.prefs['sound'] == 'true',
-                onChanged: (v) => ref.read(databaseProvider).pref('sound', v),
+                onChanged: (v) {
+                  ActionFeedback.soundEnabled = v;
+                  ActionFeedback.tap();
+                  ref.read(databaseProvider).pref('sound', v);
+                },
               ),
             ],
           ),
@@ -229,19 +235,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: busy ? null : backup,
+                onPressed: withFeedback(busy ? null : backup),
                 icon: const Icon(LucideIcons.download, size: 18),
                 label: const Text('Export everything'),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: busy ? null : restore,
+                onPressed: withFeedback(busy ? null : restore),
                 icon: const Icon(LucideIcons.upload, size: 18),
                 label: const Text('Restore a backup'),
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: busy ? null : clear,
+                onPressed: withFeedback(busy ? null : clear),
                 child: Text(
                   'Clear all data',
                   style: TextStyle(color: Theme.of(c).colorScheme.error),
@@ -324,7 +330,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
                   errorText: error,
                   suffixIcon: IconButton(
                     tooltip: 'Add',
-                    onPressed: () async {
+                    onPressed: withFeedback(() async {
                       final value = name.text.trim();
                       if (value.isEmpty ||
                           items.any(
@@ -339,7 +345,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
                         name.clear();
                       });
                       await save();
-                    },
+                    }),
                     icon: const Icon(LucideIcons.plus),
                   ),
                 ),
@@ -356,12 +362,14 @@ class _ManageListState extends ConsumerState<_ManageList> {
                     title: Text(item),
                     trailing: IconButton(
                       tooltip: 'Remove $item',
-                      onPressed: items.length <= 1
-                          ? null
-                          : () async {
-                              setState(() => items.remove(item));
-                              await save();
-                            },
+                      onPressed: withFeedback(
+                        items.length <= 1
+                            ? null
+                            : () async {
+                                setState(() => items.remove(item));
+                                await save();
+                              },
+                      ),
                       icon: const Icon(LucideIcons.x, size: 18),
                     ),
                   ),
@@ -372,7 +380,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
         Padding(
           padding: const EdgeInsets.all(20),
           child: FilledButton(
-            onPressed: () => Navigator.pop(c),
+            onPressed: withFeedback(() => Navigator.pop(c)),
             child: const Text('Done'),
           ),
         ),

@@ -1,5 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
-import 'package:soundpool/soundpool.dart';
+import 'package:flutter/material.dart';
 
 import 'data.dart';
 
@@ -44,22 +46,47 @@ abstract final class NativeSession {
 }
 
 abstract final class FeedbackSound {
-  static final pool = Soundpool.fromOptions(
-    options: const SoundpoolOptions(streamType: StreamType.notification),
-  );
-  static final Map<String, Future<int>> loaded = {};
   static Future<void> play(bool enabled, String name) async {
     if (!enabled) {
       return;
     }
     try {
-      final id = await loaded.putIfAbsent(
-        name,
-        () async => pool.load(await rootBundle.load('assets/sounds/$name.wav')),
-      );
-      await pool.play(id);
+      await NativeSession.channel.invokeMethod<void>('sound', name);
     } catch (_) {
       /* Feedback must never interrupt a saved record. */
     }
+  }
+}
+
+VoidCallback? withFeedback(VoidCallback? action) => action == null
+    ? null
+    : () {
+        ActionFeedback.tap();
+        action();
+      };
+
+abstract final class ActionFeedback {
+  static bool soundEnabled = false;
+  static final _clock = Stopwatch()..start();
+  static int _lastTap = -150;
+  static void tap({bool transition = false}) {
+    if (_clock.elapsedMilliseconds - _lastTap < 100) return;
+    _lastTap = _clock.elapsedMilliseconds;
+    unawaited(HapticFeedback.selectionClick());
+    unawaited(
+      FeedbackSound.play(soundEnabled, transition ? 'transition' : 'click'),
+    );
+  }
+}
+
+class FeedbackNavigatorObserver extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute != null) ActionFeedback.tap(transition: true);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (previousRoute != null) ActionFeedback.tap(transition: true);
   }
 }

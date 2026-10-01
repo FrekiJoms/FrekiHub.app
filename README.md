@@ -36,12 +36,14 @@ The iOS project includes a compiled Widget Extension target, ActivityKit attribu
 
 Shared light/dark tokens, monochrome surfaces, subtle textured/vignetted background, pill controls, measured tab-indicator widths, liquid-glass navigation chrome, opaque data cards, and Lucide icons. Motion uses the shared `Cubic(.22, 1, .36, 1)` curve, 40 ms capped stagger offsets, 250 ms control changes, 400/350 ms sheet open/close and 150 ms number changes. Flutter's actual system disable-animations setting bypasses entrances and reveals and stops the analog clock's animation controller. The glass library also bridges accessibility settings; Reduce Transparency is approximated by Increase Contrast by that library.
 
-Geist and Geist Mono are bundled for offline use under OFL-1.1 (`assets/fonts/OFL.txt`). Two Kenney Interface Sounds are bundled as WAV under CC0 (`assets/sounds/LICENSE.txt`), loaded once on first use. Sounds default off. The native icon follows the existing FrekiHub connected-node motif.
+Geist and Geist Mono are bundled for offline use under OFL-1.1 (`assets/fonts/OFL.txt`). Two Kenney Interface Sounds are bundled as WAV under CC0 (`assets/sounds/LICENSE.txt`), cached on first use by Android SoundPool. Buttons and selections provide light haptics; tabs and modal routes provide transition feedback. Quiet pitched variants of the bundled sounds provide click and transition cues, with a 100 ms limit to prevent overlapping feedback. Sounds default off and can be enabled in Settings. The native icon follows the existing FrekiHub connected-node motif.
 
 ## Validation
 
-Flutter static analysis and Android debug APK compilation are the required checks. The application has not been launched on a device or simulator. iOS compilation/signing and device appearance remain unverified on this Windows machine. The iOS property lists and extension/embedding/entitlement references were checked statically.
+Flutter static analysis and Android debug APK compilation are the required checks. Android device testing uses the connected physical phone. iOS compilation/signing and device appearance remain unverified on this Windows machine. The iOS property lists and extension/embedding/entitlement references were checked statically.
 
 Android output: `build/app/outputs/flutter-apk/app-debug.apk`.
+
+Run `flutter pub get` before building after generated files have been removed. In particular, `.flutter-plugins-dependencies` must exist before using `flutter build apk --no-pub`; otherwise native plugins can be omitted and database startup can hang with a missing `libdartjni.so`. For normal builds, use `flutter build apk --debug` so Flutter regenerates plugin registration automatically.
 
 In this Windows desktop execution environment, Java's default temp directory caused `Unable to establish loopback connection`. The build succeeds with TEMP/TMP pointing to the workspace `.tmp` directory and `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=<absolute workspace .tmp path>`. This is a build-process environment workaround, not an application dependency or SDK change.
