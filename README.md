@@ -9,6 +9,7 @@ Native Flutter app for personal OJT hours and money. Opens directly into Today w
 - **Sessions:** sortable searchable table, month/type/weekday/note filters, adjacent-column resizing with double-tap reset, remembered widths, pinch zoom, panning, date/time previews, editing and confirmed bulk deletion.
 - **Budget:** continuous scroll containing net position, elapsed-period ring, safe-to-spend, savings goal, category donut/bars, reorderable/duplicable planner rules, and a combined expected/actual timeline.
 - **Settings:** light/dark/system appearance with circular reveal, currency selection, custom categories and payment methods, sound toggle, JSON backup/restore, and typed confirmation for clearing data.
+- **Navigation:** four bottom tabs with a central quick-add button for sessions/logs, expenses, income, savings and budget rules; Settings stays fixed in a circular liquid-glass shortcut at the upper right.
 
 ## Data and calculations
 
@@ -27,6 +28,8 @@ All writes already live on the phone and work offline. Connectivity controls the
 Backups include every table and setting. Restore validates records, amounts, dates, currencies and settings before replacing data inside a single database transaction. A failed restore rolls back. Export uses the native share/save interface; import uses the native file picker.
 
 ## Native running timer
+
+On supported Xiaomi HyperOS devices, the same foreground notification also provides a HyperIsland count-up session timer and clock-out action through HyperIsland ToolKit 0.4.0. The system advances elapsed time from the original clock-in timestamp without polling. Enable FrekiHub's **Show in status bar** notification permission for island support. Unsupported devices or disabled island permissions retain the regular session notification. Clock-out removes both surfaces and uses the existing native-to-Flutter reconciliation.
 
 Android uses a foreground service with a quiet ongoing chronometer and clock-out action. Notification permission is requested on Android 13+. The action saves its exact end time in native preferences even when Flutter is closed. Flutter applies and acknowledges that event on resume; the update is idempotent. Notification denial does not stop local session recording. Force-stopping the app in system settings can remove the notification; the stored session remains.
 

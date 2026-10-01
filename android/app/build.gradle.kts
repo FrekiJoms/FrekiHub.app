@@ -47,3 +47,7 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("io.github.d4viddf:hyperisland_kit:0.4.0")
+}

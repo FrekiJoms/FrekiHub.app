@@ -360,10 +360,12 @@ class NumberValue extends StatelessWidget {
 class PillNavigation extends StatefulWidget {
   final int index;
   final ValueChanged<int> onChanged;
+  final VoidCallback onQuickAdd;
   const PillNavigation({
     super.key,
     required this.index,
     required this.onChanged,
+    required this.onQuickAdd,
   });
   @override
   State<PillNavigation> createState() => _PillNavigationState();
@@ -428,9 +430,23 @@ class _PillNavigationState extends State<PillNavigation> {
                 ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(
-                  labels.length,
-                  (i) => Flexible(
+                children: List.generate(labels.length + 1, (slot) {
+                  if (slot == 2) {
+                    return Expanded(
+                      child: Center(
+                        child: SizedBox.square(
+                          dimension: 48,
+                          child: IconButton.filled(
+                            tooltip: 'Quick add',
+                            onPressed: withFeedback(widget.onQuickAdd),
+                            icon: const Icon(LucideIcons.plus, size: 24),
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  final i = slot > 2 ? slot - 1 : slot;
+                  return Expanded(
                     child: Semantics(
                       selected: widget.index == i,
                       button: true,
@@ -464,8 +480,8 @@ class _PillNavigationState extends State<PillNavigation> {
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ],
           );

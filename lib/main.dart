@@ -169,6 +169,8 @@ class _AppShellState extends ConsumerState<AppShell>
                       constraints: const BoxConstraints(maxWidth: 560),
                       child: PillNavigation(
                         index: index,
+                        onQuickAdd: () =>
+                            quickAdd(c, data, dayKey(DateTime.now())),
                         onChanged: (i) {
                           if (i == index) return;
                           ActionFeedback.tap(transition: true);

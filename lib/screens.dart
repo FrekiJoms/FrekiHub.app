@@ -164,18 +164,24 @@ Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
           style: Theme.of(c).textTheme.titleLarge,
         ),
         const SizedBox(height: 20),
-        for (final kind in ['expense', 'income', 'savings', 'session'])
+        for (final kind in ['session', 'expense', 'income', 'savings', 'rule'])
           spaced(
             OutlinedButton(
               onPressed: withFeedback(() {
                 Navigator.pop(c);
                 if (kind == 'session') {
                   panel(c, SessionForm(data: data, day: day));
+                } else if (kind == 'rule') {
+                  panel(c, RuleForm(data: data));
                 } else {
                   panel(c, EntryForm(data: data, day: day, kind: kind));
                 }
               }),
-              child: Text('Add $kind'),
+              child: Text(switch (kind) {
+                'session' => 'Add session / log',
+                'rule' => 'Add budget rule',
+                _ => 'Add $kind',
+              }),
             ),
           ),
       ],
