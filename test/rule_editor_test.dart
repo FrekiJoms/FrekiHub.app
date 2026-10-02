@@ -55,6 +55,21 @@ void main() {
         controller.text,
         contains('repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri"]);'),
       );
+      await tester.enterText(
+        find.byType(TextField),
+        'target == notifications { if (true) { notification.sh',
+      );
+      await tester.pump();
+      await tester.tap(find.text('notification.show'));
+      await tester.pump();
+      expect(
+        controller.text,
+        contains('notification.show("Reminder", "Message");'),
+      );
+      expect(
+        RuleCompiler.compile('${controller.text}\n} }')['needsNotifications'],
+        true,
+      );
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },

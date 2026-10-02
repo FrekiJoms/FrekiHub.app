@@ -112,23 +112,7 @@ object RuleNotifications {
             arm(c, key, state)
             return
         }
-        val manager = c.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Rule reminders", NotificationManager.IMPORTANCE_DEFAULT))
-        val allowed = (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-            manager.areNotificationsEnabled() && (Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
-        var delivered = false
-        if (allowed) {
-            val open = PendingIntent.getActivity(c, 93, Intent(c, MainActivity::class.java)
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
-            val notification = builder.setSmallIcon(R.drawable.ic_transaction)
-                .setContentTitle(definition.getString("title")).setContentText(definition.getString("body"))
-                .setStyle(Notification.BigTextStyle().bigText(definition.getString("body")))
-                .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true)
-                .setCategory(Notification.CATEGORY_REMINDER).setVisibility(Notification.VISIBILITY_PRIVATE).build()
-            try { manager.notify("rule:$key:$due", 93, notification); delivered = true }
-            catch (_: SecurityException) { }
-        }
+        val delivered = post(c, definition.getString("title"), definition.getString("body"), "rule:$key:$due")
         if (delivered) {
             state.put("sent", state.getInt("sent") + 1)
             Automation.emit(c, JSONObject().put("action", "scheduled_notification").put("time", System.currentTimeMillis())
@@ -140,6 +124,26 @@ object RuleNotifications {
         }
         storage.edit().putString(key, state.toString()).commit()
         if (repeats(definition) || !delivered) arm(c, key, state)
+    }
+
+    fun post(c: Context, title: String, body: String, tag: String): Boolean {
+        val manager = c.getSystemService(NotificationManager::class.java)
+        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Rule reminders", NotificationManager.IMPORTANCE_DEFAULT))
+        val allowed = (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            manager.areNotificationsEnabled() && (Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
+        if (allowed) {
+            val open = PendingIntent.getActivity(c, 93, Intent(c, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
+            val notification = builder.setSmallIcon(R.drawable.ic_transaction)
+                .setContentTitle(title).setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setContentIntent(open).setAutoCancel(true).setOnlyAlertOnce(true)
+                .setCategory(Notification.CATEGORY_REMINDER).setVisibility(Notification.VISIBILITY_PRIVATE).build()
+            try { manager.notify(tag, 93, notification); return true }
+            catch (_: SecurityException) { }
+        }
+        return false
     }
 }
 

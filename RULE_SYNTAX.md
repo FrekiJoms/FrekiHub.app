@@ -4,7 +4,23 @@ Open Settings → Conditions & automation, select a saved rule or enable Structu
 
 The compiler produces a bounded JSON program. Android interprets this program; source is never executed as JavaScript.
 
-## Scheduled system notifications
+## System notifications
+
+### Conditional system notifications
+
+Use `notification.show("Title", "Body");` inside an `if` branch under `target == notifications` to send a system notification when conditions match. The title must contain 1–100 characters and the body 1–500 characters. Run requests notification permission. These notifications use the Reminders sound category and are recorded in activity logs when logging is enabled.
+
+```javascript
+target == notifications {
+  if (time.between("08:00", "09:00") && location.inside() && weekday.in(["Mon", "Tue", "Wed", "Thu", "Fri"])) {
+    notification.show("At the office", "Time to clock in before 09:00");
+  }
+}
+```
+
+Configure this rule's place and radius in the builder. Both the time window and a fresh accurate position inside the radius must match. The weekday condition is optional. Without a fresh position, the rule waits; missing GPS is not treated as leaving the place. The notification posts once when this branch first matches, then again only after another branch/no branch is observed and this branch matches again. Stop/Run permits a new initial match. If notifications are blocked at evaluation time, the branch is still consumed; conditional delivery does not automatically retry. Location/time conditions follow evaluation and location sampling, not exact alarms, so short windows can be missed while the app is closed. Use a `schedule` block for a fixed-time reminder independent of location.
+
+### Scheduled reminders
 
 Schedules run independently of conditional branch changes and work with the app closed. Put them in a `notifications` target block. A rule can also contain separate conditional target blocks.
 
@@ -114,6 +130,7 @@ Use `{}` for blocks, `()` for conditions/function calls, `[]` for weekday lists,
 | `settings.set_sound(true)` | `settings_page` |
 | `log("Arrived")` | Any target; requires activity logging to be enabled |
 | `app.toast("Message")` | Any target; appears at the top during app reconciliation |
+| `notification.show("Title", "Body")` | `notifications`; system notification when a branch matches |
 
 Actions execute once when the matched branch changes, including an initial match after Run. They do not repeat on every check. Stop/Run allows a fresh match. One session action and up to eight total actions are allowed per branch. Source is limited to 8 KB, 16 target blocks, 128 condition nodes and 16 nesting levels; up to 100 saved rules. A short per-target cooldown prevents immediate feedback loops.
 

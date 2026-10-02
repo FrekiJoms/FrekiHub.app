@@ -152,7 +152,7 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       final program = sourceMode ? RuleCompiler.compile(code.text) : null;
       final hasSchedules = (program?['schedules'] as List? ?? []).isNotEmpty;
       bool preciseReminders = true;
-      if (run && hasSchedules) {
+      if (run && program?['needsNotifications'] == true) {
         final allowed =
             await NativeSession.channel.invokeMethod<bool>(
               'reminderPermission',

@@ -132,6 +132,14 @@ object RuleProgram {
                     val action = actions.getJSONObject(a)
                     // Reserve the edge before emitting actions, preventing feedback loops through snapshots.
                     when (action.optString("action")) {
+                        "notification" -> if (target.optString("target") == "notifications") {
+                            val title = action.optString("title").take(100)
+                            val body = action.optString("body").take(500)
+                            if (title.isNotBlank() && body.isNotBlank() && RuleNotifications.post(c, title, body, "condition:${rule.getString("id")}:$i:${System.currentTimeMillis()}")) {
+                                Automation.emit(c, JSONObject().put("action", "conditional_notification").put("time", System.currentTimeMillis())
+                                    .put("title", "Sent notification: $title").put("rule", rule.getString("id")).put("message", body))
+                            }
+                        }
                         "toast" -> Automation.emit(c, JSONObject().put("time", System.currentTimeMillis()).put("action", "rule_toast").put("title", action.optString("message").take(200)))
                         "setting" -> if (target.optString("target") == "settings_page" && action.optString("key") in listOf("sound", "theme")) {
                             Automation.emit(c, JSONObject().put("time", System.currentTimeMillis()).put("action", "rule_setting").put("title", "Setting changed").put("key", action.getString("key")).put("value", action.getString("value")))

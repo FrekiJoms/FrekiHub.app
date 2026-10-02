@@ -3,6 +3,46 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Conditional system notifications combine location and time', () {
+    final program = RuleCompiler.compile('''
+target == notifications {
+  if (time.between("08:00", "09:00") && location.inside() && weekday.in(["Mon", "Tue", "Wed", "Thu", "Fri"])) {
+    notification.show("At the office", "Clock in before 09:00");
+  }
+}
+''');
+    expect(program['needsLocation'], true);
+    expect(program['needsNotifications'], true);
+    expect(program['targets'][0]['branches'][0]['actions'][0], {
+      'action': 'notification',
+      'title': 'At the office',
+      'body': 'Clock in before 09:00',
+    });
+    expect(
+      () => RuleCompiler.compile(
+        'target == app { if (true) { notification.show("A", "B"); } }',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == notifications { if (true) { notification.show("", "B"); } }',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == notifications { if (true) { notification.show("A"); } }',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      RuleCompiler.compile(
+        'target == app { if (true) { app.toast("A"); } }',
+      )['needsNotifications'],
+      isNull,
+    );
+  });
   test('Selected weekday schedules support counted and unlimited repeats', () {
     final program = RuleCompiler.compile('''
 target == notifications {

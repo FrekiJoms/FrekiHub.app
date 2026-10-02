@@ -111,6 +111,10 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
           'app.toast("Message");',
           'Show a top toast when app reconciles',
         ),
+        'notification.show': (
+          'notification.show("Reminder", "Message");',
+          'Send a system notification when this condition matches',
+        ),
         'log': (
           'log("Message");',
           'Append an activity, when logging is enabled',
@@ -143,6 +147,7 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
         'settings.set_theme',
         'settings.set_sound',
         'app.toast',
+        'notification.show',
         'log',
       ];
       final lastBrace = before.lastIndexOf('{');
@@ -159,7 +164,8 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
         return (key.startsWith('session.clock') || key == 'session.continue') &&
                 target != 'session_page' ||
             key == 'budget.add_expense' && target != 'budget_page' ||
-            key.startsWith('settings.set_') && target != 'settings_page';
+            key.startsWith('settings.set_') && target != 'settings_page' ||
+            key == 'notification.show' && target != 'notifications';
       });
       if (target == 'notifications' && !inCondition) {
         final inSchedule =

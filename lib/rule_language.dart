@@ -301,6 +301,8 @@ class _Parser {
     return {
       'version': 1,
       'targets': targets,
+      if (tokens.any((t) => t.value == 'notification.show'))
+        'needsNotifications': true,
       if (schedules.isNotEmpty) 'schedules': schedules,
       'needsLocation': tokens.any(
         (t) => ['location.inside', 'location.outside'].contains(t.value),
@@ -562,6 +564,17 @@ class _Parser {
           fail('Toast must contain 1–200 characters');
         }
         value = {'action': 'toast', 'message': message};
+      } else if (target == 'notifications' && action == 'notification.show') {
+        final title = string();
+        need(',');
+        final body = string();
+        if (title.trim().isEmpty ||
+            title.length > 100 ||
+            body.trim().isEmpty ||
+            body.length > 500) {
+          fail('Use a title of 1–100 characters and body of 1–500 characters');
+        }
+        value = {'action': 'notification', 'title': title, 'body': body};
       } else if (target == 'settings_page' && action == 'settings.set_theme') {
         final theme = string();
         if (!['light', 'dark', 'system'].contains(theme)) {
