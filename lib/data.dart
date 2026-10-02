@@ -185,6 +185,11 @@ class AppDatabase extends _$AppDatabase {
     readsFrom: {preferences, sessions, entries},
   ).watch().map((rows) => rows.map((r) => r.data).toList());
   Future<void> addActivity(Map<String, dynamic> event) async {
+    final existing = await customSelect(
+      'SELECT id FROM activity_logs WHERE id = ?',
+      variables: [Variable<String>(event['id'] as String)],
+    ).get();
+    if (existing.isNotEmpty) return;
     await customStatement(
       'INSERT OR IGNORE INTO activity_logs VALUES (?, ?, ?, ?, ?, ?)',
       [
@@ -197,6 +202,12 @@ class AppDatabase extends _$AppDatabase {
       ],
     );
     await pref('logRevision', DateTime.now().microsecondsSinceEpoch);
+    final count = await customSelect(
+      'SELECT COUNT(*) AS total FROM activity_logs',
+    ).getSingle();
+    await pref('activityCount', count.read<int>('total'));
+    await pref('lastActivityAction', event['action']);
+    await pref('lastActivityTitle', event['title']);
   }
 
   Stream<AppData> watchAll({
@@ -267,9 +278,28 @@ class AppDatabase extends _$AppDatabase {
     return stream.stream;
   }
 
-  Future<Map<String, String>> readPreferences() async => {
-    for (final p in await select(preferences).get()) p.key: p.value,
-  };
+  Future<Map<String, String>> readPreferences() async {
+    final prefs = {
+      for (final p in await select(preferences).get()) p.key: p.value,
+    };
+    if ((prefs['automation'] ?? '').contains('"source"')) {
+      final count = await customSelect(
+        'SELECT COUNT(*) AS total FROM activity_logs',
+      ).getSingle();
+      final latest = await customSelect(
+        'SELECT action, title FROM activity_logs ORDER BY time DESC LIMIT 1',
+      ).get();
+      prefs['activityCount'] = count.read<int>('total').toString();
+      prefs['lastActivityAction'] = latest.isEmpty
+          ? ''
+          : latest.first.read<String>('action');
+      prefs['lastActivityTitle'] = latest.isEmpty
+          ? ''
+          : latest.first.read<String>('title');
+    }
+    return prefs;
+  }
+
   Future<AppData> readAll() async {
     final rows = await Future.wait<Object>([
       select(sessions).get(),

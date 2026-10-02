@@ -41,6 +41,12 @@ class MainActivity : FlutterActivity() {
                         result.success(allowed)
                     }
                 }
+                "automationAppState" -> {
+                    val snapshot = org.json.JSONObject(Automation.prefs(this).getString("snapshot", "{}")!!)
+                    snapshot.put("app.foreground", call.arguments as Boolean)
+                    Automation.prefs(this).edit().putString("snapshot", snapshot.toString()).commit()
+                    RuleProgram.refresh(this); result.success(null)
+                }
                 "automationConfig" -> { Automation.configure(this, call.arguments as String); result.success(null) }
                 "automationReset" -> { Automation.prefs(this).edit().clear().commit(); Automation.configure(this, "{}"); result.success(null) }
                 "automationEvents" -> result.success(Automation.prefs(this).getString("events", "[]"))
@@ -121,7 +127,7 @@ class MainActivity : FlutterActivity() {
     private fun startTimer(data: Map<*, *>) {
         val id = data["id"] as String
         if (getSharedPreferences("session", MODE_PRIVATE).getString("pendingId", null) == id) return
-        val intent = Intent(this, SessionService::class.java).putExtra("id", id).putExtra("started", (data["started"] as Number).toLong()).putExtra("day", data["day"] as String)
+        val intent = Intent(this, SessionService::class.java).putExtra("id", id).putExtra("started", (data["started"] as Number).toLong()).putExtra("day", data["day"] as String).putExtra("kind", data["kind"] as? String ?: "OJT").putExtra("note", data["note"] as? String ?: "")
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

@@ -27,27 +27,29 @@ class SessionService : Service() {
         val id = intent?.getStringExtra("id") ?: prefs.getString("id", null) ?: return START_NOT_STICKY
         val started = intent?.getLongExtra("started", 0) ?: prefs.getLong("started", 0)
         if (started <= 0 || prefs.getString("pendingId", null) == id) { stopSelf(); return START_NOT_STICKY }
-        prefs.edit().putString("id", id).putLong("started", started).commit()
+        val kind = intent?.getStringExtra("kind") ?: prefs.getString("kind", "OJT") ?: "OJT"
+        val note = intent?.getStringExtra("note") ?: prefs.getString("note", "") ?: ""
+        prefs.edit().putString("id", id).putLong("started", started).putString("kind", kind).putString("note", note).commit()
         val manager = getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("frekihub_timer", "Running session", NotificationManager.IMPORTANCE_LOW).apply { description = "A quiet timer for your OJT session"; setSound(null, null); enableVibration(false) })
+        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("frekihub_timer", "Running session", NotificationManager.IMPORTANCE_LOW).apply { description = "A quiet timer for your active session"; setSound(null, null); enableVibration(false) })
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val stop = PendingIntent.getService(this, 1, Intent(this, SessionService::class.java).setAction("clockOut"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "frekihub_timer") else Notification.Builder(this)
-        val notification = builder.setSmallIcon(R.drawable.ic_session).setContentTitle("FrekiHub · OJT in progress").setContentText("Clocked in at ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(started))}").setWhen(started).setUsesChronometer(true).setChronometerCountDown(false).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(true).setContentIntent(open).addAction(Notification.Action.Builder(null, "Clock out", stop).build()).build()
-        addHyperIsland(notification, started, stop)
+        val notification = builder.setSmallIcon(R.drawable.ic_session).setContentTitle("FrekiHub · $kind in progress").setContentText("Clocked in at ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(started))}").setWhen(started).setUsesChronometer(true).setChronometerCountDown(false).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(true).setContentIntent(open).addAction(Notification.Action.Builder(null, "Clock out", stop).build()).build()
+        addHyperIsland(notification, started, stop, kind)
         if (Build.VERSION.SDK_INT >= 34) startForeground(73, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(73, notification)
         return START_STICKY
     }
 
-    private fun addHyperIsland(notification: Notification, started: Long, stop: PendingIntent) {
+    private fun addHyperIsland(notification: Notification, started: Long, stop: PendingIntent, kind: String) {
         try {
             if (!HyperIslandNotification.isSupported(this)) return
             val clockOut = HyperAction("clock_out", "Clock out", null, stop, 3)
-            val island = HyperIslandNotification.Builder(this, "frekihub_session", "OJT in progress")
+            val island = HyperIslandNotification.Builder(this, "frekihub_session", "$kind in progress")
                 .addPicture(HyperPicture("session", this, R.drawable.ic_session))
                 .addAction(clockOut)
                 .setChatInfo(
-                    title = "FrekiHub · OJT in progress",
+                    title = "FrekiHub · $kind in progress",
                     pictureKey = "session",
                     timer = TimerInfo(1, started, started, started),
                     actionKeys = listOf("clock_out")

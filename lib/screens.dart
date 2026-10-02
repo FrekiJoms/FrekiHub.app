@@ -29,6 +29,7 @@ import 'automation_sync.dart';
 import 'design.dart';
 import 'services.dart';
 import 'theme_reveal.dart';
+import 'rule_language.dart';
 
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 part 'today.dart';
@@ -40,6 +41,7 @@ part 'forms.dart';
 part 'pickers.dart';
 part 'activity.dart';
 part 'controls.dart';
+part 'rule_editor.dart';
 
 Future<void> guarded(
   BuildContext c,

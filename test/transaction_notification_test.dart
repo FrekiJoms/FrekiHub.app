@@ -8,6 +8,58 @@ import 'package:freki_hub/services.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('Rule expenses, settings and top toasts reconcile once', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    bool acknowledged = false;
+    const events = [
+      {
+        'id': 'rule:expense',
+        'action': 'purchase',
+        'time': 1790902800000,
+        'amount': '99.50',
+        'currency': 'PHP',
+        'category': 'Food',
+        'merchant': 'Lunch',
+        'source': 'Automation',
+      },
+      {
+        'id': 'rule:setting',
+        'action': 'rule_setting',
+        'time': 1790902800000,
+        'title': 'Setting changed',
+        'key': 'sound',
+        'value': 'true',
+      },
+      {
+        'id': 'rule:toast',
+        'action': 'rule_toast',
+        'time': 1790902800000,
+        'title': 'Rule matched',
+      },
+    ];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+      if (call.method == 'automationEvents') {
+        return jsonEncode(acknowledged ? [] : events);
+      }
+      if (call.method == 'automationAck') acknowledged = true;
+      if (call.method == 'transactionSaved') return true;
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+    );
+    await AutomationSync.reconcile(db);
+    final data = await db.readAll();
+    expect(data.entries.single.category, 'Food');
+    expect(data.entries.single.amount, 9950);
+    expect(data.prefs['sound'], 'true');
+    expect(data.prefs['ruleToast:rule:toast'], 'Rule matched');
+    await AutomationSync.reconcile(db);
+    expect((await db.readAll()).entries.length, 1);
+  });
   test('Saved purchase receipts retry permission denial and do not repeat on replay', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     addTearDown(db.close);

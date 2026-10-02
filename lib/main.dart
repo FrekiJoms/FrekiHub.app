@@ -72,6 +72,7 @@ class _AppShellState extends ConsumerState<AppShell>
   int lastTab = 0;
   double slideDirection = 1;
   String? lastRunning;
+  int? savedPage;
   Timer? automationTimer;
   bool startupReady = false;
   @override
@@ -89,6 +90,16 @@ class _AppShellState extends ConsumerState<AppShell>
   Future<void> reconcile() async {
     try {
       await AutomationSync.reconcile(ref.read(databaseProvider));
+      final db = ref.read(databaseProvider);
+      final prefs = await db.readPreferences();
+      for (final notice in prefs.entries.where(
+        (p) => p.key.startsWith('ruleToast:'),
+      )) {
+        if (mounted) toast(context, notice.value);
+        await (db.delete(
+          db.preferences,
+        )..where((p) => p.key.equals(notice.key))).go();
+      }
       final destination = await NativeSession.channel.invokeMethod<String>(
         'purchaseDestination',
       );
@@ -115,6 +126,14 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(
+      NativeSession.channel
+          .invokeMethod(
+            'automationAppState',
+            state == AppLifecycleState.resumed,
+          )
+          .catchError((Object _) {}),
+    );
     if (startupReady && state == AppLifecycleState.resumed) {
       unawaited(reconcile());
     }
@@ -131,6 +150,11 @@ class _AppShellState extends ConsumerState<AppShell>
   Widget build(BuildContext c) {
     ref.listen(dataProvider, (before, after) {
       if (!after.hasValue) return;
+      if ((after.value!.prefs['automation'] ?? '').contains('"source"')) {
+        unawaited(
+          AutomationSync.configure(after.value!).catchError((Object _) {}),
+        );
+      }
       final running = after.value?.running;
       final signature = running == null
           ? null
@@ -154,6 +178,28 @@ class _AppShellState extends ConsumerState<AppShell>
         );
       }
     });
+    if (savedPage != index) {
+      savedPage = index;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          unawaited(
+            ref
+                .read(databaseProvider)
+                .pref(
+                  'currentPage',
+                  [
+                    'session_page',
+                    'calendar_page',
+                    'sessions_page',
+                    'budget_page',
+                    'settings_page',
+                  ][index],
+                )
+                .catchError((Object _) {}),
+          );
+        }
+      });
+    }
     final async = ref.watch(dataProvider);
     final graphics = ref.watch(graphicsProvider);
     if (async.hasError && !async.hasValue) {

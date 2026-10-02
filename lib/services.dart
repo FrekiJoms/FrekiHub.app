@@ -13,6 +13,8 @@ abstract final class NativeSession {
             'id': s.id,
             'started': s.started,
             'day': s.day,
+            'kind': s.kind,
+            'note': s.note,
           }) ??
           false;
     } on PlatformException {

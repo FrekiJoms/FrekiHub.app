@@ -28,9 +28,13 @@ object Automation {
     }
     fun config(c: Context) = JSONObject(prefs(c).getString("config", "{}")!!)
     fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && (Build.VERSION.SDK_INT < 29 || c.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED)
-    fun configure(c: Context, json: String) {
+    fun configure(c: Context, raw: String) {
+        val payload = JSONObject(raw)
+        payload.optJSONObject("snapshot")?.let { prefs(c).edit().putString("snapshot", it.toString()).commit() }
+        payload.remove("snapshot")
+        val json = payload.toString()
         val fingerprint = json + ":" + allowed(c)
-        if (prefs(c).getString("configured", null) == fingerprint) return
+        if (prefs(c).getString("configured", null) == fingerprint) { RuleProgram.refresh(c); return }
         val previousConfig = config(c)
         val nextConfig = JSONObject(json)
         val previousRules = previousConfig.optJSONArray("rules") ?: JSONArray()
@@ -38,7 +42,12 @@ object Automation {
         for (i in 0 until nextRules.length()) {
             val rule = nextRules.getJSONObject(i)
             val old = (0 until previousRules.length()).map { previousRules.getJSONObject(it) }.firstOrNull { it.optString("id") == rule.optString("id") }
-            if (!previousConfig.optBoolean("locationEnabled") || old == null || old.optDouble("lat") != rule.optDouble("lat") || old.optDouble("lng") != rule.optDouble("lng") || old.optDouble("radius") != rule.optDouble("radius")) prefs(c).edit().remove("inside:" + rule.getString("id")).commit()
+            if (old == null || old.optJSONObject("program")?.toString() != rule.optJSONObject("program")?.toString() || old.optBoolean("enabled", true) != rule.optBoolean("enabled", true)) {
+                val edit = prefs(c).edit()
+                for (index in 0..15) edit.remove("branch:${rule.getString("id")}:$index").remove("executed:branch:${rule.getString("id")}:$index")
+                edit.commit()
+            }
+            if (!previousConfig.optBoolean("locationEnabled") || old == null || old.optJSONObject("program")?.toString() != rule.optJSONObject("program")?.toString() || old.optDouble("lat") != rule.optDouble("lat") || old.optDouble("lng") != rule.optDouble("lng") || old.optDouble("radius") != rule.optDouble("radius")) prefs(c).edit().remove("inside:" + rule.getString("id")).commit()
         }
         prefs(c).edit().putString("config", json).commit()
         val config = config(c)
@@ -51,16 +60,18 @@ object Automation {
             val fences = mutableListOf<Geofence>()
             for (i in 0 until rules.length()) {
                 val r = rules.getJSONObject(i)
-                if (r.optBoolean("enabled", true)) fences.add(Geofence.Builder().setRequestId(r.getString("id")).setCircularRegion(r.getDouble("lat"), r.getDouble("lng"), r.getDouble("radius").toFloat()).setExpirationDuration(Geofence.NEVER_EXPIRE).setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT).build())
+                if (r.optBoolean("enabled", true) && (r.optJSONObject("program")?.optBoolean("needsLocation", true) != false)) fences.add(Geofence.Builder().setRequestId(r.getString("id")).setCircularRegion(r.getDouble("lat"), r.getDouble("lng"), r.getDouble("radius").toFloat()).setExpirationDuration(Geofence.NEVER_EXPIRE).setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT).build())
             }
             if (fences.isNotEmpty()) {
                 try { client.addGeofences(GeofencingRequest.Builder().setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER).addGeofences(fences).build(), intent).addOnSuccessListener { prefs(c).edit().putString("configured", fingerprint).commit() }.addOnFailureListener { emit(c, JSONObject().put("time", System.currentTimeMillis()).put("action", "error").put("title", "Location rules unavailable").put("details", it.message)) } }
                 catch (e: SecurityException) { }
-            }
+            } else prefs(c).edit().putString("configured", fingerprint).commit()
         }
         if (!config.optBoolean("locationEnabled") || !allowed(c) || (config.optJSONArray("rules")?.length() ?: 0) == 0) prefs(c).edit().putString("configured", fingerprint).commit()
         val scheduler = c.getSystemService(JobScheduler::class.java)
-        if (config.optBoolean("locationEnabled") && allowed(c)) scheduler.schedule(JobInfo.Builder(91, ComponentName(c, LocationLogJob::class.java)).setPeriodic(15 * 60 * 1000L).setPersisted(true).build()) else scheduler.cancel(91)
+        val hasPrograms = (0 until nextRules.length()).any { nextRules.getJSONObject(it).optBoolean("enabled", true) && nextRules.getJSONObject(it).has("program") }
+        if ((config.optBoolean("locationEnabled") && allowed(c)) || hasPrograms) scheduler.schedule(JobInfo.Builder(91, ComponentName(c, LocationLogJob::class.java)).setPeriodic(15 * 60 * 1000L).setPersisted(true).build()) else scheduler.cancel(91)
+        RuleProgram.refresh(c)
     }
     fun requestLocation(c: Context, done: (Location?) -> Unit) {
         if (c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { done(null); return }
@@ -98,19 +109,24 @@ object Automation {
             if (location.accuracy > radius || System.currentTimeMillis() - location.time > 120000) continue
             val wasInside = prefs(c).getBoolean("inside:" + rule.getString("id"), false)
             val inside = if (wasInside) distance[0] <= radius + location.accuracy else distance[0] + location.accuracy <= radius
+            if (rule.has("program")) RuleProgram.run(c, rule, inside, location)
             if (inside != wasInside) { transition(c, rule, inside, location); prefs(c).edit().putBoolean("inside:" + rule.getString("id"), inside).commit() }
         }
     }
     @Synchronized fun transition(c: Context, rule: JSONObject, enter: Boolean, location: Location?) {
-        val config = config(c); if (!config.optBoolean("locationEnabled") || !rule.optBoolean("enabled", true)) return
+        if (rule.has("program")) RuleProgram.run(c, rule, enter, location)
+        else applySessionTransition(c, rule, enter, location)
+    }
+    @Synchronized fun applySessionTransition(c: Context, rule: JSONObject, enter: Boolean, location: Location?) {
+        val config = config(c); if ((!rule.has("program") && !config.optBoolean("locationEnabled")) || !rule.optBoolean("enabled", true)) return
         val p = c.getSharedPreferences("session", Context.MODE_PRIVATE)
         val event = (location?.let { locationJson(c, it) } ?: JSONObject()).put("location", rule.getString("name")).put("time", System.currentTimeMillis()).put("rule", rule.getString("id"))
         if (enter) {
             if (p.getString("id", null) != null || prefs(c).contains("activeRule")) return
-            if (location == null || location.accuracy > rule.getDouble("radius") || System.currentTimeMillis() - location.time > 120000) return
+            if (rule.optJSONObject("program")?.optBoolean("needsLocation", true) != false && (location == null || location.accuracy > rule.getDouble("radius") || System.currentTimeMillis() - location.time > 120000)) return
             val id = UUID.randomUUID().toString(); val started = System.currentTimeMillis()
             prefs(c).edit().putString("activeRule", rule.getString("id")).commit()
-            p.edit().putString("id", id).putLong("started", started).commit()
+            p.edit().putString("id", id).putLong("started", started).putString("kind", rule.optString("kind", "OJT")).putString("note", "Automatic · " + rule.getString("name")).commit()
             emit(c, event.put("action", "auto_clock_in").put("title", "Clocked in").put("sessionId", id).put("started", started).put("kind", rule.optString("kind", "OJT")))
             // The geofence exemption allows a foreground timer after a location transition.
             val timer = Intent(c, SessionService::class.java).putExtra("id", id).putExtra("started", started)
@@ -133,6 +149,7 @@ class ZoneReceiver : BroadcastReceiver() {
 }
 class LocationLogJob : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
+        RuleProgram.refresh(this)
         if (!Automation.config(this).optBoolean("locationEnabled") || !Automation.allowed(this)) return false
         Automation.requestLocation(this) { location -> if (location != null) { Automation.logLocation(this, location); Automation.recheck(this, location) }; jobFinished(params, false) }
         return true

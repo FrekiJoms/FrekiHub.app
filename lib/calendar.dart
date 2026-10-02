@@ -58,8 +58,28 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         : selected.add(Duration(days: direction * (mode == 2 ? 7 : 1)));
   });
 
+  String? storedSelection;
   @override
   Widget build(BuildContext c) {
+    final signature = '${dayKey(selected)}:$mode';
+    if (storedSelection != signature) {
+      storedSelection = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final db = ref.read(databaseProvider);
+        unawaited(
+          db
+              .transaction(() async {
+                await db.pref('calendarSelected', dayKey(selected));
+                await db.pref(
+                  'calendarView',
+                  ['year', 'month', 'week', 'day'][mode],
+                );
+              })
+              .catchError((Object _) {}),
+        );
+      });
+    }
     final colors = Theme.of(c).colorScheme;
     return Padding(
       padding: EdgeInsets.fromLTRB(

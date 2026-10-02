@@ -19,17 +19,33 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   String? editing;
   double radius = 150;
   String exit = 'continue', kind = 'OJT';
-  bool placed = false, busy = false;
+  bool placed = false, busy = false, sourceMode = false, ruleRunning = false;
+  final code = TextEditingController();
+  bool lastCodeNeedsPlace = true;
+  bool get requiresPlace =>
+      !sourceMode ||
+      code.text.contains('location.inside') ||
+      code.text.contains('location.outside');
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    code.addListener(() {
+      final needs =
+          code.text.contains('location.inside') ||
+          code.text.contains('location.outside');
+      if (mounted && needs != lastCodeNeedsPlace) {
+        lastCodeNeedsPlace = needs;
+        setState(() {});
+      }
+    });
     final data = ref.read(dataProvider).value;
     if (data != null && widget.conditionName != null) {
       for (final raw in AutomationSync.config(data)['rules'] as List? ?? []) {
         final rule = Map<String, dynamic>.from(raw as Map);
         if (rule['name'] == widget.conditionName) {
           editing = rule['id'] as String;
+          loadSource(rule);
           name.text = rule['name'] as String;
           lat.text = rule['lat'].toString();
           lng.text = rule['lng'].toString();
@@ -49,6 +65,7 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     name.dispose();
+    code.dispose();
     lat.dispose();
     lng.dispose();
     super.dispose();
@@ -115,20 +132,43 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
     if (mounted) setState(() => busy = false);
   }
 
-  Future<void> saveRule(AppData data) async {
+  void loadSource(Map<String, dynamic> rule) {
+    sourceMode = rule['source'] != null;
+    code.text =
+        rule['source'] as String? ??
+        RuleCompiler.visual(
+          kind: rule['kind'] as String,
+          exit: rule['else'] as String,
+        );
+    ruleRunning = rule['enabled'] == true;
+  }
+
+  Future<void> saveRule(AppData data, {bool run = false}) async {
+    if (busy) return;
+    setState(() => busy = true);
     await guarded(context, () async {
       final latitude = double.tryParse(lat.text),
           longitude = double.tryParse(lng.text);
-      if (!placed ||
-          name.text.trim().isEmpty ||
-          latitude == null ||
-          longitude == null ||
-          !latitude.isFinite ||
-          !longitude.isFinite ||
-          latitude.abs() > 90 ||
-          longitude.abs() > 180) {
+      final program = sourceMode ? RuleCompiler.compile(code.text) : null;
+      final needsLocation = program == null || program['needsLocation'] == true;
+      if (name.text.trim().isEmpty ||
+          (needsLocation &&
+              (!placed ||
+                  latitude == null ||
+                  longitude == null ||
+                  !latitude.isFinite ||
+                  !longitude.isFinite ||
+                  latitude.abs() > 90 ||
+                  longitude.abs() > 180))) {
         throw StateError(
           'Name a place, enter valid coordinates, then drop it into the condition.',
+        );
+      }
+      if (run &&
+          needsLocation &&
+          (await AutomationSync.status())['background'] != true) {
+        throw StateError(
+          'Allow precise location and location all the time before running this rule.',
         );
       }
       final config = AutomationSync.config(data);
@@ -139,36 +179,74 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       );
       final id = editing ?? newId();
       if (editing == null && rules.length >= 100) {
-        throw StateError('Up to 100 location conditions can be saved.');
+        throw StateError('Up to 100 rules can be saved.');
       }
       rules.removeWhere((r) => r['id'] == id);
       rules.add({
         'id': id,
         'name': name.text.trim(),
-        'lat': latitude,
-        'lng': longitude,
+        'lat': latitude ?? 0,
+        'lng': longitude ?? 0,
         'radius': radius,
         'kind': kind,
         'else': exit,
-        'enabled': true,
+        'enabled': sourceMode ? run : true,
+        if (sourceMode) 'source': code.text,
+        'program': ?program,
       });
       config['rules'] = rules;
+      if (run && needsLocation) {
+        await ref.read(databaseProvider).pref('locationEnabled', true);
+      }
       await ref.read(databaseProvider).pref('automation', jsonEncode(config));
       await AutomationSync.configure(
         await ref.read(databaseProvider).readAll(),
       );
       if (mounted) {
         setState(() {
-          editing = null;
-          placed = false;
-          place = null;
-          name.clear();
-          lat.clear();
-          lng.clear();
+          if (sourceMode) {
+            editing = id;
+            ruleRunning = run;
+          } else {
+            editing = null;
+            placed = false;
+            place = null;
+            name.clear();
+            lat.clear();
+            lng.clear();
+          }
         });
-        toast(context, 'Condition saved');
+        toast(
+          context,
+          run
+              ? 'Rule running'
+              : sourceMode
+              ? 'Rule saved · paused'
+              : 'Condition saved',
+        );
       }
     });
+    if (mounted) setState(() => busy = false);
+  }
+
+  Future<void> stopRule(AppData data) async {
+    if (busy || editing == null) return;
+    setState(() => busy = true);
+    await guarded(context, () async {
+      final config = AutomationSync.config(data);
+      for (final raw in config['rules'] as List? ?? []) {
+        if (raw['id'] == editing) raw['enabled'] = false;
+      }
+      await ref.read(databaseProvider).pref('automation', jsonEncode(config));
+      await AutomationSync.configure(
+        await ref.read(databaseProvider).readAll(),
+      );
+      if (mounted) {
+        setState(() => ruleRunning = false);
+        toast(context, 'Rule stopped');
+      }
+    });
+    if (mounted) setState(() => busy = false);
   }
 
   Future<void> apps(AppData data) async {
@@ -473,7 +551,7 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
             ],
           ),
         const Text(
-          'Android may delay background checks. Precise location and “Allow all the time” are required for conditions.',
+          'Android may delay background checks. Location rules require precise location and “Allow all the time”. Other rules work without GPS.',
           style: TextStyle(fontSize: 12),
         ),
         const SizedBox(height: 16),
@@ -485,11 +563,14 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
               child: ListTile(
                 title: Text(rule['name'] as String),
                 subtitle: Text(
-                  'If inside ${rule['radius']} m → clock in\nElse → ${rule['else'] == 'clock_out' ? 'clock out' : 'continue'}',
+                  rule['source'] != null
+                      ? '${rule['enabled'] == true ? 'Running' : 'Paused'} · structured rule'
+                      : 'If inside ${rule['radius']} m → clock in\nElse → ${rule['else'] == 'clock_out' ? 'clock out' : 'continue'}',
                 ),
                 onTap: withFeedback(
                   () => setState(() {
                     editing = rule['id'] as String;
+                    loadSource(rule);
                     name.text = rule['name'] as String;
                     lat.text = rule['lat'].toString();
                     lng.text = rule['lng'].toString();
@@ -525,126 +606,192 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
               ),
             ),
           ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Structured syntax'),
+          subtitle: const Text(
+            'Targets, conditions, actions and completion hints',
+          ),
+          value: sourceMode,
+          onChanged: ruleRunning && sourceMode
+              ? null
+              : (v) => setState(() {
+                  ActionFeedback.tap();
+                  sourceMode = v;
+                  if (v && code.text.trim().isEmpty) {
+                    code.text = RuleCompiler.visual(kind: kind, exit: exit);
+                  }
+                }),
+        ),
         block(
-          editing == null ? 'Choose a place' : 'Edit condition',
+          sourceMode
+              ? 'Rule name'
+              : editing == null
+              ? 'Choose a place'
+              : 'Edit condition',
           Column(
             children: [
               spaced(
                 TextField(
                   controller: name,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Place name · office, school, shop',
+                  decoration: InputDecoration(
+                    labelText: sourceMode
+                        ? 'Rule name'
+                        : 'Place name · office, school, shop',
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: lat,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                        signed: true,
+              if (requiresPlace)
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: lat,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Latitude',
+                        ),
                       ),
-                      decoration: const InputDecoration(labelText: 'Latitude'),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: lng,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                        signed: true,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: lng,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Longitude',
+                        ),
                       ),
-                      decoration: const InputDecoration(labelText: 'Longitude'),
                     ),
-                  ),
-                ],
-              ),
-              TextButton.icon(
-                onPressed: withFeedback(busy ? null : currentPlace),
-                icon: const Icon(LucideIcons.locateFixed, size: 18),
-                label: Text(
-                  busy ? 'Finding location…' : 'Use current location',
+                  ],
                 ),
-              ),
+              if (requiresPlace)
+                TextButton.icon(
+                  onPressed: withFeedback(busy ? null : currentPlace),
+                  icon: const Icon(LucideIcons.locateFixed, size: 18),
+                  label: Text(
+                    busy ? 'Finding location…' : 'Use current location',
+                  ),
+                ),
             ],
           ),
         ),
-        LongPressDraggable<bool>(
-          data: true,
-          feedback: Material(
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(name.text.isEmpty ? 'Selected place' : name.text),
+        if (requiresPlace)
+          LongPressDraggable<bool>(
+            data: true,
+            feedback: Material(
+              borderRadius: BorderRadius.circular(16),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(name.text.isEmpty ? 'Selected place' : name.text),
+              ),
+            ),
+            child: ListTile(
+              leading: const Icon(LucideIcons.gripVertical),
+              title: Text(
+                name.text.isEmpty
+                    ? 'Drag selected place into If'
+                    : 'Drag ${name.text} into If',
+              ),
             ),
           ),
-          child: ListTile(
-            leading: const Icon(LucideIcons.gripVertical),
-            title: Text(
-              name.text.isEmpty
-                  ? 'Drag selected place into If'
-                  : 'Drag ${name.text} into If',
-            ),
-          ),
-        ),
-        block(
-          'IF · Location is inside',
-          DragTarget<bool>(
-            onAcceptWithDetails: (_) => setState(() => placed = true),
-            builder: (c, candidates, rejected) => Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(c).colorScheme.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
+        if (requiresPlace)
+          block(
+            'IF · Location is inside',
+            DragTarget<bool>(
+              onAcceptWithDetails: (_) => setState(() => placed = true),
+              builder: (c, candidates, rejected) => Column(
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(c).colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      placed
+                          ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
+                          : 'Drop a location here',
+                      textAlign: TextAlign.center,
+                    ),
                   ),
-                  child: Text(
-                    placed
-                        ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
-                        : 'Drop a location here',
-                    textAlign: TextAlign.center,
+                  Slider(
+                    value: radius,
+                    min: 100,
+                    max: 1000,
+                    divisions: 18,
+                    label: '${radius.round()} m',
+                    onChanged: (v) => setState(() => radius = v),
                   ),
-                ),
-                Slider(
-                  value: radius,
-                  min: 100,
-                  max: 1000,
-                  divisions: 18,
-                  label: '${radius.round()} m',
-                  onChanged: (v) => setState(() => radius = v),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        block(
-          'THEN · Clock in',
-          selectField('Session type', kind, [
-            'OJT',
-            'Work',
-            'Study',
-            'Personal',
-          ], (v) => setState(() => kind = v)),
-        ),
-        block(
-          'ELSE · Outside the radius',
-          selectField(
-            'Action',
-            exit == 'clock_out' ? 'Clock out' : 'Keep running',
-            ['Keep running', 'Clock out'],
-            (v) => setState(
-              () => exit = v == 'Clock out' ? 'clock_out' : 'continue',
+        if (sourceMode)
+          Surface(
+            padding: const EdgeInsets.all(16),
+            child: RuleCodeEditor(
+              controller: code,
+              settingFields: data.prefs.keys
+                  .map((k) => 'settings.$k')
+                  .where(
+                    (k) =>
+                        k != 'settings.automation' &&
+                        !k.startsWith('settings.purchaseNotice:') &&
+                        !k.startsWith('settings.ruleToast:'),
+                  ),
+              create: busy
+                  ? null
+                  : () => setState(() {
+                      editing = null;
+                      ruleRunning = false;
+                      placed = false;
+                      place = null;
+                      name.clear();
+                      lat.clear();
+                      lng.clear();
+                      code.text = 'target == app {\n  if (app.foreground == true) {\n    app.toast("Rule matched");\n  }\n}';
+                    }),
+              running: ruleRunning,
+              busy: busy,
+              run: () => saveRule(data, run: true),
+              stop: () => stopRule(data),
             ),
           ),
-        ),
+        if (!sourceMode)
+          block(
+            'THEN · Clock in',
+            selectField('Session type', kind, [
+              'OJT',
+              'Work',
+              'Study',
+              'Personal',
+            ], (v) => setState(() => kind = v)),
+          ),
+        if (!sourceMode)
+          block(
+            'ELSE · Outside the radius',
+            selectField(
+              'Action',
+              exit == 'clock_out' ? 'Clock out' : 'Keep running',
+              ['Keep running', 'Clock out'],
+              (v) => setState(
+                () => exit = v == 'Clock out' ? 'clock_out' : 'continue',
+              ),
+            ),
+          ),
         FilledButton(
-          onPressed: withFeedback(() => saveRule(data)),
+          onPressed: withFeedback(
+            busy || (sourceMode && ruleRunning) ? null : () => saveRule(data),
+          ),
           child: Text(editing == null ? 'Save condition' : 'Update condition'),
         ),
         const SizedBox(height: 20),

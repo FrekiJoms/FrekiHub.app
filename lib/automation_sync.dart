@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 
 import 'data.dart';
 import 'services.dart';
+import 'rule_language.dart';
+
+import 'package:flutter/widgets.dart';
 
 abstract final class AutomationSync {
   static Future<void>? _work;
@@ -22,16 +25,38 @@ abstract final class AutomationSync {
         jsonDecode(data.prefs['automation'] ?? '{}'),
       );
     } catch (_) {}
+    stored.remove('snapshot');
+    for (final rule in stored['rules'] as List? ?? []) {
+      if (rule['source'] is String) {
+        try {
+          rule['program'] = RuleCompiler.compile(rule['source'] as String);
+        } on FormatException {
+          rule['enabled'] = false;
+        }
+      } else if (rule['program'] != null) {
+        rule['enabled'] = false;
+      }
+    }
     return {
       ...stored,
+      'knownTargets': RuleCatalog.targets,
       'logging': data.prefs['activityLogging'] == 'true',
       'locationEnabled': data.prefs['locationEnabled'] == 'true',
       'purchases': data.prefs['purchaseScanning'] == 'true',
     };
   }
 
-  static Future<void> configure(AppData data) => NativeSession.channel
-      .invokeMethod('automationConfig', jsonEncode(config(data)));
+  static Future<void> configure(AppData data) =>
+      NativeSession.channel.invokeMethod(
+        'automationConfig',
+        jsonEncode({
+          ...config(data),
+          'snapshot': RuleCatalog.snapshot(data)
+            ..['app.foreground'] =
+                WidgetsBinding.instance.lifecycleState ==
+                AppLifecycleState.resumed,
+        }),
+      );
   static Future<void> reconcile(AppDatabase db) =>
       _work ??= _reconcile(db).whenComplete(() => _work = null);
   static Future<void> _reconcile(AppDatabase db) async {
@@ -46,7 +71,14 @@ abstract final class AutomationSync {
     if (events.isEmpty && pending == null) {
       final prefs = await db.readPreferences();
       await deliverReceipts(db, prefs);
-      await configure(AppData([], [], [], prefs));
+      final stored = config(AppData([], [], [], prefs));
+      if ((stored['rules'] as List? ?? []).any(
+        (r) => r['source'] != null && r['enabled'] == true,
+      )) {
+        await configure(await db.readAll());
+      } else {
+        await configure(AppData([], [], [], prefs));
+      }
       return;
     }
     final data = await db.readAll();
@@ -93,6 +125,15 @@ abstract final class AutomationSync {
             event['sessionId'] as String,
             at: event['time'] as int,
           );
+        } else if (action == 'rule_setting') {
+          final key = event['key'];
+          final value = event['value'];
+          if (key == 'sound' && ['true', 'false'].contains(value) ||
+              key == 'theme' && ['light', 'dark', 'system'].contains(value)) {
+            await db.pref(key as String, value);
+          }
+        } else if (action == 'rule_toast') {
+          await db.pref('ruleToast:$id', event['title']);
         } else if (action == 'purchase') {
           int amount;
           try {
@@ -121,7 +162,7 @@ abstract final class AutomationSync {
                   kind: 'expense',
                   amount: amount,
                   currency: event['currency'] as String,
-                  category: 'Other',
+                  category: event['category'] as String? ?? 'Other',
                   method: (event['source'] ?? event['package']) as String,
                   note: event['merchant'] as String,
                   occurrence: id,
@@ -186,7 +227,7 @@ abstract final class AutomationSync {
     if (acknowledged.isNotEmpty) {
       await NativeSession.channel.invokeMethod('automationAck', acknowledged);
     }
-    await configure(AppData([], [], [], await db.readPreferences()));
+    await configure(await db.readAll());
   }
 
   static Future<void> deliverReceipts(
