@@ -12,14 +12,15 @@ import 'design.dart';
 import 'screens.dart';
 import 'services.dart';
 import 'theme_reveal.dart';
+import 'startup.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await LiquidGlassWidgets.initialize(enablePerformanceMonitor: false);
   runApp(
     ProviderScope(
       child: LiquidGlassWidgets.wrap(
         brightnessResolver: Theme.maybeBrightnessOf,
+        adaptiveQuality: true,
         child: const FrekiHubApp(),
       ),
     ),
@@ -35,9 +36,12 @@ class FrekiHubApp extends ConsumerWidget {
   const FrekiHubApp({super.key});
   @override
   Widget build(BuildContext c, WidgetRef ref) {
-    final mode = ref.watch(dataProvider).value?.prefs['theme'] ?? 'system';
-    ActionFeedback.soundEnabled =
-        ref.watch(dataProvider).value?.prefs['sound'] == 'true';
+    final mode = ref.watch(
+      dataProvider.select((data) => data.value?.prefs['theme'] ?? 'system'),
+    );
+    ActionFeedback.soundEnabled = ref.watch(
+      dataProvider.select((data) => data.value?.prefs['sound'] == 'true'),
+    );
     return MaterialApp.router(
       title: 'FrekiHub',
       debugShowCheckedModeBanner: false,
@@ -69,13 +73,14 @@ class _AppShellState extends ConsumerState<AppShell>
   double slideDirection = 1;
   String? lastRunning;
   Timer? automationTimer;
+  bool startupReady = false;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(reconcile());
     automationTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      if (startupReady &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(reconcile());
       }
     });
@@ -100,7 +105,7 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    if (startupReady && state == AppLifecycleState.resumed) {
       unawaited(reconcile());
     }
   }
@@ -115,6 +120,7 @@ class _AppShellState extends ConsumerState<AppShell>
   @override
   Widget build(BuildContext c) {
     ref.listen(dataProvider, (before, after) {
+      if (!after.hasValue) return;
       final running = after.value?.running;
       final signature = running == null
           ? null
@@ -144,130 +150,159 @@ class _AppShellState extends ConsumerState<AppShell>
       }
     });
     final async = ref.watch(dataProvider);
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: GlassScaffold(
-        background: const CanvasBackground(),
-        edgeFade: false,
-        body: SafeArea(
-          bottom: false,
-          child: async.when(
-            data: (data) => Stack(
-              children: [
-                Positioned.fill(
-                  child: ClipRect(
-                    child: AnimatedSwitcher(
-                      duration: Motion.duration(c),
-                      reverseDuration: Motion.duration(c, 200),
-                      switchInCurve: Motion.curve,
-                      switchOutCurve: Motion.curve,
-                      transitionBuilder: (child, animation) {
-                        final incoming = child.key == ValueKey(index);
-                        return IgnorePointer(
-                          ignoring: !incoming,
-                          child: TickerMode(
-                            enabled: incoming,
-                            child: FadeTransition(
-                              opacity: animation,
-                              child: SlideTransition(
-                                position: Tween<Offset>(
-                                  begin: Offset(
-                                    (incoming ? 1 : -1) * slideDirection * .12,
-                                    0,
-                                  ),
-                                  end: Offset.zero,
-                                ).animate(animation),
-                                child: child,
+    final graphics = ref.watch(graphicsProvider);
+    if (!graphics.hasValue || (!async.hasValue && async.isLoading)) {
+      return Scaffold(
+        body: StartupLoading(
+          stage: graphics.hasError
+              ? 'Could not prepare the interface'
+              : graphics.hasValue
+              ? 'Opening your records'
+              : 'Preparing your space',
+          failed: graphics.hasError,
+          onRetry: () => ref.invalidate(graphicsProvider),
+        ),
+      );
+    }
+    if (!startupReady && async.hasValue) {
+      startupReady = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(reconcile());
+      });
+    }
+    return StartupIntro(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: GlassScaffold(
+          background: const CanvasBackground(),
+          edgeFade: false,
+          body: SafeArea(
+            bottom: false,
+            child: async.when(
+              data: (data) => Stack(
+                children: [
+                  Positioned.fill(
+                    child: ClipRect(
+                      child: AnimatedSwitcher(
+                        duration: Motion.duration(c),
+                        reverseDuration: Motion.duration(c, 200),
+                        switchInCurve: Motion.curve,
+                        switchOutCurve: Motion.curve,
+                        transitionBuilder: (child, animation) {
+                          final incoming = child.key == ValueKey(index);
+                          return IgnorePointer(
+                            ignoring: !incoming,
+                            child: TickerMode(
+                              enabled: incoming,
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: Offset(
+                                      (incoming ? 1 : -1) *
+                                          slideDirection *
+                                          .12,
+                                      0,
+                                    ),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
                               ),
                             ),
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey(index),
+                          child: switch (index) {
+                            0 => TodayScreen(data: data),
+                            1 => CalendarScreen(data: data),
+                            2 => HistoryScreen(data: data),
+                            3 => BudgetScreen(data: data),
+                            _ => SettingsScreen(data: data),
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: MediaQuery.paddingOf(c).bottom + 12,
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: PillNavigation(
+                          index: index,
+                          onQuickAdd: (kind) => openQuickAdd(
+                            c,
+                            data,
+                            dayKey(DateTime.now()),
+                            kind,
                           ),
-                        );
-                      },
-                      child: KeyedSubtree(
-                        key: ValueKey(index),
-                        child: switch (index) {
-                          0 => TodayScreen(data: data),
-                          1 => CalendarScreen(data: data),
-                          2 => HistoryScreen(data: data),
-                          3 => BudgetScreen(data: data),
-                          _ => SettingsScreen(data: data),
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: MediaQuery.paddingOf(c).bottom + 12,
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 560),
-                      child: PillNavigation(
-                        index: index,
-                        onQuickAdd: (kind) =>
-                            openQuickAdd(c, data, dayKey(DateTime.now()), kind),
-                        onChanged: (i) {
-                          if (i == index) return;
-                          ActionFeedback.tap(transition: true);
-                          setState(() {
-                            slideDirection = i > index ? 1 : -1;
-                            index = i;
-                            lastTab = i;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 16,
-                  right: 16,
-                  child: SizedBox.square(
-                    dimension: 48,
-                    child: GlassContainer(
-                      useOwnLayer: true,
-                      shape: const LiquidOval(),
-                      settings: const LiquidGlassSettings(
-                        blur: 12,
-                        thickness: 24,
-                      ),
-                      child: Semantics(
-                        selected: index == 4,
-                        child: IconButton(
-                          tooltip: index == 4 ? 'Close settings' : 'Settings',
-                          icon: const Icon(LucideIcons.settings2, size: 22),
-                          onPressed: () {
+                          onChanged: (i) {
+                            if (i == index) return;
                             ActionFeedback.tap(transition: true);
                             setState(() {
-                              slideDirection = index == 4 ? -1 : 1;
-                              index = index == 4 ? lastTab : 4;
+                              slideDirection = i > index ? 1 : -1;
+                              index = i;
+                              lastTab = i;
                             });
                           },
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('Your data could not be opened.'),
-                    const SizedBox(height: 16),
-                    Text('$e'),
-                    TextButton(
-                      onPressed: withFeedback(
-                        () => ref.invalidate(dataProvider),
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: SizedBox.square(
+                      dimension: 48,
+                      child: GlassContainer(
+                        useOwnLayer: true,
+                        shape: const LiquidOval(),
+                        settings: const LiquidGlassSettings(
+                          blur: 12,
+                          thickness: 24,
+                        ),
+                        child: Semantics(
+                          selected: index == 4,
+                          child: IconButton(
+                            tooltip: index == 4 ? 'Close settings' : 'Settings',
+                            icon: const Icon(LucideIcons.settings2, size: 22),
+                            onPressed: () {
+                              ActionFeedback.tap(transition: true);
+                              setState(() {
+                                slideDirection = index == 4 ? -1 : 1;
+                                index = index == 4 ? lastTab : 4;
+                              });
+                            },
+                          ),
+                        ),
                       ),
-                      child: const Text('Retry'),
                     ),
-                  ],
+                  ),
+                ],
+              ),
+              loading: () =>
+                  const StartupLoading(stage: 'Opening your records'),
+              error: (e, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Your data could not be opened.'),
+                      const SizedBox(height: 16),
+                      Text('$e'),
+                      TextButton(
+                        onPressed: withFeedback(
+                          () => ref.invalidate(dataProvider),
+                        ),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

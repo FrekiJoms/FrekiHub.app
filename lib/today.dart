@@ -10,6 +10,7 @@ class TodayScreen extends ConsumerStatefulWidget {
 class _TodayScreenState extends ConsumerState<TodayScreen> {
   final note = TextEditingController();
   Timer? timer;
+  final tick = ValueNotifier<DateTime>(DateTime.now());
   StreamSubscription<List<ConnectivityResult>>? connectivity;
   bool offline = false, busy = false;
   @override
@@ -18,7 +19,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     note.text = widget.data.running?.note ?? '';
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
-        setState(() {});
+        tick.value = DateTime.now();
       }
     });
     connectivity = Connectivity().onConnectivityChanged.listen(
@@ -36,6 +37,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   @override
   void dispose() {
     timer?.cancel();
+    tick.dispose();
     connectivity?.cancel();
     note.dispose();
     super.dispose();
@@ -113,9 +115,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final d = widget.data;
     final running = d.running;
     final today = dayKey(DateTime.now());
-    final total = d.sessions
-        .where((s) => s.day == today)
-        .fold(0, (sum, s) => sum + durationOf(s));
+    final todaySessions = d.sessions.where((s) => s.day == today).toList();
+    int total() => todaySessions.fold(0, (sum, s) => sum + durationOf(s));
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
     return PageBody(
@@ -144,7 +145,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
           child: Column(
             children: [
               const SizedBox(height: 8),
-              const AnalogClock(),
+              const RepaintBoundary(child: AnalogClock()),
               const SizedBox(height: 16),
               Text(
                 running == null
@@ -157,9 +158,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              FlipClock(
-                running == null ? elapsed(total) : elapsed(durationOf(running)),
-                size: 36,
+              ValueListenableBuilder<DateTime>(
+                valueListenable: tick,
+                builder: (c, _, _) => FlipClock(
+                  running == null
+                      ? elapsed(total())
+                      : elapsed(durationOf(running)),
+                  size: 36,
+                ),
               ),
               const SizedBox(height: 10),
               Text(
@@ -209,11 +215,14 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               if (running != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
-                  child: Text(
-                    'Today’s total  ${elapsed(total)}',
-                    style: const TextStyle(
-                      fontFamily: 'Geist Mono',
-                      fontSize: 12,
+                  child: ValueListenableBuilder<DateTime>(
+                    valueListenable: tick,
+                    builder: (c, _, _) => Text(
+                      'Today’s total  ${elapsed(total())}',
+                      style: const TextStyle(
+                        fontFamily: 'Geist Mono',
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),

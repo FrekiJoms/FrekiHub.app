@@ -41,8 +41,12 @@ abstract final class AutomationSync {
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
     final acknowledged = <String>[];
-    final data = await db.readAll();
     final pending = await NativeSession.pending();
+    if (events.isEmpty && pending == null) {
+      await configure(AppData([], [], [], await db.readPreferences()));
+      return;
+    }
+    final data = await db.readAll();
     await db.transaction(() async {
       if (pending != null) {
         await db.clockOut(pending['id'] as String, at: pending['ended'] as int);
@@ -157,6 +161,6 @@ abstract final class AutomationSync {
     if (acknowledged.isNotEmpty) {
       await NativeSession.channel.invokeMethod('automationAck', acknowledged);
     }
-    await configure(await db.readAll());
+    await configure(AppData([], [], [], await db.readPreferences()));
   }
 }

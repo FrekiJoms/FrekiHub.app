@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -198,16 +199,74 @@ class AppDatabase extends _$AppDatabase {
     await pref('logRevision', DateTime.now().microsecondsSinceEpoch);
   }
 
-  Stream<AppData> watchAll() => customSelect(
-    'SELECT (SELECT count(*) FROM sessions) + (SELECT count(*) FROM entries) + (SELECT count(*) FROM rules) + (SELECT count(*) FROM preferences) AS n',
-    readsFrom: {sessions, entries, rules, preferences},
-  ).watch().asyncMap((_) => readAll());
-  Future<AppData> readAll() async => AppData(
-    await select(sessions).get(),
-    await select(entries).get(),
-    await select(rules).get(),
-    {for (final p in await select(preferences).get()) p.key: p.value},
-  );
+  Stream<AppData> watchAll() {
+    late StreamController<AppData> stream;
+    final subscriptions = <StreamSubscription<dynamic>>[];
+    List<Session>? sessionRows;
+    List<Entry>? entryRows;
+    List<Rule>? ruleRows;
+    Map<String, String>? prefs;
+    void emit() {
+      if (sessionRows != null &&
+          entryRows != null &&
+          ruleRows != null &&
+          prefs != null) {
+        stream.add(AppData(sessionRows!, entryRows!, ruleRows!, prefs!));
+      }
+    }
+
+    stream = StreamController<AppData>(
+      onListen: () {
+        subscriptions.add(
+          select(sessions).watch().listen((rows) {
+            sessionRows = rows;
+            emit();
+          }, onError: stream.addError),
+        );
+        subscriptions.add(
+          select(entries).watch().listen((rows) {
+            entryRows = rows;
+            emit();
+          }, onError: stream.addError),
+        );
+        subscriptions.add(
+          select(rules).watch().listen((rows) {
+            ruleRows = rows;
+            emit();
+          }, onError: stream.addError),
+        );
+        subscriptions.add(
+          select(preferences).watch().listen((rows) {
+            prefs = {for (final p in rows) p.key: p.value};
+            emit();
+          }, onError: stream.addError),
+        );
+      },
+      onCancel: () async {
+        await Future.wait(subscriptions.map((s) => s.cancel()));
+      },
+    );
+    return stream.stream;
+  }
+
+  Future<Map<String, String>> readPreferences() async => {
+    for (final p in await select(preferences).get()) p.key: p.value,
+  };
+  Future<AppData> readAll() async {
+    final rows = await Future.wait<Object>([
+      select(sessions).get(),
+      select(entries).get(),
+      select(rules).get(),
+      readPreferences(),
+    ]);
+    return AppData(
+      rows[0] as List<Session>,
+      rows[1] as List<Entry>,
+      rows[2] as List<Rule>,
+      rows[3] as Map<String, String>,
+    );
+  }
+
   Future<void> pref(String key, Object value) => into(preferences)
       .insertOnConflictUpdate(Preference(key: key, value: value.toString()));
   Future<Session> clockIn(String note) => transaction(() async {
