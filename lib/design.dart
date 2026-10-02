@@ -430,82 +430,102 @@ class PageBody extends StatelessWidget {
     builder: (c, constraints) {
       final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
       final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
+      final header = Entrance(
+        child: compactHeader
+            ? Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 56),
+                child: Column(
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        title,
+                        style: Theme.of(c).textTheme.headlineSmall,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 56),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              fontWeight: FontWeight.w500,
+                              color: Theme.of(c).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        ?action,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Semantics(
+                    header: true,
+                    child: Text(
+                      title,
+                      style: Theme.of(c).textTheme.headlineLarge,
+                    ),
+                  ),
+                ],
+              ),
+      );
+      final content = <Widget>[
+        for (var i = 0; i < children.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Entrance(index: i + 1, child: children[i]),
+          ),
+      ];
+      if (compactHeader) {
+        return Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 0),
+              child: header,
+            ),
+            Expanded(
+              child: ListView(
+                key: PageStorageKey(title),
+                padding: EdgeInsets.fromLTRB(
+                  horizontal,
+                  16,
+                  horizontal,
+                  126 + MediaQuery.paddingOf(c).bottom,
+                ),
+                children: content,
+              ),
+            ),
+          ],
+        );
+      }
       return ListView(
         key: PageStorageKey(title),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          compactHeader ? 16 : 80,
+          80,
           horizontal,
           126 + MediaQuery.paddingOf(c).bottom,
         ),
-        children: [
-          Entrance(
-            child: compactHeader
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 56),
-                    child: Column(
-                      children: [
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            title,
-                            style: Theme.of(c).textTheme.headlineSmall,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(c).colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 56),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                subtitle,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  height: 1.4,
-                                  fontWeight: FontWeight.w500,
-                                  color: Theme.of(c)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                            ?action,
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Semantics(
-                        header: true,
-                        child: Text(
-                          title,
-                          style: Theme.of(c).textTheme.headlineLarge,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-          const SizedBox(height: 16),
-          for (var i = 0; i < children.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Entrance(index: i + 1, child: children[i]),
-            ),
-        ],
+        children: [header, const SizedBox(height: 16), ...content],
       );
     },
   );

@@ -111,6 +111,13 @@ void main() {
       if (page is TodayScreen) {
         expect(find.text('Balance'), findsOneWidget);
         expect(find.text('Current time'), findsOneWidget);
+        final headingPosition = tester.getTopLeft(find.text('Today.'));
+        final date = find.textContaining(RegExp(r'^\w+, \d+ \w+$'));
+        final datePosition = tester.getTopLeft(date);
+        await tester.drag(find.byType(ListView).first, const Offset(0, -220));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.getTopLeft(find.text('Today.')), headingPosition);
+        expect(tester.getTopLeft(date), datePosition);
         expect(
           find.byWidgetPredicate(
             (widget) => widget is FlipClock && widget.label == 'Current time',
