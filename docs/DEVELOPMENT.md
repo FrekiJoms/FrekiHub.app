@@ -52,6 +52,7 @@ flutter analyze
 | Startup/readiness/reactive cache | `test/startup_test.dart` |
 | Shared layout/custom selectors/two-position drawers | `test/layout_test.dart` (opening frames, both snaps, nested selector/date picker, keyboard and cancellation) |
 | Bottom-bar gestures | `test/navigation_test.dart` |
+| Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
 | Activity storage/backup/native session import | `test/activity_test.dart` |
 | Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |

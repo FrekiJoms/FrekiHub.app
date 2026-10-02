@@ -20,7 +20,6 @@ class _SessionFormState extends ConsumerState<SessionForm> {
   late String kind;
   late TextEditingController note;
   bool saving = false;
-  String? error;
   @override
   void initState() {
     super.initState();
@@ -79,16 +78,19 @@ class _SessionFormState extends ConsumerState<SessionForm> {
 
   Future<void> save() async {
     if (end != null && !end!.isAfter(start)) {
-      setState(() => error = 'Clock out must be later than clock in.');
+      toast(context, 'Clock out must be later than clock in.', error: true);
       return;
     }
     if (end == null && start.isAfter(DateTime.now())) {
-      setState(() => error = 'A running session cannot start in the future.');
+      toast(
+        context,
+        'A running session cannot start in the future.',
+        error: true,
+      );
       return;
     }
     setState(() {
       saving = true;
-      error = null;
     });
     try {
       final db = ref.read(databaseProvider);
@@ -110,9 +112,13 @@ class _SessionFormState extends ConsumerState<SessionForm> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = 'Could not save. Only one session may be running.';
           saving = false;
         });
+        toast(
+          context,
+          'Could not save session. Check that no other session is running, then try again.',
+          error: true,
+        );
       }
     }
   }
@@ -170,13 +176,6 @@ class _SessionFormState extends ConsumerState<SessionForm> {
             maxLines: 4,
           ),
         ),
-        if (error != null)
-          spaced(
-            Text(
-              error!,
-              style: TextStyle(color: Theme.of(c).colorScheme.error),
-            ),
-          ),
         FilledButton(
           onPressed: withFeedback(saving ? null : save),
           child: Text(saving ? 'Saving…' : 'Save session'),
@@ -221,7 +220,6 @@ class EntryForm extends ConsumerStatefulWidget {
 class _EntryFormState extends ConsumerState<EntryForm> {
   late String category, method, kind, day;
   late TextEditingController amount, note;
-  String? error;
   bool busy = false;
   @override
   void initState() {
@@ -259,7 +257,6 @@ class _EntryFormState extends ConsumerState<EntryForm> {
       }
       setState(() {
         busy = true;
-        error = null;
       });
       final db = ref.read(databaseProvider);
       await db
@@ -284,10 +281,14 @@ class _EntryFormState extends ConsumerState<EntryForm> {
       if (!mounted) return;
       setState(() {
         busy = false;
-        error = e is FormatException
-            ? e.message
-            : 'Unable to save transaction.';
       });
+      toast(
+        context,
+        e is FormatException
+            ? e.message
+            : 'Unable to save transaction. Try again.',
+        error: true,
+      );
     }
   }
 
@@ -317,7 +318,6 @@ class _EntryFormState extends ConsumerState<EntryForm> {
             decoration: InputDecoration(
               labelText:
                   'Amount · ${widget.entry?.currency ?? widget.data.currency}',
-              errorText: error,
             ),
           ),
         ),
@@ -374,13 +374,14 @@ class _EntryFormState extends ConsumerState<EntryForm> {
                 'Delete transaction?',
                 'This record will be permanently removed.',
               )) {
-                final db = ref.read(databaseProvider);
-                await (db.delete(
-                  db.entries,
-                )..where((e) => e.id.equals(widget.entry!.id))).go();
-                if (c.mounted) {
-                  Navigator.pop(c);
-                }
+                if (!c.mounted) return;
+                await guarded(c, () async {
+                  final db = ref.read(databaseProvider);
+                  await (db.delete(
+                    db.entries,
+                  )..where((e) => e.id.equals(widget.entry!.id))).go();
+                  if (c.mounted) Navigator.pop(c);
+                });
               }
             }),
             child: Text(
@@ -408,7 +409,7 @@ class RuleForm extends ConsumerStatefulWidget {
 class _RuleFormState extends ConsumerState<RuleForm> {
   late TextEditingController title, amount, quantity;
   late String kind, basis, cadence, category, method, start;
-  String? finish, error;
+  String? finish;
   bool saving = false;
   @override
   void initState() {
@@ -464,7 +465,6 @@ class _RuleFormState extends ConsumerState<RuleForm> {
       }
       setState(() {
         saving = true;
-        error = null;
       });
       final db = ref.read(databaseProvider);
       await db
@@ -493,8 +493,12 @@ class _RuleFormState extends ConsumerState<RuleForm> {
       if (mounted) {
         setState(() {
           saving = false;
-          error = e is FormatException ? e.message : 'Could not save rule.';
         });
+        toast(
+          context,
+          e is FormatException ? e.message : 'Could not save rule. Try again.',
+          error: true,
+        );
       }
     }
   }
@@ -633,13 +637,6 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             (v) => method = v,
           ),
         ),
-        if (error != null)
-          spaced(
-            Text(
-              error!,
-              style: TextStyle(color: Theme.of(c).colorScheme.error),
-            ),
-          ),
         FilledButton(
           onPressed: withFeedback(saving ? null : save),
           child: Text(saving ? 'Saving…' : 'Save rule'),

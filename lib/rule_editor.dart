@@ -28,7 +28,6 @@ class RuleCodeEditor extends StatefulWidget {
 
 class _RuleCodeEditorState extends State<RuleCodeEditor> {
   final focus = FocusNode();
-  String? error;
   @override
   void dispose() {
     focus.dispose();
@@ -257,10 +256,9 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
             onPressed: withFeedback(() {
               try {
                 RuleCompiler.compile(widget.controller.text);
-                setState(() => error = null);
                 toast(c, 'Syntax valid');
               } on FormatException catch (e) {
-                setState(() => error = e.message);
+                toast(c, e.message, error: true);
               }
             }),
           ),
@@ -274,11 +272,9 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
                         : () {
                             try {
                               RuleCompiler.compile(widget.controller.text);
-                              setState(() => error = null);
                               widget.run();
                             } on FormatException catch (e) {
-                              setState(() => error = e.message);
-                              toast(c, 'Rule could not run · fix the syntax');
+                              toast(c, e.message, error: true);
                             }
                           },
                   ),
@@ -315,14 +311,7 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
             fontSize: 12,
             height: 1.6,
           ),
-          decoration: InputDecoration(
-            hintText: 'target == session_page { … }',
-            errorText: error,
-            errorMaxLines: 4,
-          ),
-          onChanged: (_) {
-            if (error != null) setState(() => error = null);
-          },
+          decoration: InputDecoration(hintText: 'target == session_page { … }'),
         ),
         optionsViewBuilder: (c, select, hints) => Align(
           alignment: Alignment.topLeft,

@@ -233,11 +233,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             child: ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(LucideIcons.workflow, size: 20),
-              title: const Text('Session conditions set'),
-              subtitle: Text(
-                widget.data.prefs['locationEnabled'] == 'true'
-                    ? 'Location automation enabled'
-                    : 'Location automation paused',
+              title: const Text('Automation rules saved'),
+              subtitle: const Text(
+                'Open Settings to review rules and Run/Stop status',
               ),
               trailing: const Icon(LucideIcons.chevronRight, size: 18),
               onTap: withFeedback(

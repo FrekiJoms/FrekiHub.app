@@ -119,7 +119,11 @@ class _AppShellState extends ConsumerState<AppShell>
       }
     } catch (e) {
       if (mounted) {
-        toast(context, 'Could not reconcile the notification action: $e');
+        toast(
+          context,
+          'Could not sync the notification action. Your pending actions will retry.',
+          error: true,
+        );
       }
     }
   }

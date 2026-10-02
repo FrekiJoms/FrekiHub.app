@@ -612,7 +612,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       c,
       StatefulBuilder(
         builder: (c, setLocal) {
-          String? error;
           return Padding(
             padding: const EdgeInsets.all(24),
             child: Column(
@@ -628,7 +627,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   ),
                   decoration: InputDecoration(
                     labelText: 'Goal · ${widget.data.currency}',
-                    errorText: error,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -645,9 +643,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       if (c.mounted) {
                         Navigator.pop(c);
                       }
-                    } on FormatException catch (e) {
+                    } catch (e) {
                       if (c.mounted) {
-                        toast(c, e.message);
+                        toast(
+                          c,
+                          e is FormatException
+                              ? e.message
+                              : 'Could not save goal. Try again.',
+                          error: true,
+                        );
                       }
                     }
                   }),
@@ -658,8 +662,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           );
         },
       ),
+      scrollable: true,
     );
     field.dispose();
   }
 }
-      scrollable: true,

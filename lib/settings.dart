@@ -389,7 +389,7 @@ class _ManageList extends ConsumerStatefulWidget {
 class _ManageListState extends ConsumerState<_ManageList> {
   late List<String> items;
   final name = TextEditingController();
-  String? error;
+  bool saving = false;
   @override
   void initState() {
     super.initState();
@@ -402,8 +402,20 @@ class _ManageListState extends ConsumerState<_ManageList> {
     super.dispose();
   }
 
-  Future<void> save() =>
-      ref.read(databaseProvider).pref(widget.setting, jsonEncode(items));
+  Future<void> save(List<String> next, {bool clearName = false}) async {
+    if (saving) return;
+    setState(() => saving = true);
+    await guarded(context, () async {
+      await ref.read(databaseProvider).pref(widget.setting, jsonEncode(next));
+      if (!mounted) return;
+      setState(() {
+        items = next;
+        if (clearName) name.clear();
+      });
+    });
+    if (mounted) setState(() => saving = false);
+  }
+
   @override
   Widget build(BuildContext c) => SizedBox(
     height: MediaQuery.sizeOf(c).height * .7,
@@ -424,25 +436,28 @@ class _ManageListState extends ConsumerState<_ManageList> {
                 controller: name,
                 decoration: InputDecoration(
                   labelText: 'Add a name',
-                  errorText: error,
                   suffixIcon: IconButton(
                     tooltip: 'Add',
-                    onPressed: withFeedback(() async {
-                      final value = name.text.trim();
-                      if (value.isEmpty ||
-                          items.any(
-                            (s) => s.toLowerCase() == value.toLowerCase(),
-                          )) {
-                        setState(() => error = 'Enter a new, unique name.');
-                        return;
-                      }
-                      setState(() {
-                        items.add(value);
-                        error = null;
-                        name.clear();
-                      });
-                      await save();
-                    }),
+                    onPressed: withFeedback(
+                      saving
+                          ? null
+                          : () async {
+                              final value = name.text.trim();
+                              if (value.isEmpty ||
+                                  items.any(
+                                    (s) =>
+                                        s.toLowerCase() == value.toLowerCase(),
+                                  )) {
+                                toast(
+                                  c,
+                                  'Enter a new, unique name.',
+                                  error: true,
+                                );
+                                return;
+                              }
+                              await save([...items, value], clearName: true);
+                            },
+                    ),
                     icon: const Icon(LucideIcons.plus),
                   ),
                 ),
@@ -460,11 +475,12 @@ class _ManageListState extends ConsumerState<_ManageList> {
                     trailing: IconButton(
                       tooltip: 'Remove $item',
                       onPressed: withFeedback(
-                        items.length <= 1
+                        saving || items.length <= 1
                             ? null
                             : () async {
-                                setState(() => items.remove(item));
-                                await save();
+                                await save(
+                                  items.where((s) => s != item).toList(),
+                                );
                               },
                       ),
                       icon: const Icon(LucideIcons.x, size: 18),

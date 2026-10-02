@@ -74,41 +74,15 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       }
     } on StateError catch (e) {
       if (mounted) {
-        final existing = widget.data.sessions
-            .where((s) => s.day == dayKey(DateTime.now()))
-            .firstOrNull;
-        await showDialog<void>(
-          context: context,
-          builder: (c) => AlertDialog(
-            title: const Text('Today already has a session'),
-            content: Text(e.message.toString()),
-            actions: [
-              TextButton(
-                onPressed: withFeedback(() => Navigator.pop(c)),
-                child: const Text('Close'),
-              ),
-              if (existing != null)
-                FilledButton(
-                  onPressed: withFeedback(() {
-                    Navigator.pop(c);
-                    panel(
-                      context,
-                      SessionForm(
-                        data: widget.data,
-                        day: existing.day,
-                        session: existing,
-                      ),
-                    );
-                  }),
-                  child: const Text('Open session'),
-                ),
-            ],
-          ),
-        );
+        toast(context, e.message.toString(), error: true);
       }
     } catch (e) {
       if (mounted) {
-        toast(context, 'Your session could not be saved: $e');
+        toast(
+          context,
+          'Your session could not be saved. Try again.',
+          error: true,
+        );
       }
     }
     if (mounted) {

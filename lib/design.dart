@@ -324,16 +324,18 @@ class _Grain extends CustomPainter {
 class Surface extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
+  final BorderRadius borderRadius;
   const Surface({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
+    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
   });
   @override
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: borderRadius,
       border: Border.all(
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .035),
       ),
@@ -347,7 +349,7 @@ class Surface extends StatelessWidget {
     ),
     child: Material(
       type: MaterialType.transparency,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: padding, child: child),
     ),
@@ -1020,13 +1022,11 @@ class _PanelSheetState extends State<_PanelSheet> {
                 child: GestureDetector(
                   key: const ValueKey('panel-drag-handle'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: withFeedback(
-                    () {
-                      if (controller.isAttached) {
-                        settle(controller.size < .74 ? expanded : compact);
-                      }
-                    },
-                  ),
+                  onTap: withFeedback(() {
+                    if (controller.isAttached) {
+                      settle(controller.size < .74 ? expanded : compact);
+                    }
+                  }),
                   onVerticalDragUpdate: (details) {
                     if (scroll.hasClients && controller.isAttached) {
                       controller.jumpTo(
@@ -1089,24 +1089,54 @@ class _PanelSheetState extends State<_PanelSheet> {
   );
 }
 
-void toast(BuildContext c, String message) {
-  final overlay = Overlay.of(c);
+final _toastDismissals = Expando<VoidCallback>();
+
+void toast(BuildContext c, String message, {bool error = false}) {
+  final overlay = Overlay.of(c, rootOverlay: true);
+  _toastDismissals[overlay]?.call();
   late OverlayEntry entry;
+  var dismissed = false;
+  void dismiss() {
+    if (dismissed) return;
+    dismissed = true;
+    _toastDismissals[overlay] = null;
+    entry.remove();
+    entry.dispose();
+  }
+
+  final themes = InheritedTheme.capture(from: c, to: overlay.context);
   entry = OverlayEntry(
     builder: (c) => Positioned(
       top: MediaQuery.paddingOf(c).top + 16,
-      left: 24,
-      right: 24,
-      child: _Toast(message: message, done: entry.remove),
+      left: MediaQuery.paddingOf(c).left + 16,
+      right: MediaQuery.paddingOf(c).right + 16,
+      child: themes.wrap(
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 560,
+              maxHeight: math.max(80, MediaQuery.sizeOf(c).height * .4),
+            ),
+            child: _Toast(message: message, error: error, done: dismiss),
+          ),
+        ),
+      ),
     ),
   );
   overlay.insert(entry);
+  _toastDismissals[overlay] = dismiss;
 }
 
 class _Toast extends StatefulWidget {
   final String message;
+  final bool error;
   final VoidCallback done;
-  const _Toast({required this.message, required this.done});
+  const _Toast({
+    required this.message,
+    required this.error,
+    required this.done,
+  });
   @override
   State<_Toast> createState() => _ToastState();
 }
@@ -1121,7 +1151,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    timer = Timer(const Duration(seconds: 3), () async {
+    timer = Timer(Duration(seconds: widget.error ? 8 : 4), () async {
       if (!mounted) {
         return;
       }
@@ -1157,21 +1187,41 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
   }
 
   @override
-  Widget build(BuildContext c) => IgnorePointer(
-    child: FadeTransition(
-      opacity: controller,
-      child: SlideTransition(
-        position: Tween(
-          begin: const Offset(0, -.3),
-          end: Offset.zero,
-        ).animate(CurvedAnimation(parent: controller, curve: Motion.curve)),
-        child: Material(
-          color: Colors.transparent,
-          child: Chrome(
-            padding: const EdgeInsets.all(18),
-            child: Semantics(
-              liveRegion: true,
-              child: Text(widget.message, textAlign: TextAlign.center),
+  Widget build(BuildContext c) => FadeTransition(
+    opacity: controller,
+    child: SlideTransition(
+      position: Tween(
+        begin: const Offset(0, -.3),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: controller, curve: Motion.curve)),
+      child: Material(
+        color: Colors.transparent,
+        child: Surface(
+          key: const ValueKey('top-toast-pill'),
+          borderRadius: BorderRadius.circular(40),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          child: Semantics(
+            liveRegion: true,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.error) ...[
+                  Icon(
+                    LucideIcons.circleAlert,
+                    size: 20,
+                    color: Theme.of(c).colorScheme.error,
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: SingleChildScrollView(child: Text(widget.message)),
+                ),
+                IconButton(
+                  tooltip: 'Dismiss message',
+                  onPressed: withFeedback(widget.done),
+                  icon: const Icon(LucideIcons.x, size: 18),
+                ),
+              ],
             ),
           ),
         ),

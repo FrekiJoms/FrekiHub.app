@@ -154,6 +154,8 @@ Records and configuration live locally. Native receivers/services exchange data 
 
 ## Design contracts
 
+Submitted-action failures use the shared `toast(context, message, error: true)` top pill. It appears below the status-bar safe inset on the root overlay, including above modal drawers. A new message replaces the previous pill; errors remain for eight seconds and other notices for four, with an accessible dismiss button. Long diagnostics wrap and scroll within a bounded height, retaining syntax line/column details. Entrance/exit obey reduced motion; dismissal uses the existing feedback and sound preference. Session, transaction and planner forms, list-name validation, savings goals and syntax validation use this surface instead of inline error text or an error dialog. Failed category/payment-method writes retain the entered name and last saved list. Persistent startup Retry and Map availability states remain visible because they describe ongoing page availability.
+
 Keep bundled Geist/Geist Mono, Lucide icons, neutral light/dark surfaces, opaque data cards and liquid glass for fixed chrome. `Surface`, `Chrome`, `PageBody`, `panel`, `toast`, `selectField` and wheel pickers are shared contracts. Standard page headers reserve 80 px for fixed top shortcuts; Today's compact header starts at 16 px with horizontal shortcut clearance. Content leaves bottom navigation clearance and uses bounded readable width.
 
 Motion uses `Motion.duration` and shared curves. Preserve reduced motion, tooltips/semantics, enlarged text, keyboard/inset behavior, minimum touch controls and sound preference. `withFeedback`/`ActionFeedback` provide throttled interaction effects; elapsed ticks do not play sounds. OS permission/share/file/channel dialogs remain OS-owned.
