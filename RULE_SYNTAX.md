@@ -34,6 +34,10 @@ The editor's clock icon opens Android's Alarms & reminders access. With access g
 
 Observable fields: `notifications.exact_allowed` (boolean) and `notifications.schedule_count` (number of active schedules). Sent reminders appear in activity logs when logging is enabled.
 
+Settings → Notification sounds opens a category selector for reminders, saved transactions and running sessions, then Android's sound settings. Android stores these choices per notification channel; they are separate from in-app button sound effects. Running sessions start silent. On Android versions before notification channels, the option opens app notification settings.
+
+Rules can read `notifications.reminder_sound`, `notifications.transaction_sound` and `notifications.session_sound`. Values are sound URI strings or `"silent"` for silent/low-importance categories; fields are sampled during native evaluation and included in completion. Sound selection is controlled by Android settings, not a rule action.
+
 ```javascript
 target == session_page {
   if (location.inside() && weekday.in(["Mon", "Tue", "Wed", "Thu", "Fri"])) {

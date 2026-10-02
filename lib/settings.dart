@@ -21,6 +21,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> manage(String key, List<String> initial) =>
       panel(context, _ManageList(setting: key, initial: initial));
+  Future<void> notificationSounds() async {
+    final category = await panel<String>(
+      context,
+      const _ChoiceSheet(
+        title: 'Notification sounds',
+        selected: '',
+        values: ['Reminders', 'Saved transactions', 'Running sessions'],
+      ),
+    );
+    if (category == null || !mounted) return;
+    const categories = {
+      'Reminders': 'reminders',
+      'Saved transactions': 'transactions',
+      'Running sessions': 'sessions',
+    };
+    await guarded(context, () async {
+      await NativeSession.channel.invokeMethod(
+        'notificationSoundSettings',
+        categories[category],
+      );
+    });
+  }
+
   Future<void> backup() async {
     setState(() => busy = true);
     await guarded(context, () async {
@@ -201,6 +224,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     }
                   }),
                 ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.volume2),
+                title: const Text('Notification sounds'),
+                subtitle: const Text(
+                  'Choose a tone or Silent for each notification type',
+                ),
+                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                onTap: withFeedback(notificationSounds),
               ),
             ],
           ),

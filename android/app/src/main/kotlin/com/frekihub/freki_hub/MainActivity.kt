@@ -34,6 +34,10 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             when (call.method) {
+                "notificationSoundSettings" -> {
+                    try { NotificationSoundSettings.open(this, call.arguments as String); result.success(null) }
+                    catch (e: Exception) { result.error("notification_sound", e.message, null) }
+                }
                 "transactionSaved" -> result.success(TransactionNotifications.post(this, call.arguments as Map<*, *>))
                 "purchaseDestination" -> { val page = intent.getStringExtra("openPage"); intent.removeExtra("openPage"); result.success(page) }
                 "receiptNotificationsAllowed" -> result.success(TransactionNotifications.allowed(this))
