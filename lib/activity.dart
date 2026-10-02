@@ -71,6 +71,7 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   }
 
   Future<void> toggle(String key, bool value) async {
+    ActionFeedback.tap();
     await guarded(context, () async {
       await ref.read(databaseProvider).pref(key, value);
       await AutomationSync.configure(

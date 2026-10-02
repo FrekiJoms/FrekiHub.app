@@ -1,5 +1,23 @@
 # UI audit and applied changes
 
+## October 2, 2026 re-audit
+
+Reviewed all five main pages, record forms, settings sheets, shared navigation, feedback, calendar lookup, budget projections and Android notification integration.
+
+- Navigation: removed the invisible center overlay that swallowed nearby Calendar/Sessions taps. Center hold-and-drag quick-add and accessible quick-add actions remain available; the existing elastic selection animation stays isolated to its controller.
+- Sessions: placed the visible condition link in the card content instead of the constrained trailing area. Duration retains its own alignment. External filter resets now update dropdown state.
+- Calendar: index sessions and transactions once when record lists change, rather than scanning all records for every calendar cell. Persist sheet height after 250 ms of inactivity and on close, rather than every drag frame. Constrain the month heading between its navigation controls on narrow displays.
+- Budget: use equal-width summary columns with bounded amounts; remove redundant nested scaling and duplicate completed-plan timeline rows. Cache monthly projection totals and recorded occurrence IDs within each calculation.
+- Forms/storage: guard date/time picker callbacks and transaction errors after disposal; prevent repeated file-picker launches and report picker failures. Remove unused session form and native timer parameters.
+- Today: refresh daily totals at midnight and handle connectivity plugin failures without interrupting the page. Timer controls and automation switches now use the shared sound/haptic feedback; bulk-selection checkboxes do too.
+- Motion: retain slide/fade page switching, split-flap digits and elastic navigation. Limit staggered card entrances to the first five content sections, with system reduced-motion respected.
+- Shared cards: add a clipped transparent Material layer so tap ripples remain visible above the surface decoration across Settings and Budget.
+- Notifications: make saved-transaction permission available directly from Settings and retry pending durable receipts when enabled. Existing ongoing-session notifications and purchase receipts cover the useful immediate actions. Periodic location samples remain silent. Receipt posting continues after database commit and retries denied delivery without duplicating transactions.
+
+Limitations: purchases queued while Flutter is closed are reconciled when the app opens/resumes. Condition links still use the automatic-session note's location name; editing that note removes the link. Background reminders and immediate closed-app database imports require separate scheduling work. No APK rebuild or device installation in this audit; Android visual appearance and animation frame timings need device verification.
+
+Validation: all 13 Flutter tests passed, including all five main pages at 320 × 720 with 1.3× text in the dark theme, dropdown resets, center-adjacent tab taps, hold-drag quick-add, startup timeout recovery, automation reconciliation, and purchase receipt retry/rollback behavior. These are widget/database checks, not on-device performance measurements.
+
 Reviewed Today, Calendar, Sessions, Budget, Settings, session/transaction/rule forms, quick-add, shared dialogs, sheets, navigation and feedback from the Flutter source.
 
 - Shared layout: bounded 720 px reading width, adaptive 16/24 px gutters, consistent section gaps and headers that reserve space for fixed settings without narrowing page titles.

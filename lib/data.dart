@@ -546,6 +546,8 @@ class Projection {
 
 List<Projection> project(AppData data, DateTime from, DateTime until) {
   final result = <Projection>[];
+  final recordedOccurrences = data.entries.map((e) => e.occurrence).toSet();
+  final monthlyTotals = <String, (int, int)>{};
   for (final r in data.rules.where((r) => r.currency == data.currency)) {
     final start = calendarDate(r.start);
     for (
@@ -572,8 +574,15 @@ List<Projection> project(AppData data, DateTime from, DateTime until) {
         continue;
       }
       final month = dayKey(d).substring(0, 7);
-      final income = data.total('income', month: month);
-      final expenses = data.total('expense', month: month);
+      final totals = monthlyTotals.putIfAbsent(
+        month,
+        () => (
+          data.total('income', month: month),
+          data.total('expense', month: month),
+        ),
+      );
+      final income = totals.$1;
+      final expenses = totals.$2;
       final base = switch (r.basis) {
         'income' => income,
         'expenses' => expenses,
@@ -589,7 +598,7 @@ List<Projection> project(AppData data, DateTime from, DateTime until) {
                     BigInt.from(10000))
                 .toInt();
       final key = '${r.id}:${dayKey(d)}';
-      final recorded = data.entries.any((e) => e.occurrence == key);
+      final recorded = recordedOccurrences.contains(key);
       result.add(
         Projection(
           r,

@@ -48,10 +48,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> restore() async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
+    if (busy) return;
+    setState(() => busy = true);
+    List<PlatformFile> picked = [];
+    await guarded(context, () async {
+      picked = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+    });
+    if (mounted) setState(() => busy = false);
     if (picked.isEmpty || !mounted) {
       return;
     }
@@ -144,7 +150,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final theme = d.prefs['theme'] ?? 'system';
     return PageBody(
       title: 'Settings.',
-      subtitle: 'Settings',
+      subtitle: 'Preferences & storage',
       children: [
         Surface(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -166,6 +172,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
                 onTap: withFeedback(
                   () => panel(c, const ActivitySheet(initialTab: 1)),
+                ),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.bell),
+                title: const Text('Saved-transaction notifications'),
+                subtitle: const Text(
+                  'Confirm amounts and merchants after saving',
+                ),
+                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                onTap: withFeedback(
+                  () => guarded(c, () async {
+                    final allowed = await NativeSession.channel
+                        .invokeMethod<bool>('receiptNotificationPermission');
+                    if (allowed == true) {
+                      await AutomationSync.reconcile(
+                        ref.read(databaseProvider),
+                      );
+                      if (c.mounted) {
+                        toast(c, 'Saved-transaction notifications enabled');
+                      }
+                    } else if (c.mounted) {
+                      toast(
+                        c,
+                        'Allow FrekiHub notifications in Android settings',
+                      );
+                    }
+                  }),
                 ),
               ),
             ],

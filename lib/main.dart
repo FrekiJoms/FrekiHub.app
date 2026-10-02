@@ -143,12 +143,7 @@ class _AppShellState extends ConsumerState<AppShell>
         unawaited(NativeSession.stop());
       } else {
         unawaited(
-          NativeSession.start(
-            running,
-            todaySeconds: after.value!.sessions
-                .where((s) => s.day == running.day && s.ended != null)
-                .fold(0, (sum, s) => sum + (s.ended! - s.started) ~/ 1000),
-          ).then((ok) {
+          NativeSession.start(running).then((ok) {
             if (!ok && mounted) {
               toast(
                 context,

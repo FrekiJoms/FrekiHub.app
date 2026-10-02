@@ -19,13 +19,19 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     note.text = widget.data.running?.note ?? '';
     timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) {
+        final previous = tick.value;
         tick.value = DateTime.now();
+        if (dayKey(previous) != dayKey(tick.value)) setState(() {});
       }
     });
     connectivity = Connectivity().onConnectivityChanged.listen(
       updateConnection,
+      onError: (Object _) {},
     );
-    Connectivity().checkConnectivity().then(updateConnection);
+    Connectivity()
+        .checkConnectivity()
+        .then(updateConnection)
+        .catchError((Object _) {});
   }
 
   void updateConnection(List<ConnectivityResult> values) {
@@ -180,7 +186,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: busy ? null : clock,
+                  onPressed: withFeedback(busy ? null : clock),
                   icon: Icon(
                     running == null ? LucideIcons.play : LucideIcons.square,
                     size: 19,

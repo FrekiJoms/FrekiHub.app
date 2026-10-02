@@ -4,13 +4,11 @@ class SessionForm extends ConsumerStatefulWidget {
   final AppData data;
   final Session? session;
   final String day;
-  final bool fullPage;
   const SessionForm({
     super.key,
     required this.data,
     required this.day,
     this.session,
-    this.fullPage = false,
   });
   @override
   ConsumerState<SessionForm> createState() => _SessionFormState();
@@ -60,7 +58,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(old),
     );
-    if (t != null) {
+    if (t != null && mounted) {
       setState(() {
         final value = DateTime(
           date.year,
@@ -283,6 +281,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
         Navigator.pop(context);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         busy = false;
         error = e is FormatException
@@ -331,7 +330,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
-              if (d != null) {
+              if (d != null && mounted) {
                 setState(() => day = dayKey(d));
               }
             }),
@@ -591,7 +590,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
                 firstDate: DateTime(2000),
                 lastDate: DateTime(2100),
               );
-              if (d != null) {
+              if (d != null && mounted) {
                 setState(() => start = dayKey(d));
               }
             }),
@@ -608,7 +607,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
                   firstDate: calendarDate(start),
                   lastDate: DateTime(2100),
                 );
-                if (d != null) {
+                if (d != null && mounted) {
                   setState(() => finish = dayKey(d));
                 }
               }),

@@ -7,13 +7,12 @@ import 'data.dart';
 
 abstract final class NativeSession {
   static const channel = MethodChannel('frekihub/session');
-  static Future<bool> start(Session s, {int todaySeconds = 0}) async {
+  static Future<bool> start(Session s) async {
     try {
       return await channel.invokeMethod<bool>('start', {
             'id': s.id,
             'started': s.started,
             'day': s.day,
-            'todaySeconds': todaySeconds,
           }) ??
           false;
     } on PlatformException {

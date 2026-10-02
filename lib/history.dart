@@ -637,6 +637,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                         child: Checkbox(
                                           value: selected.contains(s.id),
                                           onChanged: (v) => setState(() {
+                                            ActionFeedback.tap();
                                             v!
                                                 ? selected.add(s.id)
                                                 : selected.remove(s.id);

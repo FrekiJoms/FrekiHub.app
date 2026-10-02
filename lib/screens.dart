@@ -70,6 +70,7 @@ Widget selectField(
   List<String> values,
   ValueChanged<String> changed,
 ) => DropdownButtonFormField<String>(
+  key: ValueKey('$label:$value'),
   initialValue: values.contains(value) ? value : values.first,
   decoration: InputDecoration(labelText: label),
   isExpanded: true,
@@ -146,44 +147,53 @@ Widget sessionTile(
   transitionDuration: Motion.duration(c, 400),
   openBuilder: (c, _) => Scaffold(
     appBar: AppBar(title: const Text('Session detail')),
-    body: SessionForm(data: data, session: s, day: s.day, fullPage: true),
+    body: SessionForm(data: data, session: s, day: s.day),
   ),
   closedBuilder: (c, open) => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
     onTap: withFeedback(open),
     leading: Icon(s.ended == null ? LucideIcons.timer : LucideIcons.clock3),
     title: Text(sessionDate(data, s)),
-    subtitle: Text(
-      '${s.kind} · ${clockTime(data, s.started)} — ${s.ended == null ? 'running' : clockTime(data, s.ended!)}${s.note.isEmpty ? '' : '\n${s.note}'}',
-      maxLines: 3,
-      overflow: TextOverflow.ellipsis,
-    ),
-    trailing: Column(
+    subtitle: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         Text(
-          elapsed(durationOf(s)),
-          style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
+          '${s.kind} · ${clockTime(data, s.started)} — ${s.ended == null ? 'running' : clockTime(data, s.ended!)}${s.note.isEmpty ? '' : '\n${s.note}'}',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
         ),
         if (s.note.startsWith('Automatic · '))
-          SizedBox(
-            height: 48,
-            child: TextButton(
-              onPressed: withFeedback(
-                () => panel(
-                  c,
-                  ActivitySheet(
-                    initialTab: 1,
-                    conditionName: s.note.substring('Automatic · '.length),
-                  ),
+          TextButton.icon(
+            onPressed: withFeedback(
+              () => panel(
+                c,
+                ActivitySheet(
+                  initialTab: 1,
+                  conditionName: s.note.substring('Automatic · '.length),
                 ),
               ),
-              child: const Text('Condition', style: TextStyle(fontSize: 11)),
             ),
+            icon: const Icon(LucideIcons.workflow, size: 14),
+            label: const Text('Condition set', style: TextStyle(fontSize: 11)),
           ),
       ],
     ),
+    trailing: Text(
+      elapsed(durationOf(s)),
+      style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
+    ),
+    onLongPress: s.note.startsWith('Automatic · ')
+        ? withFeedback(
+            () => panel(
+              c,
+              ActivitySheet(
+                initialTab: 1,
+                conditionName: s.note.substring('Automatic · '.length),
+              ),
+            ),
+          )
+        : null,
   ),
 );
 void openQuickAdd(BuildContext c, AppData data, String day, String kind) {

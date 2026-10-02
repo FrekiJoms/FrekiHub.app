@@ -7,6 +7,7 @@ void main() {
     'Hold center, drag to expense, release selects; outside cancels',
     (tester) async {
       String? action;
+      int? selected;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -16,7 +17,7 @@ void main() {
                 width: 400,
                 child: PillNavigation(
                   index: 0,
-                  onChanged: (_) {},
+                  onChanged: (value) => selected = value,
                   onQuickAdd: (value) => action = value,
                 ),
               ),
@@ -26,6 +27,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       final center = tester.getCenter(find.byType(PillNavigation));
+      await tester.tapAt(center - const Offset(10, 0));
+      await tester.pumpAndSettle();
+      expect(selected, 1);
+      await tester.tapAt(center + const Offset(10, 0));
+      await tester.pumpAndSettle();
+      expect(selected, 2);
       final gesture = await tester.startGesture(center);
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('Expense'), findsOneWidget);

@@ -264,7 +264,6 @@ class Surface extends StatelessWidget {
   });
   @override
   Widget build(BuildContext context) => Container(
-    padding: padding,
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
       borderRadius: BorderRadius.circular(24),
@@ -279,7 +278,12 @@ class Surface extends StatelessWidget {
         ),
       ],
     ),
-    child: child,
+    child: Material(
+      type: MaterialType.transparency,
+      borderRadius: BorderRadius.circular(24),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(padding: padding, child: child),
+    ),
   );
 }
 
@@ -307,7 +311,7 @@ class Entrance extends StatelessWidget {
   const Entrance({super.key, required this.child, this.index = 0});
   @override
   Widget build(BuildContext c) {
-    if (MediaQuery.disableAnimationsOf(c)) {
+    if (MediaQuery.disableAnimationsOf(c) || index > 5) {
       return child;
     }
     return child
@@ -644,120 +648,115 @@ class _PillNavigationState extends State<PillNavigation>
   @override
   Widget build(BuildContext c) {
     WidgetsBinding.instance.addPostFrameCallback((_) => measure());
-    return Chrome(
-      child: Stack(
-        key: track,
-        children: [
-          AnimatedBuilder(
-            animation: motion,
-            builder: (c, _) {
-              final rect = current;
-              return rect == null
-                  ? const SizedBox.shrink()
-                  : Positioned.fromRect(
-                      rect: rect,
-                      child: IgnorePointer(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Theme.of(c).colorScheme.onSurface
-                                .withValues(alpha: .09),
-                            borderRadius: BorderRadius.circular(32),
-                          ),
-                        ),
-                      ),
-                    );
-            },
-          ),
-          Row(
-            children: List.generate(
-              labels.length,
-              (i) => Expanded(
-                child: Semantics(
-                  selected: widget.index == i,
-                  button: true,
-                  label: labels[i],
-                  child: InkWell(
-                    key: keys[i],
-                    borderRadius: BorderRadius.circular(32),
-                    onTap: () => widget.onChanged(i),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 12,
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            icons[i],
-                            size: 20,
-                            color: widget.index == i
-                                ? Theme.of(c).colorScheme.onSurface
-                                : Theme.of(c).colorScheme.onSurfaceVariant,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            labels[i],
-                            maxLines: 1,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: widget.index == i
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: widget.index == i
-                                  ? Theme.of(c).colorScheme.onSurface
-                                  : Theme.of(c).colorScheme.onSurfaceVariant,
+    return Semantics(
+      label: 'Navigation. Hold the center and drag to add.',
+      customSemanticsActions: {
+        const CustomSemanticsAction(label: 'Add session or log'): () =>
+            widget.onQuickAdd('session'),
+        const CustomSemanticsAction(label: 'Add expense'): () =>
+            widget.onQuickAdd('expense'),
+        const CustomSemanticsAction(label: 'Add income'): () =>
+            widget.onQuickAdd('income'),
+        const CustomSemanticsAction(label: 'Add savings'): () =>
+            widget.onQuickAdd('savings'),
+        const CustomSemanticsAction(label: 'Add budget rule'): () =>
+            widget.onQuickAdd('rule'),
+      },
+      child: GestureDetector(
+        onLongPressStart: (d) {
+          final box = track.currentContext!.findRenderObject() as RenderBox;
+          final local = box.globalToLocal(d.globalPosition);
+          if ((local.dx - box.size.width / 2).abs() <= 36) openMenu();
+        },
+        onLongPressMoveUpdate: (d) {
+          if (menu != null) updateMenu(d.globalPosition);
+        },
+        onLongPressCancel: closeMenu,
+        onLongPressEnd: (d) {
+          if (menu == null) return;
+          updateMenu(d.globalPosition);
+          final selection = hovered;
+          closeMenu();
+          if (selection != null) widget.onQuickAdd(actions[selection]);
+        },
+        child: Chrome(
+          child: Stack(
+            key: track,
+            children: [
+              AnimatedBuilder(
+                animation: motion,
+                builder: (c, _) {
+                  final rect = current;
+                  return rect == null
+                      ? const SizedBox.shrink()
+                      : Positioned.fromRect(
+                          rect: rect,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: Theme.of(c).colorScheme.onSurface
+                                    .withValues(alpha: .09),
+                                borderRadius: BorderRadius.circular(32),
+                              ),
                             ),
                           ),
-                        ],
+                        );
+                },
+              ),
+              Row(
+                children: List.generate(
+                  labels.length,
+                  (i) => Expanded(
+                    child: Semantics(
+                      selected: widget.index == i,
+                      button: true,
+                      label: labels[i],
+                      child: InkWell(
+                        key: keys[i],
+                        borderRadius: BorderRadius.circular(32),
+                        onTap: () => widget.onChanged(i),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                icons[i],
+                                size: 20,
+                                color: widget.index == i
+                                    ? Theme.of(c).colorScheme.onSurface
+                                    : Theme.of(c).colorScheme.onSurfaceVariant,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                labels[i],
+                                maxLines: 1,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: widget.index == i
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                  color: widget.index == i
+                                      ? Theme.of(c).colorScheme.onSurface
+                                      : Theme.of(c)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
-            ),
+            ],
           ),
-          Positioned.fill(
-            child: Align(
-              alignment: Alignment.center,
-              child: SizedBox(
-                width: 40,
-                height: double.infinity,
-                child: Semantics(
-                  label: 'Quick add. Hold and drag to choose an action.',
-                  customSemanticsActions: {
-                    const CustomSemanticsAction(
-                      label: 'Add session or log',
-                    ): () =>
-                        widget.onQuickAdd('session'),
-                    const CustomSemanticsAction(label: 'Add expense'): () =>
-                        widget.onQuickAdd('expense'),
-                    const CustomSemanticsAction(label: 'Add income'): () =>
-                        widget.onQuickAdd('income'),
-                    const CustomSemanticsAction(label: 'Add savings'): () =>
-                        widget.onQuickAdd('savings'),
-                    const CustomSemanticsAction(label: 'Add budget rule'): () =>
-                        widget.onQuickAdd('rule'),
-                  },
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPressStart: (_) => openMenu(),
-                    onLongPressMoveUpdate: (d) => updateMenu(d.globalPosition),
-                    onLongPressCancel: closeMenu,
-                    onLongPressEnd: (d) {
-                      updateMenu(d.globalPosition);
-                      final selection = hovered;
-                      closeMenu();
-                      if (selection != null) {
-                        widget.onQuickAdd(actions[selection]);
-                      }
-                    },
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

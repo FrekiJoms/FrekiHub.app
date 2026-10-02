@@ -213,6 +213,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       );
     }
     for (final p in planned) {
+      if (p.status == 'complete') continue;
       add(
         p.day,
         ListTile(
@@ -296,9 +297,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                           style: TextStyle(fontSize: 11, letterSpacing: 2),
                         ),
                         const SizedBox(height: 12),
-                        FittedBox(
-                          child: NumberValue(money(net, d.currency), size: 34),
-                        ),
+                        NumberValue(money(net, d.currency), size: 34),
                       ],
                     ),
                   ),
@@ -353,14 +352,31 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 24,
-                runSpacing: 16,
-                children: [
-                  metric(c, 'Income', money(income, d.currency)),
-                  metric(c, 'Spent', money(expenses, d.currency)),
-                  metric(c, 'Saved', money(savings, d.currency)),
-                ],
+              LayoutBuilder(
+                builder: (c, constraints) {
+                  final columns = constraints.maxWidth < 260 ? 2 : 3;
+                  final width =
+                      (constraints.maxWidth - 12 * (columns - 1)) / columns;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 16,
+                    children: [
+                      for (final value in [
+                        ('Income', income),
+                        ('Spent', expenses),
+                        ('Saved', savings),
+                      ])
+                        SizedBox(
+                          width: width,
+                          child: metric(
+                            c,
+                            value.$1,
+                            money(value.$2, d.currency),
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ],
           ),
@@ -575,9 +591,13 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ),
       ),
       const SizedBox(height: 6),
-      Text(
-        value,
-        style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 14),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          value,
+          style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 14),
+        ),
       ),
     ],
   );

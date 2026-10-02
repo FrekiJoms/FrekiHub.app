@@ -13,11 +13,38 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   bool collapsed = false;
   bool labels = false;
   static const blue = Color(0xff4788ff);
+  final sessionsByDay = <String, List<Session>>{};
+  final entriesByDay = <String, List<Entry>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    indexRecords();
+  }
+
+  @override
+  void didUpdateWidget(CalendarScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.data.sessions, widget.data.sessions) ||
+        !identical(oldWidget.data.entries, widget.data.entries)) {
+      indexRecords();
+    }
+  }
+
+  void indexRecords() {
+    sessionsByDay.clear();
+    entriesByDay.clear();
+    for (final s in widget.data.sessions) {
+      sessionsByDay.putIfAbsent(s.day, () => []).add(s);
+    }
+    for (final e in widget.data.entries) {
+      entriesByDay.putIfAbsent(e.day, () => []).add(e);
+    }
+  }
 
   List<Session> sessions(DateTime date) =>
-      widget.data.sessions.where((s) => s.day == dayKey(date)).toList();
-  List<Entry> entries(DateTime date) =>
-      widget.data.entries.where((e) => e.day == dayKey(date)).toList();
+      sessionsByDay[dayKey(date)] ?? const [];
+  List<Entry> entries(DateTime date) => entriesByDay[dayKey(date)] ?? const [];
   List<String> records(DateTime date) => [
     ...sessions(date).map((s) => s.kind),
     ...entries(date).map((e) => e.category),
@@ -98,9 +125,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 onPressed: withFeedback(() => shift(-1)),
                 icon: const Icon(LucideIcons.chevronLeft, size: 18),
               ),
-              Text(
-                DateFormat(mode == 0 ? 'yyyy' : 'MMMM yyyy').format(selected),
-                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+              Expanded(
+                child: Text(
+                  DateFormat(mode == 0 ? 'yyyy' : 'MMMM yyyy').format(selected),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                ),
               ),
               IconButton(
                 tooltip: 'Next ${['year', 'month', 'week', 'day'][mode]}',
@@ -800,13 +835,41 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 }
 
-class DayPanel extends ConsumerWidget {
+class DayPanel extends ConsumerStatefulWidget {
   final String day;
   final AppData initialData;
   const DayPanel({super.key, required this.day, required this.initialData});
   @override
-  Widget build(BuildContext c, WidgetRef ref) {
-    final d = ref.watch(dataProvider).value ?? initialData;
+  ConsumerState<DayPanel> createState() => _DayPanelState();
+}
+
+class _DayPanelState extends ConsumerState<DayPanel> {
+  Timer? resizeTimer;
+  double? extent;
+  late AppDatabase database;
+  @override
+  void initState() {
+    super.initState();
+    database = ref.read(databaseProvider);
+  }
+
+  void persistExtent() {
+    if (extent != null) {
+      unawaited(database.pref('dayPanel', extent!).catchError((Object _) {}));
+    }
+  }
+
+  @override
+  void dispose() {
+    resizeTimer?.cancel();
+    persistExtent();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final day = widget.day;
+    final d = ref.watch(dataProvider).value ?? widget.initialData;
     final height = (double.tryParse(d.prefs['dayPanel'] ?? '') ?? .65).clamp(
       .3,
       .95,
@@ -815,7 +878,9 @@ class DayPanel extends ConsumerWidget {
     final entries = d.entries.where((e) => e.day == day).toList();
     return NotificationListener<DraggableScrollableNotification>(
       onNotification: (n) {
-        ref.read(databaseProvider).pref('dayPanel', n.extent);
+        extent = n.extent;
+        resizeTimer?.cancel();
+        resizeTimer = Timer(const Duration(milliseconds: 250), persistExtent);
         return false;
       },
       child: DraggableScrollableSheet(
