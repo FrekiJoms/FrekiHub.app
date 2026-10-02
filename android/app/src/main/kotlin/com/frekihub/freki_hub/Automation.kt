@@ -144,6 +144,7 @@ class AutomationBootReceiver : BroadcastReceiver() {
 }
 class PurchaseListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        if (sbn.packageName == packageName) return
         val config = Automation.config(this)
         if (!config.optBoolean("purchases")) return
         val apps = config.optJSONArray("apps") ?: return

@@ -62,6 +62,9 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   Future<void> refresh() async {
     await guarded(context, () async {
       final next = await AutomationSync.status();
+      next['receipts'] = await NativeSession.channel.invokeMethod<bool>(
+        'receiptNotificationsAllowed',
+      );
       await AutomationSync.reconcile(ref.read(databaseProvider));
       if (mounted) setState(() => status = next);
     });
@@ -73,6 +76,12 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       await AutomationSync.configure(
         await ref.read(databaseProvider).readAll(),
       );
+      if (key == 'purchaseScanning' && value) {
+        await NativeSession.channel.invokeMethod<bool>(
+          'receiptNotificationPermission',
+        );
+        await refresh();
+      }
     });
   }
 
@@ -658,6 +667,17 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
                   NativeSession.channel.invokeMethod('notificationPermission'),
             ),
             child: const Text('Allow notification access'),
+          ),
+        if (data.prefs['purchaseScanning'] == 'true' &&
+            status['receipts'] != true)
+          OutlinedButton(
+            onPressed: withFeedback(() async {
+              await NativeSession.channel.invokeMethod<bool>(
+                'receiptNotificationPermission',
+              );
+              await refresh();
+            }),
+            child: const Text('Allow saved-transaction notifications'),
           ),
         const SizedBox(height: 8),
         const Text(

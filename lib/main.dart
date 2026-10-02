@@ -89,6 +89,16 @@ class _AppShellState extends ConsumerState<AppShell>
   Future<void> reconcile() async {
     try {
       await AutomationSync.reconcile(ref.read(databaseProvider));
+      final destination = await NativeSession.channel.invokeMethod<String>(
+        'purchaseDestination',
+      );
+      if (destination == 'budget' && mounted) {
+        setState(() {
+          slideDirection = index > 3 ? -1 : 1;
+          index = 3;
+          lastTab = 3;
+        });
+      }
       final pending = await NativeSession.pending();
       if (pending != null) {
         await ref

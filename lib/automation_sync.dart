@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:intl/intl.dart';
 
 import 'data.dart';
 import 'services.dart';
@@ -43,7 +44,9 @@ abstract final class AutomationSync {
     final acknowledged = <String>[];
     final pending = await NativeSession.pending();
     if (events.isEmpty && pending == null) {
-      await configure(AppData([], [], [], await db.readPreferences()));
+      final prefs = await db.readPreferences();
+      await deliverReceipts(db, prefs);
+      await configure(AppData([], [], [], prefs));
       return;
     }
     final data = await db.readAll();
@@ -105,6 +108,10 @@ abstract final class AutomationSync {
             acknowledged.add(id);
             continue;
           }
+          final existing =
+              await (db.select(db.entries)
+                    ..where((e) => e.id.equals(id) | e.occurrence.equals(id)))
+                  .getSingleOrNull();
           await db
               .into(db.entries)
               .insert(
@@ -121,6 +128,23 @@ abstract final class AutomationSync {
                 ),
                 mode: InsertMode.insertOrIgnore,
               );
+          if (existing == null) {
+            final merchant = event['merchant'] as String;
+            await db.pref(
+              'purchaseNotice:$id',
+              jsonEncode({
+                'id': id,
+                'title': 'Transaction saved',
+                'amount': money(amount, event['currency'] as String),
+                'merchant': merchant,
+                'time': event['time'],
+                'date': DateFormat('d MMM y · h:mm a').format(time),
+                'source': event['source'] ?? event['package'],
+                'location': event['location'] ?? 'Location unavailable',
+                'reference': event['reference'] ?? '',
+              }),
+            );
+          }
           // Replace the generic insert log with the notification's precise timestamp and snapshot.
           await db.customStatement('DELETE FROM activity_logs WHERE id = ?', [
             'transaction:$id',
@@ -157,10 +181,35 @@ abstract final class AutomationSync {
         acknowledged.add(id);
       }
     });
+    await deliverReceipts(db, await db.readPreferences());
     if (pending != null) await NativeSession.acknowledge();
     if (acknowledged.isNotEmpty) {
       await NativeSession.channel.invokeMethod('automationAck', acknowledged);
     }
     await configure(AppData([], [], [], await db.readPreferences()));
+  }
+
+  static Future<void> deliverReceipts(
+    AppDatabase db,
+    Map<String, String> prefs,
+  ) async {
+    for (final pending in prefs.entries.where(
+      (p) => p.key.startsWith('purchaseNotice:'),
+    )) {
+      try {
+        final posted = await NativeSession.channel.invokeMethod<bool>(
+          'transactionSaved',
+          jsonDecode(pending.value),
+        );
+        if (posted == true) {
+          await (db.delete(
+            db.preferences,
+          )..where((p) => p.key.equals(pending.key))).go();
+        }
+      } catch (_) {
+        // A saved transaction stays saved even if Android cannot show its receipt.
+        // Keep the receipt for the next foreground reconciliation.
+      }
+    }
   }
 }

@@ -22,11 +22,25 @@ class MainActivity : FlutterActivity() {
     private var pendingResult: MethodChannel.Result? = null
     private var startData: Map<*, *>? = null
     private var locationResult: MethodChannel.Result? = null
+    private var receiptPermissionResult: MethodChannel.Result? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             when (call.method) {
+                "transactionSaved" -> result.success(TransactionNotifications.post(this, call.arguments as Map<*, *>))
+                "purchaseDestination" -> { val page = intent.getStringExtra("openPage"); intent.removeExtra("openPage"); result.success(page) }
+                "receiptNotificationsAllowed" -> result.success(TransactionNotifications.allowed(this))
+                "receiptNotificationPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        if (receiptPermissionResult != null || pendingResult != null) result.success(false)
+                        else { receiptPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 75) }
+                    } else {
+                        val allowed = TransactionNotifications.allowed(this)
+                        if (!allowed) startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                        result.success(allowed)
+                    }
+                }
                 "automationConfig" -> { Automation.configure(this, call.arguments as String); result.success(null) }
                 "automationReset" -> { Automation.prefs(this).edit().clear().commit(); Automation.configure(this, "{}"); result.success(null) }
                 "automationEvents" -> result.success(Automation.prefs(this).getString("events", "[]"))
@@ -100,6 +114,10 @@ class MainActivity : FlutterActivity() {
         soundPool?.release(); soundPool = null; soundIds.clear(); readySounds.clear()
         super.onDestroy()
     }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+    }
     private fun startTimer(data: Map<*, *>) {
         val id = data["id"] as String
         if (getSharedPreferences("session", MODE_PRIVATE).getString("pendingId", null) == id) return
@@ -114,5 +132,6 @@ class MainActivity : FlutterActivity() {
             pendingResult?.success(approved); pendingResult = null; startData = null
         }
         if (requestCode == 74) { locationResult?.success(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED); locationResult = null }
+        if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }
     }
 }

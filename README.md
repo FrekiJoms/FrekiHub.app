@@ -82,3 +82,13 @@ Validated with Flutter analysis and seven focused startup/data, automation and n
 The startup audit found two unbounded waits that could leave the loading screen visible indefinitely: graphics preparation and initial database streams. Graphics now has a six-second recovery deadline and uses solid surfaces when it stalls or fails. Initial record loading has a fifteen-second deadline, then displays a Retry state; late database completion can still recover without clearing records. Database errors appear immediately even while graphics is preparing. These deadlines cap stalled work and do not add a minimum splash duration.
 
 Nine focused checks and Flutter analysis passed, including simulated hung graphics, late shader errors, a delayed database connection, and recovery. ADB reported no connected devices, so the original intermittent Android force-close/reopen failure has not been reproduced on the phone. No APK was rebuilt or installed.
+
+### Saved transaction confirmations
+
+Detected purchases now produce a `Transaction saved` Android notification only after the expense and receipt commit to SQLite. The compact notification shows amount and merchant; expanding it shows confirmation that the record was added to Budget, date/time, payment app, available location and reference. Tapping opens Budget. Financial details use private lock-screen visibility, with a generic public summary.
+
+Confirmations use a separate Saved transactions channel. Enabling purchase detection requests posting permission, and Settings exposes an Allow saved-transaction notifications action when posting is blocked. Denied or failed delivery retains a local pending receipt for later reconciliation; replaying the same detected purchase does not create another receipt. FrekiHub excludes its own notifications from purchase scanning.
+
+As with the existing purchase import flow, purchases detected while Flutter is closed remain queued: the saved confirmation is sent when the app next opens/resumes and commits the import, rather than claiming the transaction was saved when it was only detected.
+
+Validation for saved-transaction confirmations: Flutter analyzer clean, five focused purchase/automation regression checks passed, and native Kotlin compilation passed using temporary output to bypass an IDE-held resource lock. No APK built or installed; real-device notification delivery remains to be checked.
