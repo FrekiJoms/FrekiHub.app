@@ -39,6 +39,7 @@ part 'settings.dart';
 part 'forms.dart';
 part 'pickers.dart';
 part 'activity.dart';
+part 'controls.dart';
 
 Future<void> guarded(
   BuildContext c,
@@ -69,18 +70,11 @@ Widget selectField(
   String value,
   List<String> values,
   ValueChanged<String> changed,
-) => DropdownButtonFormField<String>(
-  key: ValueKey('$label:$value'),
-  initialValue: values.contains(value) ? value : values.first,
-  decoration: InputDecoration(labelText: label),
-  isExpanded: true,
-  items: values.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-  onChanged: (v) {
-    if (v != null) {
-      ActionFeedback.tap();
-      changed(v);
-    }
-  },
+) => _SelectionField(
+  label: label,
+  value: value,
+  values: values,
+  changed: changed,
 );
 Widget spaced(Widget child) =>
     Padding(padding: const EdgeInsets.only(bottom: 16), child: child);

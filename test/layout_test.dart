@@ -7,6 +7,50 @@ import 'package:freki_hub/design.dart';
 import 'package:freki_hub/screens.dart';
 
 void main() {
+  testWidgets(
+    'Selection sheet searches, selects and cancels without changing data',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      String value = 'Option 1';
+      int changes = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) => selectField(
+                'Category',
+                value,
+                List.generate(12, (i) => 'Option ${i + 1}'),
+                (result) => setState(() {
+                  value = result;
+                  changes++;
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Category'));
+      await tester.pumpAndSettle();
+      expect(find.text('Find an option'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), '12');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Option 12'));
+      await tester.pumpAndSettle();
+      expect(value, 'Option 12');
+      expect(changes, 1);
+      await tester.tap(find.text('Category'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close selection'));
+      await tester.pumpAndSettle();
+      expect(changes, 1);
+      expect(tester.takeException(), isNull);
+    },
+  );
   testWidgets('Main pages fit a narrow screen with enlarged text', (
     tester,
   ) async {

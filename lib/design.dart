@@ -107,6 +107,51 @@ abstract final class Design {
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
       ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.disabled)
+              ? scheme.onSurface.withValues(alpha: .3)
+              : states.contains(WidgetState.selected)
+              ? scheme.onPrimary
+              : scheme.onSurfaceVariant,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.primary
+              : scheme.surfaceContainerHighest,
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
+        thumbIcon: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? Icon(Icons.check, size: 14, color: scheme.primary)
+              : null,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        side: BorderSide(color: scheme.outlineVariant, width: 1.5),
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.primary
+              : Colors.transparent,
+        ),
+        checkColor: WidgetStatePropertyAll(scheme.onPrimary),
+      ),
+      sliderTheme: SliderThemeData(
+        trackHeight: 3,
+        activeTrackColor: scheme.primary,
+        inactiveTrackColor: scheme.surfaceContainerHighest,
+        thumbColor: scheme.primary,
+        overlayColor: scheme.primary.withValues(alpha: .1),
+        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+        overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+        valueIndicatorColor: scheme.primary,
+        valueIndicatorTextStyle: TextStyle(
+          fontFamily: 'Geist Mono',
+          fontSize: 12,
+          color: scheme.onPrimary,
+        ),
+      ),
       appBarTheme: AppBarTheme(
         backgroundColor: surface,
         foregroundColor: foreground,
@@ -183,16 +228,38 @@ abstract final class Design {
         ),
       ),
       chipTheme: ChipThemeData(
+        backgroundColor: scheme.surfaceContainerLow,
+        selectedColor: scheme.primaryContainer,
+        checkmarkColor: scheme.onPrimaryContainer,
         shape: const StadiumBorder(),
         side: BorderSide.none,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        titleTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -.5,
+          color: foreground,
+        ),
+        contentTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontSize: 14,
+          height: 1.5,
+          color: scheme.onSurfaceVariant,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: surface,
+        surfaceTintColor: Colors.transparent,
+        dragHandleColor: scheme.onSurface.withValues(alpha: .18),
+        dragHandleSize: const Size(36, 4),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
         ),
@@ -324,6 +391,25 @@ class Entrance extends StatelessWidget {
           curve: Motion.settle,
         );
   }
+}
+
+class SizeTransitionPanel extends StatelessWidget {
+  final Widget child;
+  final AlignmentGeometry alignment;
+  const SizeTransitionPanel({
+    super.key,
+    required this.child,
+    this.alignment = Alignment.center,
+  });
+  @override
+  Widget build(BuildContext c) => MediaQuery.disableAnimationsOf(c)
+      ? child
+      : AnimatedSize(
+          duration: const Duration(milliseconds: 250),
+          curve: Motion.curve,
+          alignment: alignment,
+          child: child,
+        );
 }
 
 class PageBody extends StatelessWidget {

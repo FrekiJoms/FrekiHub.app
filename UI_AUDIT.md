@@ -1,5 +1,19 @@
 # UI audit and applied changes
 
+## Custom component pass
+
+- Today: timer dialogs inherit FrekiHub typography, neutral surfaces and rounded shapes; session forms use custom selection fields.
+- Calendar: replace the platform-styled overflow popup with the shared options sheet. Retain custom date/time wheels and calendar view controls.
+- Sessions: custom selection fields for filters, a selected-state sorting sheet, rounded themed checkboxes for bulk actions, and consistent chips.
+- Budget: transaction/rule forms share the custom selectors; existing occurrence and savings sheets retain their bounded layouts.
+- Settings: currency and other selections use the shared sheet. Sound and automation switches use coordinated track/thumb colors. Radius and width sliders use a slimmer custom track and restrained thumb/overlay sizes.
+- Selection fields: a compact caption/value hierarchy, focus border, rotating chevron and a controlled external value. Sheets have a highlighted checkmarked current choice, optional search above eight choices, a bounded scrolling list and a close action. Cancel leaves values unchanged; selecting updates once. Native button keyboard activation and semantics remain available.
+- Dialogs and sheets: coordinated typography, elevation, neutral tint and grab handles in light/dark themes. Shared sheet motion honors reduced-motion and existing sound settings.
+
+Android permission prompts, file pickers and share sheets remain OS-owned. No new dependency or APK build is needed for these Flutter component changes.
+
+Validation: 14 tests pass, including custom selection search/select/cancel behavior, externally reset values, and five main-page narrow-screen layouts. Static analysis passes. The resize wrapper bypasses animation entirely under reduced motion, avoiding a zero-duration AnimatedSize layout assertion. Device visuals remain unverified.
+
 ## October 2, 2026 re-audit
 
 Reviewed all five main pages, record forms, settings sheets, shared navigation, feedback, calendar lookup, budget projections and Android notification integration.

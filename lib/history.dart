@@ -291,30 +291,38 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: PopupMenuButton<int>(
-                tooltip: 'Sort sessions',
-                onSelected: (i) {
-                  ActionFeedback.tap();
-                  setState(() => sortColumn = i);
-                },
-                itemBuilder: (_) => List.generate(
-                  headers.length,
-                  (i) => CheckedPopupMenuItem(
-                    value: i,
-                    checked: sortColumn == i,
-                    child: Text(headers[i]),
+              child: TextButton(
+                onPressed: withFeedback(() async {
+                  final value = await panel<String>(
+                    c,
+                    _ChoiceSheet(
+                      title: 'Sort sessions',
+                      selected: headers[sortColumn],
+                      values: headers,
+                    ),
+                  );
+                  if (value != null && mounted) {
+                    setState(() => sortColumn = headers.indexOf(value));
+                  }
+                }),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 14,
                   ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 14,
-                    horizontal: 8,
-                  ),
-                  child: Text(
-                    'Sort: ${headers[sortColumn]}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Sort: ${headers[sortColumn]}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(LucideIcons.chevronDown, size: 14),
+                  ],
                 ),
               ),
             ),
@@ -332,9 +340,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
           ],
         ),
-        AnimatedSize(
-          duration: Motion.duration(c),
-          curve: Motion.curve,
+        SizeTransitionPanel(
           alignment: Alignment.topCenter,
           child: filtersExpanded
               ? Wrap(

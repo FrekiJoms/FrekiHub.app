@@ -537,9 +537,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             }),
           ),
         ),
-        AnimatedSize(
-          duration: Motion.duration(c),
-          curve: Motion.curve,
+        SizeTransitionPanel(
           child: Column(
             children: [
               spaced(

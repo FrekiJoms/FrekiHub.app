@@ -89,30 +89,29 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                   icon: const Icon(LucideIcons.plus),
                 ),
-                PopupMenuButton<String>(
+                IconButton(
                   tooltip: 'Calendar options',
-                  onSelected: (value) {
-                    ActionFeedback.tap();
+                  icon: const Icon(LucideIcons.ellipsisVertical),
+                  onPressed: withFeedback(() async {
+                    final option = await panel<String>(
+                      c,
+                      _ChoiceSheet(
+                        title: 'Calendar options',
+                        values: [
+                          'Go to today',
+                          labels ? 'Show record dots' : 'Show record labels',
+                        ],
+                      ),
+                    );
+                    if (option == null || !mounted) return;
                     setState(() {
-                      if (value == 'today') {
+                      if (option == 'Go to today') {
                         selected = DateUtils.dateOnly(DateTime.now());
                       } else {
                         labels = !labels;
                       }
                     });
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'today',
-                      child: Text('Go to today'),
-                    ),
-                    PopupMenuItem(
-                      value: 'labels',
-                      child: Text(
-                        labels ? 'Show record dots' : 'Show record labels',
-                      ),
-                    ),
-                  ],
+                  }),
                 ),
               ],
             ),
@@ -169,9 +168,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                         children: [
                           if (mode != 3) ...[
                             weekdays(c, false),
-                            AnimatedSize(
-                              duration: Motion.duration(c, 250),
-                              curve: Motion.curve,
+                            SizeTransitionPanel(
                               alignment: Alignment.topCenter,
                               child: SizedBox(
                                 height: rowHeight * (single ? 1 : rows),
