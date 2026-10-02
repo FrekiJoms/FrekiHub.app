@@ -1,12 +1,61 @@
 import 'dart:async';
 
 import 'package:drift/native.dart';
+import 'package:drift/drift.dart' show LazyDatabase, QueryExecutor;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freki_hub/data.dart';
 import 'package:freki_hub/startup.dart';
 
 void main() {
+  test('Stalled and failed graphics initialization use the fallback', () async {
+    final stalled = Completer<void>();
+    expect(
+      await prepareGraphics(
+        () => stalled.future,
+        timeout: const Duration(milliseconds: 10),
+      ),
+      isFalse,
+    );
+    stalled.completeError(StateError('Late shader failure'));
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      await prepareGraphics(() async => throw StateError('Shader unavailable')),
+      isFalse,
+    );
+    expect(await prepareGraphics(() async {}), isTrue);
+  });
+
+  test('Stalled database opening reports a timeout and can recover', () async {
+    final connection = Completer<QueryExecutor>();
+    final db = AppDatabase.forTesting(LazyDatabase(() => connection.future));
+    final timedOut = Completer<Object>();
+    final recovered = Completer<AppData>();
+    final subscription = db
+        .watchAll(initialTimeout: const Duration(milliseconds: 20))
+        .listen(
+          (data) {
+            if (!recovered.isCompleted) recovered.complete(data);
+          },
+          onError: (Object error) {
+            if (!timedOut.isCompleted) timedOut.complete(error);
+          },
+        );
+    addTearDown(() async {
+      await subscription.cancel();
+      await db.close();
+    });
+    expect(
+      await timedOut.future.timeout(const Duration(seconds: 2)),
+      isA<TimeoutException>(),
+    );
+    connection.complete(NativeDatabase.memory());
+    expect(
+      (await recovered.future.timeout(const Duration(seconds: 2))).sessions,
+      isEmpty,
+    );
+  });
+
   test('Preference updates preserve cached record tables', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     final snapshots = StreamIterator(db.watchAll());

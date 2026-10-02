@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:developer';
 
@@ -7,16 +8,36 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'design.dart';
 
-final graphicsProvider = FutureProvider<void>((ref) async {
+Future<bool> prepareGraphics(
+  Future<void> Function() initialize, {
+  Duration timeout = const Duration(seconds: 6),
+}) async {
+  try {
+    await initialize().timeout(timeout);
+    return true;
+  } catch (error, stack) {
+    log(
+      'Graphics unavailable; using the solid interface.',
+      name: 'FrekiHub.startup',
+      error: error,
+      stackTrace: stack,
+    );
+    return false;
+  }
+}
+
+final graphicsProvider = FutureProvider<bool>((ref) async {
   // Show the lightweight first frame before loading glass shaders. The database
   // opens concurrently through dataProvider; neither needs a splash delay.
-  await WidgetsBinding.instance.endOfFrame;
   final task = TimelineTask()..start('FrekiHub.prepareGraphics');
   try {
-    await LiquidGlassWidgets.initialize(
-      enablePerformanceMonitor: false,
-      warmUpMode: GlassWarmUpMode.never,
-    );
+    return await prepareGraphics(() async {
+      await WidgetsBinding.instance.endOfFrame;
+      await LiquidGlassWidgets.initialize(
+        enablePerformanceMonitor: false,
+        warmUpMode: GlassWarmUpMode.never,
+      );
+    });
   } finally {
     task.finish();
   }

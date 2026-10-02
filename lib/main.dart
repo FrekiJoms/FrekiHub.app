@@ -151,6 +151,17 @@ class _AppShellState extends ConsumerState<AppShell>
     });
     final async = ref.watch(dataProvider);
     final graphics = ref.watch(graphicsProvider);
+    if (async.hasError && !async.hasValue) {
+      return Scaffold(
+        body: StartupLoading(
+          stage: async.error is TimeoutException
+              ? 'Your records are taking longer to open'
+              : 'Your records could not be opened',
+          failed: true,
+          onRetry: () => ref.invalidate(dataProvider),
+        ),
+      );
+    }
     if (!graphics.hasValue || (!async.hasValue && async.isLoading)) {
       return Scaffold(
         body: StartupLoading(
@@ -170,138 +181,143 @@ class _AppShellState extends ConsumerState<AppShell>
         if (mounted) unawaited(reconcile());
       });
     }
-    return StartupIntro(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: GlassScaffold(
-          background: const CanvasBackground(),
-          edgeFade: false,
-          body: SafeArea(
-            bottom: false,
-            child: async.when(
-              data: (data) => Stack(
-                children: [
-                  Positioned.fill(
-                    child: ClipRect(
-                      child: AnimatedSwitcher(
-                        duration: Motion.duration(c),
-                        reverseDuration: Motion.duration(c, 200),
-                        switchInCurve: Motion.curve,
-                        switchOutCurve: Motion.curve,
-                        transitionBuilder: (child, animation) {
-                          final incoming = child.key == ValueKey(index);
-                          return IgnorePointer(
-                            ignoring: !incoming,
-                            child: TickerMode(
-                              enabled: incoming,
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: Offset(
-                                      (incoming ? 1 : -1) *
-                                          slideDirection *
-                                          .12,
-                                      0,
-                                    ),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
+    return GlassAccessibilityScope(
+      reduceTransparency: graphics.value == true ? null : true,
+      child: StartupIntro(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: GlassScaffold(
+            background: const CanvasBackground(),
+            edgeFade: false,
+            body: SafeArea(
+              bottom: false,
+              child: async.when(
+                data: (data) => Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRect(
+                        child: AnimatedSwitcher(
+                          duration: Motion.duration(c),
+                          reverseDuration: Motion.duration(c, 200),
+                          switchInCurve: Motion.curve,
+                          switchOutCurve: Motion.curve,
+                          transitionBuilder: (child, animation) {
+                            final incoming = child.key == ValueKey(index);
+                            return IgnorePointer(
+                              ignoring: !incoming,
+                              child: TickerMode(
+                                enabled: incoming,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: Offset(
+                                        (incoming ? 1 : -1) *
+                                            slideDirection *
+                                            .12,
+                                        0,
+                                      ),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
-                        child: KeyedSubtree(
-                          key: ValueKey(index),
-                          child: switch (index) {
-                            0 => TodayScreen(data: data),
-                            1 => CalendarScreen(data: data),
-                            2 => HistoryScreen(data: data),
-                            3 => BudgetScreen(data: data),
-                            _ => SettingsScreen(data: data),
+                            );
                           },
-                        ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: MediaQuery.paddingOf(c).bottom + 12,
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: PillNavigation(
-                          index: index,
-                          onQuickAdd: (kind) => openQuickAdd(
-                            c,
-                            data,
-                            dayKey(DateTime.now()),
-                            kind,
+                          child: KeyedSubtree(
+                            key: ValueKey(index),
+                            child: switch (index) {
+                              0 => TodayScreen(data: data),
+                              1 => CalendarScreen(data: data),
+                              2 => HistoryScreen(data: data),
+                              3 => BudgetScreen(data: data),
+                              _ => SettingsScreen(data: data),
+                            },
                           ),
-                          onChanged: (i) {
-                            if (i == index) return;
-                            ActionFeedback.tap(transition: true);
-                            setState(() {
-                              slideDirection = i > index ? 1 : -1;
-                              index = i;
-                              lastTab = i;
-                            });
-                          },
                         ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    top: 16,
-                    right: 16,
-                    child: SizedBox.square(
-                      dimension: 48,
-                      child: GlassContainer(
-                        useOwnLayer: true,
-                        shape: const LiquidOval(),
-                        settings: const LiquidGlassSettings(
-                          blur: 12,
-                          thickness: 24,
-                        ),
-                        child: Semantics(
-                          selected: index == 4,
-                          child: IconButton(
-                            tooltip: index == 4 ? 'Close settings' : 'Settings',
-                            icon: const Icon(LucideIcons.settings2, size: 22),
-                            onPressed: () {
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: MediaQuery.paddingOf(c).bottom + 12,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 560),
+                          child: PillNavigation(
+                            index: index,
+                            onQuickAdd: (kind) => openQuickAdd(
+                              c,
+                              data,
+                              dayKey(DateTime.now()),
+                              kind,
+                            ),
+                            onChanged: (i) {
+                              if (i == index) return;
                               ActionFeedback.tap(transition: true);
                               setState(() {
-                                slideDirection = index == 4 ? -1 : 1;
-                                index = index == 4 ? lastTab : 4;
+                                slideDirection = i > index ? 1 : -1;
+                                index = i;
+                                lastTab = i;
                               });
                             },
                           ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              loading: () =>
-                  const StartupLoading(stage: 'Opening your records'),
-              error: (e, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('Your data could not be opened.'),
-                      const SizedBox(height: 16),
-                      Text('$e'),
-                      TextButton(
-                        onPressed: withFeedback(
-                          () => ref.invalidate(dataProvider),
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: SizedBox.square(
+                        dimension: 48,
+                        child: GlassContainer(
+                          useOwnLayer: true,
+                          shape: const LiquidOval(),
+                          settings: const LiquidGlassSettings(
+                            blur: 12,
+                            thickness: 24,
+                          ),
+                          child: Semantics(
+                            selected: index == 4,
+                            child: IconButton(
+                              tooltip: index == 4
+                                  ? 'Close settings'
+                                  : 'Settings',
+                              icon: const Icon(LucideIcons.settings2, size: 22),
+                              onPressed: () {
+                                ActionFeedback.tap(transition: true);
+                                setState(() {
+                                  slideDirection = index == 4 ? -1 : 1;
+                                  index = index == 4 ? lastTab : 4;
+                                });
+                              },
+                            ),
+                          ),
                         ),
-                        child: const Text('Retry'),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+                loading: () =>
+                    const StartupLoading(stage: 'Opening your records'),
+                error: (e, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('Your data could not be opened.'),
+                        const SizedBox(height: 16),
+                        Text('$e'),
+                        TextButton(
+                          onPressed: withFeedback(
+                            () => ref.invalidate(dataProvider),
+                          ),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

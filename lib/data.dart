@@ -199,50 +199,68 @@ class AppDatabase extends _$AppDatabase {
     await pref('logRevision', DateTime.now().microsecondsSinceEpoch);
   }
 
-  Stream<AppData> watchAll() {
+  Stream<AppData> watchAll({
+    Duration initialTimeout = const Duration(seconds: 15),
+  }) {
     late StreamController<AppData> stream;
     final subscriptions = <StreamSubscription<dynamic>>[];
     List<Session>? sessionRows;
     List<Entry>? entryRows;
     List<Rule>? ruleRows;
     Map<String, String>? prefs;
+    Timer? openingDeadline;
+    void queryError(Object error, StackTrace stack) {
+      openingDeadline?.cancel();
+      stream.addError(error, stack);
+    }
+
     void emit() {
       if (sessionRows != null &&
           entryRows != null &&
           ruleRows != null &&
           prefs != null) {
+        openingDeadline?.cancel();
         stream.add(AppData(sessionRows!, entryRows!, ruleRows!, prefs!));
       }
     }
 
     stream = StreamController<AppData>(
       onListen: () {
+        openingDeadline = Timer(initialTimeout, () {
+          stream.addError(
+            TimeoutException(
+              'Opening records took too long. Retry to reconnect.',
+              initialTimeout,
+            ),
+          );
+        });
         subscriptions.add(
           select(sessions).watch().listen((rows) {
             sessionRows = rows;
             emit();
-          }, onError: stream.addError),
+          }, onError: queryError),
         );
         subscriptions.add(
           select(entries).watch().listen((rows) {
             entryRows = rows;
             emit();
-          }, onError: stream.addError),
+          }, onError: queryError),
         );
         subscriptions.add(
           select(rules).watch().listen((rows) {
             ruleRows = rows;
             emit();
-          }, onError: stream.addError),
+          }, onError: queryError),
         );
         subscriptions.add(
           select(preferences).watch().listen((rows) {
             prefs = {for (final p in rows) p.key: p.value};
             emit();
-          }, onError: stream.addError),
+          }, onError: queryError),
         );
       },
       onCancel: () async {
+        openingDeadline?.cancel();
         await Future.wait(subscriptions.map((s) => s.cancel()));
       },
     );

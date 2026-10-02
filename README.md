@@ -76,3 +76,9 @@ Startup now renders a lightweight, theme-aware orbit loader before preparing gla
 Glass starts at adaptive standard quality; heavier multi-pass shaders load only when needed. Record streams cache each table independently, so preference changes no longer reload sessions, entries and budget rules. Empty automation polling reads only preferences. Theme updates subscribe only to theme/sound preferences, and the Today screen ticks only its timer text rather than rebuilding the page and sorting the full session history each second. The analog clock has its own repaint boundary.
 
 Validated with Flutter analysis and seven focused startup/data, automation and navigation checks. Actual launch latency and frame improvements have not been measured on a connected device. Use a profile build on the phone with Flutter DevTools to compare cold starts and frame times; `FrekiHub.prepareGraphics` is available in the timeline for shader initialization. No APK was built or installed for this change.
+
+### Cold-start recovery
+
+The startup audit found two unbounded waits that could leave the loading screen visible indefinitely: graphics preparation and initial database streams. Graphics now has a six-second recovery deadline and uses solid surfaces when it stalls or fails. Initial record loading has a fifteen-second deadline, then displays a Retry state; late database completion can still recover without clearing records. Database errors appear immediately even while graphics is preparing. These deadlines cap stalled work and do not add a minimum splash duration.
+
+Nine focused checks and Flutter analysis passed, including simulated hung graphics, late shader errors, a delayed database connection, and recovery. ADB reported no connected devices, so the original intermittent Android force-close/reopen failure has not been reproduced on the phone. No APK was rebuilt or installed.
