@@ -50,7 +50,7 @@ flutter analyze
 | Change | Relevant existing checks |
 | --- | --- |
 | Startup/readiness/reactive cache | `test/startup_test.dart` |
-| Shared layout/custom selectors | `test/layout_test.dart` |
+| Shared layout/custom selectors/two-position drawers | `test/layout_test.dart` (opening frames, both snaps, nested selector/date picker, keyboard and cancellation) |
 | Bottom-bar gestures | `test/navigation_test.dart` |
 | Activity storage/backup/native session import | `test/activity_test.dart` |
 | Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |

@@ -189,12 +189,16 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
               const SizedBox(height: 4),
               Flexible(
                 child: values.isEmpty
-                    ? const Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'No matching options',
-                          textAlign: TextAlign.center,
-                        ),
+                    ? ListView(
+                        children: const [
+                          Padding(
+                            padding: EdgeInsets.all(24),
+                            child: Text(
+                              'No matching options',
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ],
                       )
                     : ListView.separated(
                         shrinkWrap: true,

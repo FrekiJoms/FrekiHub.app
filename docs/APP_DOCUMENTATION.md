@@ -37,7 +37,7 @@ Manual clock-in creates an OJT session through `AppDatabase.clockIn`. It rejects
 
 The timestamp is authoritative for duration; a ticking Flutter widget is not the source of elapsed time. Android's foreground chronometer uses the original start instant. A system notification clock-out stores an exact pending end instant and Flutter reconciles it later. Automatic records use notes beginning `Automatic · PLACE`; visible condition links currently derive the location name from that note, so changing the note can remove the shortcut.
 
-Session forms support OJT, Work, Study and Personal, editable date/start/end/note, wheel time/date input and saved/running records. End must follow start; a running session cannot start in the future. There is no account-level attendance synchronization.
+Session forms support OJT, Work, Study and Personal, editable date/start/end/note, wheel time/date input and saved/running records. Opening a session uses the shared bottom drawer rather than a full-screen container transform. End must follow start; a running session cannot start in the future. There is no account-level attendance synchronization.
 
 ## Sessions
 
@@ -63,7 +63,7 @@ Calendar is the fixed upper-left shortcut. Its local toolbar switches Year, Mont
 
 The year view shows twelve months. Month view uses recorded markers or labels and a draggable collapse handle that reduces to the selected week. Week view has a 24-hour session grid and a finance band; Day view has a visual cover and recorded session/finance agenda. Records are real saved data, not the gaming events in the original reference screenshots. Calendar records retain original currency denominations.
 
-Sessions and entries are indexed by date when their record lists change. The selected date/view are exported as rule context. The separate day panel remembers a bounded extent, with debounced persistence. Initial Calendar selection/view currently start at today/month when remounted; exported preferences should not be mistaken for complete view-state restoration.
+Sessions and entries are indexed by date when their record lists change. The selected date/view are exported as rule context. The day agenda uses the shared two-position drawer, without a nested draggable sheet. The legacy `dayPanel` preference remains in saved/exported data but no longer controls drawer height. Initial Calendar selection/view currently start at today/month when remounted; exported preferences should not be mistaken for complete view-state restoration.
 
 ## Map
 
@@ -78,6 +78,10 @@ Markers group positions rounded to five decimal places. A dot opens located reco
 On-demand OpenStreetMap tiles use app identification, visible attribution and a 128 MiB cache configuration. Tile failure leaves saved dots available and displays a message. Viewport context publishes after 500 ms of inactivity; identical raw query rows skip repeated JSON parsing and marker rebuilds. Current shortcomings and long-history limits are listed in [Application audit](APPLICATION_AUDIT.md).
 
 ## Settings and bottom sheets
+
+The shared `panel` in `design.dart` is the standard bottom drawer for record details, forms, pickers and Settings sheets. It opens at 56% of available height and snaps between that compact position and 92% expanded. Drag the handle or scroll the content to resize; tapping the handle toggles positions. Accessibility increase/decrease actions do the same. The keyboard expands the drawer within the remaining viewport. Opening/closing use 250/150 ms transitions; reduced motion skips those transitions and uses immediate handle resizing.
+
+Content with a vertical scrollable inherits the drawer's `PrimaryScrollController`; do not give it an independent controller or nest another draggable sheet. Pass `scrollable: true` for plain columns and wheel pickers so `panel` supplies the scrolling wrapper. Flutter requires the sheet's controller to be attached to the child scrollable for coordinated resizing, as described in the [DraggableScrollableSheet API](https://api.flutter.dev/flutter/widgets/DraggableScrollableSheet-class.html). Keep empty/loading content scrollable too. Picker wheels retain their own wheel interaction while surrounding drawer content scrolls.
 
 Settings contains Activity logs, Conditions & automation, saved-transaction posting access, notification sounds, appearance, display currency, category/payment-method management, in-app sound effects, export, restore and clear-data controls.
 

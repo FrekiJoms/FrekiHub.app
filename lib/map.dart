@@ -708,7 +708,11 @@ class _MapLogSheetState extends State<_MapLogSheet> {
           const SizedBox(height: 12),
           Expanded(
             child: widget.records.isEmpty
-                ? const Center(child: Text('No records with a usable location'))
+                ? ListView(
+                    children: const [
+                      Center(child: Text('No records with a usable location')),
+                    ],
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                     itemCount: widget.records.length,

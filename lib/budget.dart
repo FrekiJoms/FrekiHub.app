@@ -75,6 +75,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ],
       ),
     ),
+    scrollable: true,
   );
   Future<void> ruleMenu(Rule r) => panel(
     context,
@@ -134,6 +135,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ],
       ),
     ),
+    scrollable: true,
   );
   @override
   Widget build(BuildContext c) {
@@ -660,3 +662,4 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     field.dispose();
   }
 }
+      scrollable: true,

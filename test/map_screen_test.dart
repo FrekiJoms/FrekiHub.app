@@ -76,6 +76,8 @@ void main() {
       expect(find.text('2 logs'), findsOneWidget);
       await tester.tap(find.text('2 logs'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
+      await tester.pumpAndSettle();
       expect(find.text('Purchased lunch'), findsOneWidget);
       expect(find.text('Clocked in'), findsOneWidget);
       await tester.tap(find.byType(Checkbox).first);

@@ -21,7 +21,7 @@ Passing automated tests shows their covered cases pass; it does not establish th
 | Map | Full interval query, freshness validation, named categories, grouped records, selected chronological trace, debounced context and unchanged-row skip | Long-history cost, very large grouped badges, offline recovery and short-screen overlays need further work/testing |
 | Sessions | Phone list, bounded scrolling/table, stable sort, custom filters, width preferences, confirmed bulk delete | Condition banner currently checks all automation rules rather than session-relevant running rules |
 | Finance | Integer money, currency isolation, occurrence uniqueness, expected/actual timeline, post-commit receipts | Closed-Flutter purchases are queued until reconciliation; long timeline/charts need device profiling |
-| Calendar | Real session/entry agenda, date indexing, four views, draggable month collapse, debounced day-sheet extent | Starts at today/month on remount; DST-sensitive date navigation and enlarged/short layouts need broader tests |
+| Calendar | Real session/entry agenda, date indexing, four views, draggable month collapse, shared two-position day drawer | Starts at today/month on remount; DST-sensitive date navigation and enlarged/short layouts need broader tests |
 | Settings | Shared custom selectors/sheets, separate notification sounds, backup/reset confirmation and error handling | OS permission/channel flows unverified; unbounded export can exceed restore's size limit |
 | Logs / automation sheets | Opt-in logging, completion, parser diagnostics, target scoping, paused Save and Run/Stop, sampled native context | Log UI caps 1,000 rows; not every edit/delete/action is logged; native queue is unbounded |
 | Forms and shared chrome | Themed wheel inputs/selectors, guarded saves, accessible tooltips, shared motion/feedback and inset handling | Current automated layout coverage is narrow portrait at 1.3× text, not every overlay/form/landscape state |
@@ -82,7 +82,13 @@ The root README now presents current navigation/features and points to complete 
 
 An explicitly requested debug rebuild exposed a manifest incompatibility: HyperIsland ToolKit 0.4.0 requires API 35 while Flutter's default minimum was API 24. Resolved by declaring `minSdk = 35` in the app Gradle configuration; this APK now requires Android 15 or newer. Debug assembly succeeded using a temporary app output override because another process held the standard output's `R.jar` open. Compilation, manifest merge, native library compilation and APK packaging passed. Existing Gradle/SDK deprecation warnings remain; this is not evidence that all device flows pass.
 
-## Recommended next validation
+## Session drawer follow-up — 2026-10-02
+
+Source-confirmed: session list tiles used a full-screen `OpenContainer` transform instead of the shared bottom sheet. That path is replaced by `panel`; all shared drawers now snap at 56% and 92% of the available viewport, with coordinated primary scrolling, a draggable/tappable accessible handle, keyboard expansion and reduced motion. Calendar's nested day drawer is removed. Empty/loading lists and non-scrollable picker/quick-action content now attach to the shared scroll controller. The date wheel uses the available width to avoid an overflow at 320 px with 1.3× text.
+
+Automated evidence: seven focused layout, Map and rule-editor tests passed, including frame-by-frame session opening, both snap points, nested selectors/date wheels, keyboard insets and cancellation. The Map check expands the compact drawer before asserting all lazy list rows are present. No saved records are changed by the opening test.
+
+The reported opening error was not captured in the recent device logs. Removing the former opening path and passing regressions do not establish its exact original cause, nor measure real-device frame performance. Static analysis passed with no issues. This follow-up did not build/install an APK or measure phone performance; device verification remains pending.
 
 Fixed-header follow-up (2026-10-02): Today's title/date now sit outside the bounded content ListView. All three existing layout tests passed, including explicit unchanged title/date positions after scrolling at enlarged text scale. Other pages retain their existing scrolling headers.
 

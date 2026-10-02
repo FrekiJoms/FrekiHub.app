@@ -931,24 +931,164 @@ Future<bool> confirm(
       ),
     ) ??
     false;
-Future<T?> panel<T>(BuildContext c, Widget child) => showModalBottomSheet<T>(
-  context: c,
-  isScrollControlled: true,
-  useSafeArea: true,
-  showDragHandle: true,
-  constraints: BoxConstraints(
-    maxWidth: 640,
-    maxHeight: MediaQuery.sizeOf(c).height * .92,
-  ),
-  sheetAnimationStyle: AnimationStyle(
-    duration: Motion.duration(c, 400),
-    reverseDuration: Motion.duration(c, 350),
-  ),
-  builder: (c) => Padding(
+Future<T?> panel<T>(BuildContext c, Widget child, {bool scrollable = false}) =>
+    showModalBottomSheet<T>(
+      context: c,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      constraints: const BoxConstraints(maxWidth: 640),
+      sheetAnimationStyle: AnimationStyle(
+        duration: Motion.duration(c, 250),
+        reverseDuration: Motion.duration(c, 150),
+      ),
+      builder: (c) => _PanelSheet(scrollable: scrollable, child: child),
+    );
+
+class _PanelSheet extends StatefulWidget {
+  final Widget child;
+  final bool scrollable;
+  const _PanelSheet({required this.child, required this.scrollable});
+  @override
+  State<_PanelSheet> createState() => _PanelSheetState();
+}
+
+class _PanelSheetState extends State<_PanelSheet> {
+  static const compact = .56, expanded = .92;
+  final controller = DraggableScrollableController();
+  double keyboard = 0;
+
+  void settle(double extent) {
+    if (!controller.isAttached) return;
+    final duration = Motion.duration(context);
+    if (duration == Duration.zero) {
+      controller.jumpTo(extent);
+    } else {
+      unawaited(
+        controller.animateTo(extent, duration: duration, curve: Motion.curve),
+      );
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final next = MediaQuery.viewInsetsOf(context).bottom;
+    if (next > keyboard) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) settle(expanded);
+      });
+    }
+    keyboard = next;
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext c) => Padding(
     padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(c).bottom),
-    child: child,
-  ),
-);
+    child: LayoutBuilder(
+      builder: (c, bounds) => DraggableScrollableSheet(
+        controller: controller,
+        initialChildSize: compact,
+        minChildSize: compact,
+        maxChildSize: expanded,
+        expand: false,
+        snap: true,
+        shouldCloseOnMinExtent: false,
+        // Flutter requires a positive snap duration, even with reduced motion.
+        snapAnimationDuration: MediaQuery.disableAnimationsOf(c)
+            ? const Duration(milliseconds: 1)
+            : Motion.duration(c, 150),
+        builder: (c, scroll) => Material(
+          color: Theme.of(c).colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Semantics(
+                label: 'Resize sheet',
+                button: true,
+                onIncrease: () => settle(expanded),
+                onDecrease: () => settle(compact),
+                child: GestureDetector(
+                  key: const ValueKey('panel-drag-handle'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: withFeedback(
+                    () {
+                      if (controller.isAttached) {
+                        settle(controller.size < .74 ? expanded : compact);
+                      }
+                    },
+                  ),
+                  onVerticalDragUpdate: (details) {
+                    if (scroll.hasClients && controller.isAttached) {
+                      controller.jumpTo(
+                        (controller.size - details.delta.dy / bounds.maxHeight)
+                            .clamp(compact, expanded),
+                      );
+                    }
+                  },
+                  onVerticalDragEnd: (details) {
+                    if (!scroll.hasClients) return;
+                    final velocity = details.primaryVelocity ?? 0;
+                    settle(
+                      velocity < -250
+                          ? expanded
+                          : velocity > 250
+                          ? compact
+                          : controller.size < .74
+                          ? compact
+                          : expanded,
+                    );
+                  },
+                  child: SizedBox(
+                    height: 40,
+                    width: double.infinity,
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Theme.of(c).colorScheme.onSurfaceVariant
+                              .withValues(alpha: .35),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: RepaintBoundary(
+                  child: widget.scrollable
+                      ? SingleChildScrollView(
+                          controller: scroll,
+                          child: widget.child,
+                        )
+                      : PrimaryScrollController(
+                          controller: scroll,
+                          automaticallyInheritForPlatforms: TargetPlatform
+                              .values
+                              .toSet(),
+                          child: widget.child,
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 void toast(BuildContext c, String message) {
   final overlay = Overlay.of(c);
   late OverlayEntry entry;

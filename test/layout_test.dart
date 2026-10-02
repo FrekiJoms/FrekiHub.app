@@ -8,6 +8,90 @@ import 'package:freki_hub/screens.dart';
 
 void main() {
   testWidgets(
+    'Session drawer opens without errors, snaps twice and keeps nested inputs usable',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final now = DateTime.now();
+      final session = Session(
+        id: 'drawer',
+        day: dayKey(now),
+        kind: 'Work',
+        started: now.subtract(const Duration(hours: 1)).millisecondsSinceEpoch,
+        ended: now.millisecondsSinceEpoch,
+        note: 'Drawer check',
+      );
+      final data = AppData([session], [], [], {});
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(true),
+            builder: (c, child) => MediaQuery(
+              data: MediaQuery.of(c)
+                  .copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+            home: Consumer(
+              builder: (c, ref, _) => Scaffold(
+                body: Center(child: sessionTile(c, ref, data, session)),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byType(ListTile));
+      for (var frame = 0; frame < 8; frame++) {
+        await tester.pump(const Duration(milliseconds: 40));
+        expect(tester.takeException(), isNull);
+      }
+      expect(find.text('Session details'), findsOneWidget);
+      expect(find.text('Session detail'), findsNothing);
+      final sheet = tester.widget<DraggableScrollableSheet>(
+        find.byType(DraggableScrollableSheet),
+      );
+      expect(sheet.controller!.size, closeTo(.56, .001));
+      await tester.drag(
+        find.byKey(const ValueKey('panel-drag-handle')),
+        const Offset(0, -220),
+      );
+      await tester.pumpAndSettle();
+      expect(sheet.controller!.size, closeTo(.92, .001));
+      await tester.tap(find.text('Session type'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Study'));
+      await tester.pumpAndSettle();
+      expect(find.text('Study'), findsOneWidget);
+      await tester.tap(find.textContaining('Clock in ·'));
+      await tester.pumpAndSettle();
+      expect(find.text('Select date'), findsOneWidget);
+      await tester.tap(find.text('Cancel').last);
+      await tester.pumpAndSettle();
+      expect(find.text('Session details'), findsOneWidget);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 260);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      tester.view.resetViewInsets();
+      await tester.pumpAndSettle();
+      await tester.drag(
+        find.byKey(const ValueKey('panel-drag-handle')),
+        const Offset(0, 240),
+      );
+      await tester.pumpAndSettle();
+      expect(sheet.controller!.size, closeTo(.56, .001));
+      await tester.ensureVisible(find.text('Cancel'));
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byType(DraggableScrollableSheet), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'Selection sheet searches, selects and cancels without changing data',
     (tester) async {
       tester.view.physicalSize = const Size(320, 720);

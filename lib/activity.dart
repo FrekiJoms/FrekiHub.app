@@ -338,9 +338,13 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   Widget build(BuildContext c) {
     final data = ref.watch(dataProvider).value;
     if (data == null) {
-      return const SizedBox(
-        height: 240,
-        child: Center(child: CircularProgressIndicator()),
+      return ListView(
+        children: const [
+          SizedBox(
+            height: 240,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+        ],
       );
     }
     return SizedBox(

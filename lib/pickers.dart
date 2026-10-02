@@ -17,6 +17,7 @@ Future<DateTime?> showWheelDatePicker({
     first: DateUtils.dateOnly(firstDate),
     last: DateUtils.dateOnly(lastDate),
   ),
+  scrollable: true,
 );
 
 Future<TimeOfDay?> showWheelTimePicker({
@@ -29,6 +30,7 @@ Future<TimeOfDay?> showWheelTimePicker({
       initial: DateTime(2026, 1, 1, initialTime.hour, initialTime.minute),
       timeOnly: true,
     ),
+    scrollable: true,
   );
   return value == null ? null : TimeOfDay.fromDateTime(value);
 }
@@ -56,7 +58,7 @@ class _WheelPickerSheetState extends State<_WheelPickerSheet> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+        padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

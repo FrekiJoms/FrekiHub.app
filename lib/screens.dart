@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:animations/animations.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:file_picker/file_picker.dart';
@@ -65,7 +64,8 @@ Future<void> guarded(
             ? e.message.toString()
             : e is FormatException
             ? e.message
-            : 'Could not save: $e',
+            : 'Could not complete this action. Try again.',
+        error: true,
       );
     }
   }
@@ -127,7 +127,7 @@ Future<bool> deleteSession(BuildContext c, WidgetRef ref, Session s) async {
     return true;
   } catch (e) {
     if (c.mounted) {
-      toast(c, 'Could not delete this session: $e');
+      toast(c, 'Could not delete this session. Try again.', error: true);
     }
     return false;
   }
@@ -138,20 +138,13 @@ Widget sessionTile(
   WidgetRef ref,
   AppData data,
   Session s,
-) => OpenContainer(
-  closedElevation: 0,
-  openElevation: 0,
-  closedColor: Theme.of(c).colorScheme.surface,
-  openColor: Theme.of(c).colorScheme.surface,
-  closedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-  transitionDuration: Motion.duration(c, 400),
-  openBuilder: (c, _) => Scaffold(
-    appBar: AppBar(title: const Text('Session detail')),
-    body: SessionForm(data: data, session: s, day: s.day),
-  ),
-  closedBuilder: (c, open) => ListTile(
+) => Surface(
+  padding: EdgeInsets.zero,
+  child: ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    onTap: withFeedback(open),
+    onTap: withFeedback(
+      () => panel(c, SessionForm(data: data, session: s, day: s.day)),
+    ),
     leading: Icon(s.ended == null ? LucideIcons.timer : LucideIcons.clock3),
     title: Text(sessionDate(data, s)),
     subtitle: Column(
@@ -243,4 +236,5 @@ Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
       ],
     ),
   ),
+  scrollable: true,
 );

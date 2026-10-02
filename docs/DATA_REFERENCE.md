@@ -73,7 +73,7 @@ The exact saved keys are visible in `pref` call sites. These are the important f
 | `automation` | JSON configuration: saved visual/structured rules and selected payment apps |
 | `locationName`, `locationDetails`, `locationSampleTime` | Cached imported position label/payload/time |
 | `logRevision`, `activityCount`, `lastActivityAction`, `lastActivityTitle` | Log refresh/observable metadata |
-| `calendarSelected`, `calendarView`, `dayPanel` | Exported calendar selection/view and remembered day-sheet extent |
+| `calendarSelected`, `calendarView`, `dayPanel` | Exported calendar selection/view; legacy day-sheet extent retained for backup compatibility, no longer used by the shared drawer |
 | `mapPeriod`, `mapDate`, `mapFrom`, `mapUntil`, `mapTrace` | Saved map view preferences |
 | `mapContext` | Separately encoded last viewed map runtime observations |
 | `currentPage` | Current target string for rule navigation conditions |
