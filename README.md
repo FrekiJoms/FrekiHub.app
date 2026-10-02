@@ -52,3 +52,5 @@ Run `flutter pub get` before building after generated files have been removed. I
 In this Windows desktop execution environment, Java's default temp directory caused `Unable to establish loopback connection`. The build succeeds with TEMP/TMP pointing to the workspace `.tmp` directory and `JAVA_TOOL_OPTIONS=-Djdk.net.unixdomain.tmpdir=<absolute workspace .tmp path>`. This is a build-process environment workaround, not an application dependency or SDK change.
 
 Calendar provides Year, Month, Week and Day views. The Sunday-first month grid collapses to the selected week using its drag handle; record dots can switch to labels. Weekly sessions use a 24-hour time grid, with budget entries above it. Daily cards list recorded sessions and transactions across all currencies. Tap a record to edit, or use the calendar add button for the selected date.
+
+Date and time inputs use themed wheel-picker sheets matching the original web app: month/day/year and hour/minute/AM-PM, five visible rows, a highlighted selection band, Cancel/Confirm, and selection feedback. Date limits remain enforced; cancelling leaves the form unchanged.

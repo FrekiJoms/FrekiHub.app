@@ -9,6 +9,14 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:file_picker/file_picker.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart'
+    show
+        CupertinoDatePicker,
+        CupertinoDatePickerMode,
+        CupertinoTheme,
+        CupertinoThemeData,
+        CupertinoTextThemeData,
+        DatePickerDateOrder;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -28,6 +36,7 @@ part 'history.dart';
 part 'budget.dart';
 part 'settings.dart';
 part 'forms.dart';
+part 'pickers.dart';
 
 Future<void> guarded(
   BuildContext c,

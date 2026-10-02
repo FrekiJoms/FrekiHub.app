@@ -47,7 +47,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
 
   Future<void> time(bool ending) async {
     final old = ending ? end ?? start : start;
-    final date = await showDatePicker(
+    final date = await showWheelDatePicker(
       context: context,
       initialDate: old,
       firstDate: DateTime(2000),
@@ -56,7 +56,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
     if (date == null || !mounted) {
       return;
     }
-    final t = await showTimePicker(
+    final t = await showWheelTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(old),
     );
@@ -325,7 +325,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
         spaced(
           OutlinedButton(
             onPressed: withFeedback(() async {
-              final d = await showDatePicker(
+              final d = await showWheelDatePicker(
                 context: c,
                 initialDate: calendarDate(day),
                 firstDate: DateTime(2000),
@@ -585,7 +585,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
         spaced(
           OutlinedButton(
             onPressed: withFeedback(() async {
-              final d = await showDatePicker(
+              final d = await showWheelDatePicker(
                 context: c,
                 initialDate: calendarDate(start),
                 firstDate: DateTime(2000),
@@ -602,7 +602,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
           spaced(
             OutlinedButton(
               onPressed: withFeedback(() async {
-                final d = await showDatePicker(
+                final d = await showWheelDatePicker(
                   context: c,
                   initialDate: calendarDate(finish ?? start),
                   firstDate: calendarDate(start),
