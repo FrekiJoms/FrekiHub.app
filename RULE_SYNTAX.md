@@ -20,15 +20,31 @@ target == notifications {
 ```
 
 - `schedule("name") { ... }`: unique identifier within the rule, 1–64 letters/digits/underscores/hyphens, starting with a letter or underscore.
-- `at("HH:mm");`: required local 24-hour time. Starts at the next occurrence; a time already passed starts tomorrow.
+- `at("HH:mm");`: required local 24-hour time. Starts at the next eligible occurrence; a time already passed moves to the next eligible day.
 - `repeat.daily();`: repeat each local calendar day at the specified time.
+- `repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri"]);`: repeat only on the selected local weekdays. Valid names are `Mon`, `Tue`, `Wed`, `Thu`, `Fri`, `Sat`, `Sun`; use `Thu`, not `Thur`. The list must contain at least one day. Duplicate days are combined.
 - `repeat.count(10);`: total successful notification deliveries, including the first; integer 1–10,000.
 - `repeat.forever();`: unlimited repeats until stopped. Use this instead of `repeat.count()`.
 - `notification.show("Title", "Body");`: required title (1–100 characters) and body (1–500 characters).
 
-For a one-time reminder, omit all `repeat.*` commands. For daily repetition, specify `repeat.daily()` and exactly one of `repeat.count()` or `repeat.forever()`. Command order is flexible; duplicate commands are rejected. Up to 16 schedules per rule are supported.
+For a one-time reminder, omit all `repeat.*` commands. For repetition, choose either `repeat.daily()` or `repeat.weekdays([...])`, then exactly one of `repeat.count()` or `repeat.forever()`. Daily and selected-weekday modes cannot be combined. Command order is flexible; duplicate commands are rejected. Up to 16 schedules per rule are supported.
 
-Run requests notification permission and activates the schedules. Stop/deletion cancels their pending alarms. Stop followed by Run, or changing the rule source, starts a fresh repeat count. Context updates and reopening the app preserve the count. Completed schedules remain saved but inactive. Reminders restore after reboot, app updates, clock/time-zone changes and reopening after force-stop. Missed occurrences are skipped instead of replayed in a burst. Notification permission/channel denial consumes no repeat count; delivery retries at the next local occurrence.
+Example: notify at 08:00 Monday through Friday until stopped:
+
+```javascript
+target == notifications {
+  schedule("workday_reminder") {
+    at("08:00");
+    repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri"]);
+    repeat.forever();
+    notification.show("Workday reminder", "Time to clock in");
+  }
+}
+```
+
+Use `repeat.count(10);` instead of `repeat.forever();` for ten successful deliveries across the selected days, not ten calendar days or ten deliveries per weekday. The first eligible occurrence counts as delivery one. Weekend-only repeats use `["Sat", "Sun"]`; all seven days are equivalent to daily repetition. Weekday selection is included in completion.
+
+Run requests notification permission and activates the schedules. Stop/deletion cancels their pending alarms. Stop followed by Run, or changing the rule source, starts a fresh repeat count. Context updates and reopening the app preserve the count. Completed schedules remain saved but inactive. Reminders restore after reboot, app updates, clock/time-zone changes and reopening after force-stop. Missed occurrences are skipped instead of replayed in a burst. Notification permission/channel denial consumes no repeat count; delivery retries at the next eligible local occurrence. An alarm delayed into an excluded weekday is skipped without consuming a delivery, then rescheduled for the next selected day. Local weekday and clock time are preserved across time-zone and daylight-saving changes.
 
 The editor's clock icon opens Android's Alarms & reminders access. With access granted, schedules use precise alarms; otherwise they use Android's inexact fallback and may be delayed. Android battery restrictions and force-stop can prevent delivery; reopening restores the next occurrence. Reminder delivery does not depend on the 15-minute rule evaluation job.
 

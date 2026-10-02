@@ -169,6 +169,10 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
           choices.addAll({
             'at': ('at("08:00");', 'Local 24-hour delivery time'),
             'repeat.daily': ('repeat.daily();', 'Repeat each local day'),
+            'repeat.weekdays': (
+              'repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri"]);',
+              'Repeat only on selected local weekdays',
+            ),
             'repeat.forever': ('repeat.forever();', 'Repeat until stopped'),
             'repeat.count': (
               'repeat.count(10);',

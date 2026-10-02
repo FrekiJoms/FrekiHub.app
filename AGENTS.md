@@ -6,3 +6,4 @@
 - Keep rule source, runtime JSON and live snapshots separate. Never persist snapshots or outbox payloads into the rule configuration. Preserve branch-change deduplication and paused/Run/Stop behavior.
 - Verify meaningful changes with relevant compiler, editor or reconciliation checks. Do not build/install an APK unless the user asks for it or connects a device for that purpose.
 - Commit and push completed features, as requested by the user.
+- Update `RULE_SYNTAX.md` for every syntax change, including commands, fields, validation, completion, scheduling behavior and limits. Keep examples aligned with the compiler and Android runtime in the same feature commit.

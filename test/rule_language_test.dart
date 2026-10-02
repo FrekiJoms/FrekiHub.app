@@ -3,6 +3,48 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Selected weekday schedules support counted and unlimited repeats', () {
+    final program = RuleCompiler.compile('''
+target == notifications {
+  schedule("workdays") {
+    at("08:00");
+    repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri", "Mon"]);
+    repeat.count(10);
+    notification.show("Work", "Clock in");
+  }
+  schedule("weekend") {
+    repeat.forever();
+    repeat.weekdays(["Sat", "Sun"]);
+    at("09:00");
+    notification.show("Weekend", "Take a break");
+  }
+}
+''');
+    final schedules = program['schedules'] as List;
+    expect(schedules[0]['days'], [1, 2, 3, 4, 5]);
+    expect(schedules[0]['daily'], false);
+    expect(schedules[0]['count'], 10);
+    expect(schedules[1]['days'], [6, 7]);
+    expect(schedules[1]['count'], -1);
+    for (final repeat in [
+      'repeat.weekdays([]); repeat.forever();',
+      'repeat.weekdays(["Thur"]); repeat.forever();',
+      'repeat.weekdays([1]); repeat.forever();',
+      'repeat.weekdays(["Mon"]);',
+      'repeat.weekdays(["Mon"]); repeat.daily(); repeat.forever();',
+      'repeat.daily(); repeat.weekdays(["Mon"]); repeat.forever();',
+      'repeat.weekdays(["Mon"]); repeat.weekdays(["Tue"]); repeat.forever();',
+      'repeat.weekdays(["Mon"]); repeat.forever(); repeat.count(2);',
+    ]) {
+      expect(
+        () => RuleCompiler.compile(
+          'target == notifications { schedule("bad") { at("08:00"); $repeat notification.show("A", "B"); } }',
+        ),
+        throwsFormatException,
+        reason: repeat,
+      );
+    }
+  });
   test('Compiles one-time, counted and unlimited notification schedules', () {
     final program = RuleCompiler.compile('''
 target == notifications {

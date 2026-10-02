@@ -13,6 +13,14 @@ public final class RuleNotificationScheduleCheck {
         }
     }
 
+    private static void weekdays(String zone, String time, String after, String expected, int... days) {
+        TimeZone.setDefault(TimeZone.getTimeZone(zone));
+        long actual = RuleNotifications.INSTANCE.nextTime(time, Instant.parse(after).toEpochMilli(), days);
+        if (actual != Instant.parse(expected).toEpochMilli()) {
+            throw new AssertionError(zone + " selected weekdays: " + Instant.ofEpochMilli(actual) + " != " + expected);
+        }
+    }
+
     public static void main(String[] args) {
         TimeZone original = TimeZone.getDefault();
         try {
@@ -22,7 +30,11 @@ public final class RuleNotificationScheduleCheck {
             next("America/New_York", "08:00", "2026-03-07T13:00:00Z", "2026-03-08T12:00:00Z");
             next("America/New_York", "02:30", "2026-03-08T08:00:00Z", "2026-03-09T06:30:00Z");
             next("America/New_York", "08:00", "2026-10-31T12:00:00Z", "2026-11-01T13:00:00Z");
-            System.out.println("6 notification clock checks passed");
+            weekdays("Asia/Manila", "08:00", "2026-10-02T00:00:00Z", "2026-10-05T00:00:00Z", 1, 2, 3, 4, 5);
+            weekdays("Asia/Manila", "08:00", "2026-10-05T00:00:00Z", "2026-10-12T00:00:00Z", 1);
+            weekdays("Asia/Manila", "08:00", "2026-10-02T01:00:00Z", "2026-10-03T00:00:00Z", 6, 7);
+            weekdays("America/New_York", "08:00", "2026-03-01T13:00:00Z", "2026-03-08T12:00:00Z", 7);
+            System.out.println("10 notification clock checks passed");
         } finally {
             TimeZone.setDefault(original);
         }

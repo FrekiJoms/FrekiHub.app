@@ -23,21 +23,30 @@ object RuleNotifications {
             .putExtra("key", key).putExtra("due", due).putExtra("token", token),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    fun nextTime(time: String, after: Long): Long {
+    fun nextTime(time: String, after: Long): Long = nextTime(time, after, intArrayOf(1, 2, 3, 4, 5, 6, 7))
+
+    fun nextTime(time: String, after: Long, days: IntArray): Long {
+        require(days.isNotEmpty() && days.all { it in 1..7 })
         val parts = time.split(":")
-        val date = Calendar.getInstance().apply {
-            timeInMillis = after
-            set(Calendar.HOUR_OF_DAY, parts[0].toInt()); set(Calendar.MINUTE, parts[1].toInt())
-            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            if (timeInMillis <= after) {
-                add(Calendar.DAY_OF_YEAR, 1)
-                // Restore the requested clock time after a DST gap normalized today's value.
+        for (offset in 0..7) {
+            val date = Calendar.getInstance().apply {
+                timeInMillis = after
+                add(Calendar.DAY_OF_YEAR, offset)
                 set(Calendar.HOUR_OF_DAY, parts[0].toInt()); set(Calendar.MINUTE, parts[1].toInt())
                 set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             }
+            val day = (date.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+            if (day in days && date.timeInMillis > after) return date.timeInMillis
         }
-        return date.timeInMillis
+        error("No eligible weekday occurrence")
     }
+
+    private fun days(definition: JSONObject): IntArray {
+        val selected = definition.optJSONArray("days") ?: return intArrayOf(1, 2, 3, 4, 5, 6, 7)
+        return IntArray(selected.length()) { selected.getInt(it) }
+    }
+    private fun nextTime(definition: JSONObject, after: Long) = nextTime(definition.getString("time"), after, days(definition))
+    private fun repeats(definition: JSONObject) = definition.optBoolean("daily") || definition.has("days")
 
     private fun arm(c: Context, key: String, state: JSONObject) {
         if (state.getInt("limit") != -1 && state.getInt("sent") >= state.getInt("limit")) return
@@ -68,10 +77,10 @@ object RuleNotifications {
                 val state = if (old?.optString("fingerprint") == fingerprint) JSONObject(old.toString()) else JSONObject()
                     .put("fingerprint", fingerprint).put("token", java.util.UUID.randomUUID().toString())
                     .put("definition", definition).put("limit", definition.getInt("count")).put("sent", 0)
-                    .put("due", nextTime(definition.getString("time"), System.currentTimeMillis()))
+                    .put("due", nextTime(definition, System.currentTimeMillis()))
                 val modeChanged = !state.has("exact") || state.optBoolean("exact") != exactAllowed(c)
                 state.put("exact", exactAllowed(c))
-                if (restore) state.put("due", nextTime(definition.getString("time"), System.currentTimeMillis()))
+                if (restore) state.put("due", nextTime(definition, System.currentTimeMillis()))
                 if (old == null || old.toString() != state.toString()) storage.edit().putString(key, state.toString()).commit()
                 if (restore || modeChanged || old == null || old.optString("fingerprint") != fingerprint) arm(c, key, state)
             }
@@ -95,6 +104,14 @@ object RuleNotifications {
         if (due != intent.getLongExtra("due", -1) || state.getString("token") != intent.getStringExtra("token") || System.currentTimeMillis() < due) return
         if (state.getInt("limit") != -1 && state.getInt("sent") >= state.getInt("limit")) return
         val definition = state.getJSONObject("definition")
+        val today = (Calendar.getInstance().get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
+        if (today !in days(definition)) {
+            // An inexact alarm delayed into an excluded day must not consume a repeat.
+            state.put("due", nextTime(definition, System.currentTimeMillis()))
+            storage.edit().putString(key, state.toString()).commit()
+            arm(c, key, state)
+            return
+        }
         val manager = c.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Rule reminders", NotificationManager.IMPORTANCE_DEFAULT))
         val allowed = (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
@@ -118,11 +135,11 @@ object RuleNotifications {
                 .put("title", "Sent reminder: " + definition.getString("title")).put("schedule", definition.getString("name")))
         }
         // Skip missed occurrences instead of sending a burst. Denied permission consumes no repeat count.
-        if (definition.getBoolean("daily") || !delivered) {
-            state.put("due", nextTime(definition.getString("time"), maxOf(System.currentTimeMillis(), due)))
+        if (repeats(definition) || !delivered) {
+            state.put("due", nextTime(definition, maxOf(System.currentTimeMillis(), due)))
         }
         storage.edit().putString(key, state.toString()).commit()
-        if (definition.getBoolean("daily") || !delivered) arm(c, key, state)
+        if (repeats(definition) || !delivered) arm(c, key, state)
     }
 }
 

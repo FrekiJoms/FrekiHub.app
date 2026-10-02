@@ -318,6 +318,7 @@ class _Parser {
     need('{');
     String? time, title, body;
     bool daily = false;
+    List<int>? days;
     int? count;
     final seen = <String>{};
     while (!take('}')) {
@@ -332,7 +333,11 @@ class _Parser {
             fail('Use a valid 24-hour time such as "08:00"');
           }
         case 'repeat.daily':
+          if (days != null) fail('Choose daily or weekdays, not both');
           daily = true;
+        case 'repeat.weekdays':
+          if (daily) fail('Choose daily or weekdays, not both');
+          days = weekdays();
         case 'repeat.forever':
           if (count != null) fail('Choose count or forever, not both');
           count = -1;
@@ -364,18 +369,36 @@ class _Parser {
     if (time == null || title == null) {
       fail('A schedule needs at() and notification.show()');
     }
-    if (daily && count == null) {
-      fail('Daily repeats need repeat.count() or repeat.forever()');
+    if ((daily || days != null) && count == null) {
+      fail('Repeats need repeat.count() or repeat.forever()');
     }
-    if (!daily && count != null) fail('Repeating requires repeat.daily()');
+    if (!daily && days == null && count != null) {
+      fail('Repeating requires repeat.daily() or repeat.weekdays()');
+    }
     return {
       'name': name,
       'time': time,
       'daily': daily,
+      'days': ?days,
       'count': count ?? 1,
       'title': title,
       'body': body,
     };
+  }
+
+  List<int> weekdays() {
+    need('[');
+    final days = <int>{};
+    const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    do {
+      final day = string();
+      if (!names.contains(day)) {
+        fail('Weekday must be Mon, Tue, Wed, Thu, Fri, Sat or Sun');
+      }
+      days.add(names.indexOf(day) + 1);
+    } while (take(','));
+    need(']');
+    return days.toList();
   }
 
   Map<String, dynamic> branch(String target) {
@@ -468,19 +491,9 @@ class _Parser {
         return node('time', {'from': start, 'until': end});
       }
       if (function == 'weekday.in') {
-        need('[');
-        final days = <int>[];
-        const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        do {
-          final day = string();
-          if (!names.contains(day)) {
-            fail('Weekday must be Mon, Tue, Wed, Thu, Fri, Sat or Sun');
-          }
-          days.add(names.indexOf(day) + 1);
-        } while (take(','));
-        need(']');
+        final days = weekdays();
         need(')');
-        return node('weekday', {'days': days.toSet().toList()});
+        return node('weekday', {'days': days});
       }
       fail('Unknown condition "$function"');
     } finally {

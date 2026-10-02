@@ -44,6 +44,17 @@ void main() {
       await tester.tap(find.text('repeat.count'));
       await tester.pump();
       expect(controller.text, contains('repeat.count(10);'));
+      await tester.enterText(
+        find.byType(TextField),
+        'target == notifications { schedule("test") { at("08:00"); repeat.we',
+      );
+      await tester.pump();
+      await tester.tap(find.text('repeat.weekdays'));
+      await tester.pump();
+      expect(
+        controller.text,
+        contains('repeat.weekdays(["Mon", "Tue", "Wed", "Thu", "Fri"]);'),
+      );
       await tester.pumpWidget(const SizedBox());
       controller.dispose();
     },
