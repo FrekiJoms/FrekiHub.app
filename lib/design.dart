@@ -416,12 +416,14 @@ class PageBody extends StatelessWidget {
   final String title, subtitle;
   final List<Widget> children;
   final Widget? action;
+  final bool compactHeader;
   const PageBody({
     super.key,
     required this.title,
     required this.subtitle,
     required this.children,
     this.action,
+    this.compactHeader = false,
   });
   @override
   Widget build(BuildContext c) => LayoutBuilder(
@@ -432,44 +434,70 @@ class PageBody extends StatelessWidget {
         key: PageStorageKey(title),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          80,
+          compactHeader ? 16 : 80,
           horizontal,
           126 + MediaQuery.paddingOf(c).bottom,
         ),
         children: [
           Entrance(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 56),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
+            child: compactHeader
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 56),
+                    child: Column(
+                      children: [
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            title,
+                            style: Theme.of(c).textTheme.headlineSmall,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
                           subtitle,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 12,
-                            height: 1.4,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 11,
                             color: Theme.of(c).colorScheme.onSurfaceVariant,
                           ),
                         ),
+                      ],
+                    ),
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 56),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                subtitle,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.4,
+                                  fontWeight: FontWeight.w500,
+                                  color: Theme.of(c)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                            ?action,
+                          ],
+                        ),
                       ),
-                      ?action,
+                      const SizedBox(height: 12),
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          title,
+                          style: Theme.of(c).textTheme.headlineLarge,
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 12),
-                Semantics(
-                  header: true,
-                  child: Text(
-                    title,
-                    style: Theme.of(c).textTheme.headlineLarge,
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 16),
           for (var i = 0; i < children.length; i++)

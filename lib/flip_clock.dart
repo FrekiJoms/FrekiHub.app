@@ -3,10 +3,16 @@ part of 'design.dart';
 class FlipClock extends StatelessWidget {
   final String value;
   final double size;
-  const FlipClock(this.value, {super.key, this.size = 36});
+  final String label;
+  const FlipClock(
+    this.value, {
+    super.key,
+    this.size = 36,
+    this.label = 'Elapsed time',
+  });
   @override
   Widget build(BuildContext c) => Semantics(
-    label: 'Elapsed time $value',
+    label: '$label $value',
     child: ExcludeSemantics(
       child: FittedBox(
         fit: BoxFit.scaleDown,

@@ -128,12 +128,50 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     return PageBody(
       title: 'Today.',
       subtitle: DateFormat('EEEE, d MMMM').format(DateTime.now()),
-      action: IconButton(
-        tooltip: 'Add record',
-        icon: const Icon(LucideIcons.plus),
-        onPressed: withFeedback(() => quickAdd(c, d, today)),
-      ),
+      compactHeader: true,
       children: [
+        Center(
+          child: Semantics(
+            label:
+                'Total balance in ${d.currency}: ${money(d.balance, d.currency)}',
+            child: ExcludeSemantics(
+              child: Surface(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Icon(
+                      LucideIcons.wallet,
+                      size: 15,
+                      color: Theme.of(c).colorScheme.onSurfaceVariant,
+                    ),
+                    Text(
+                      'Balance',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    Text(
+                      money(d.balance, d.currency),
+                      style: const TextStyle(
+                        fontFamily: 'Geist Mono',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
         if (offline)
           const Surface(
             padding: EdgeInsets.all(16),
@@ -166,20 +204,30 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               const SizedBox(height: 12),
               ValueListenableBuilder<DateTime>(
                 valueListenable: tick,
-                builder: (c, _, _) => FlipClock(
+                builder: (c, now, _) => FlipClock(
                   running == null
-                      ? elapsed(total())
+                      ? DateFormat(
+                          d.prefs['clockFormat'] == '12'
+                              ? 'hh:mm:ss'
+                              : 'HH:mm:ss',
+                        ).format(now)
                       : elapsed(durationOf(running)),
                   size: 36,
+                  label: running == null ? 'Current time' : 'Elapsed time',
                 ),
               ),
               const SizedBox(height: 10),
-              Text(
-                running == null
-                    ? 'Your time today'
-                    : 'Clocked in at ${clockTime(d, running.started)}',
-                style: TextStyle(
-                  color: Theme.of(c).colorScheme.onSurfaceVariant,
+              ValueListenableBuilder<DateTime>(
+                valueListenable: tick,
+                builder: (c, now, _) => Text(
+                  running == null
+                      ? d.prefs['clockFormat'] == '12'
+                            ? 'Current time · ${DateFormat('a').format(now)}'
+                            : 'Current time'
+                      : 'Clocked in at ${clockTime(d, running.started)}',
+                  style: TextStyle(
+                    color: Theme.of(c).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -218,20 +266,19 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   }
                 },
               ),
-              if (running != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: ValueListenableBuilder<DateTime>(
-                    valueListenable: tick,
-                    builder: (c, _, _) => Text(
-                      'Today’s total  ${elapsed(total())}',
-                      style: const TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 12,
-                      ),
+              Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: ValueListenableBuilder<DateTime>(
+                  valueListenable: tick,
+                  builder: (c, _, _) => Text(
+                    'Today’s total  ${elapsed(total())}',
+                    style: const TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 12,
                     ),
                   ),
                 ),
+              ),
             ],
           ),
         ),

@@ -124,6 +124,8 @@ Location rule radii use **metres**, currently 100–1,000 m in 50 m increments. 
 
 The authoritative field catalog is `RuleCatalog.fields` in `lib/rule_language.dart`; completion uses it directly. It exposes session activity/type/note/count/duration/today's time; budget income/expenses/savings/net/currency/goal/counts/latest dated transaction details; calendar date/view; appearance/sound; activity count/latest action/title; location enablement/name/coordinates/accuracy/sample age; purchase detection and notification permission; battery, charging, connectivity, media volume, ringer mode and orientation; current page and foreground state.
 
+`budget.balance` is numeric: all-time recorded income minus expenses minus savings, in major units of the selected display currency. It matches Today's balance pill, preserves negative balances and excludes other currencies and unrecorded plans. Unlike `budget.net`, it is not restricted to the current month. It supports completion and numeric comparisons, for example `target == app { if (budget.balance < 100) { app.toast("Balance below 100"); } }`. Android evaluates this field from the last reconciled Flutter snapshot; closed-app queued purchases do not update it until imported.
+
 `data.get("settings.someNewPreference")` reads any exported saved preference. Generic preferences are strings, so compare against double-quoted values. For example `data.get("settings.clockFormat") == "12"`. Internal automation programs and pending receipt/toast transport are excluded. New saved settings automatically appear in completion; new feature data must be registered in the shared catalog/snapshot.
 
 ## Conditions

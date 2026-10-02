@@ -108,6 +108,24 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 100));
+      if (page is TodayScreen) {
+        expect(find.text('Balance'), findsOneWidget);
+        expect(find.text('Current time'), findsOneWidget);
+        expect(
+          find.byWidgetPredicate(
+            (widget) => widget is FlipClock && widget.label == 'Current time',
+          ),
+          findsOneWidget,
+        );
+      }
+      for (final tooltip in [
+        'Add record',
+        'Add transaction',
+        'Add session',
+        'Add to selected day',
+      ]) {
+        expect(find.byTooltip(tooltip), findsNothing);
+      }
       expect(
         tester.takeException(),
         isNull,

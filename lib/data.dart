@@ -566,6 +566,8 @@ class AppData {
     return null;
   }
 
+  int get balance => total('income') - total('expense') - total('savings');
+
   int total(String kind, {String? month}) => entries
       .where(
         (e) =>

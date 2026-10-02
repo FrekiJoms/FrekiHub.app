@@ -103,13 +103,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Add to selected day',
-                  onPressed: withFeedback(
-                    () => quickAdd(c, widget.data, dayKey(selected)),
-                  ),
-                  icon: const Icon(LucideIcons.plus),
-                ),
-                IconButton(
                   tooltip: 'Calendar options',
                   icon: const Icon(LucideIcons.ellipsisVertical),
                   onPressed: withFeedback(() async {

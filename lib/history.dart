@@ -225,16 +225,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     return PageBody(
       title: 'Sessions.',
       subtitle: 'Session history',
-      action: IconButton(
-        tooltip: 'Add session',
-        onPressed: withFeedback(
-          () => panel(
-            c,
-            SessionForm(data: widget.data, day: dayKey(DateTime.now())),
-          ),
-        ),
-        icon: const Icon(LucideIcons.plus),
-      ),
       children: [
         if ((AutomationSync.config(widget.data)['rules'] as List? ?? [])
             .isNotEmpty)

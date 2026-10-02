@@ -244,11 +244,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     return PageBody(
       title: 'Finance.',
       subtitle: 'Your money, clearly',
-      action: IconButton(
-        tooltip: 'Add transaction',
-        onPressed: withFeedback(() => quickAdd(c, d, today)),
-        icon: const Icon(LucideIcons.plus),
-      ),
       children: [
         Surface(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),

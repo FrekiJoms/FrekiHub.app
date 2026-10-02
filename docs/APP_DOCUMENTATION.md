@@ -29,6 +29,8 @@ Hold the bottom center to reveal quick-add actions, drag over an action and rele
 
 Today shows the analog clock, a split-flap elapsed timer, session note input, clock-in/out control, current-day totals, recent records and an informational offline state. Timer digits update separately from the page; unchanged digits do not animate. The analog clock has a repaint boundary. Reduced motion suppresses the clock/flip transitions and uses immediate updates.
 
+Today's compact centered heading sits between the floating Calendar/Settings shortcuts. Its fitted balance pill shows all-time recorded income minus expenses and savings in the selected currency, with the same value exposed as `budget.balance`. While idle, the flip display shows live device time including seconds and respects the 12/24-hour preference; during a session it shows elapsed time. Today's recorded total remains separate. Page-top add buttons are removed; the bottom long-press quick-add gesture and context-specific inline add actions remain available.
+
 Manual clock-in creates an OJT session through `AppDatabase.clockIn`. It rejects an existing running session or any session already assigned to today's date. This is stricter than the database's one-running-session constraint: manual forms and native automatic imports use other write paths and can create multiple completed records on one day. Preserve that distinction or deliberately change it across paths.
 
 The timestamp is authoritative for duration; a ticking Flutter widget is not the source of elapsed time. Android's foreground chronometer uses the original start instant. A system notification clock-out stores an exact pending end instant and Flutter reconciles it later. Automatic records use notes beginning `Automatic · PLACE`; visible condition links currently derive the location name from that note, so changing the note can remove the shortcut.
@@ -55,7 +57,7 @@ Detected payment notifications use a conservative local parser. Valid purchases 
 
 ## Calendar
 
-Calendar is the fixed upper-left shortcut. Its local toolbar switches Year, Month, Week and Day views, shifts the date and opens quick add for the selected date. The Sunday-first calendar differs from the Map's Monday-start week filter.
+Calendar is the fixed upper-left shortcut. Its local toolbar switches Year, Month, Week and Day views and shifts the date. Inline agenda add controls retain selected-date entry creation. The Sunday-first calendar differs from the Map's Monday-start week filter.
 
 The year view shows twelve months. Month view uses recorded markers or labels and a draggable collapse handle that reduces to the selected week. Week view has a 24-hour session grid and a finance band; Day view has a visual cover and recorded session/finance agenda. Records are real saved data, not the gaming events in the original reference screenshots. Calendar records retain original currency denominations.
 
@@ -146,7 +148,7 @@ Records and configuration live locally. Native receivers/services exchange data 
 
 ## Design contracts
 
-Keep bundled Geist/Geist Mono, Lucide icons, neutral light/dark surfaces, opaque data cards and liquid glass for fixed chrome. `Surface`, `Chrome`, `PageBody`, `panel`, `toast`, `selectField` and wheel pickers are shared contracts. Page headers reserve 80 px for fixed top shortcuts; content leaves bottom navigation clearance and uses bounded readable width.
+Keep bundled Geist/Geist Mono, Lucide icons, neutral light/dark surfaces, opaque data cards and liquid glass for fixed chrome. `Surface`, `Chrome`, `PageBody`, `panel`, `toast`, `selectField` and wheel pickers are shared contracts. Standard page headers reserve 80 px for fixed top shortcuts; Today's compact header starts at 16 px with horizontal shortcut clearance. Content leaves bottom navigation clearance and uses bounded readable width.
 
 Motion uses `Motion.duration` and shared curves. Preserve reduced motion, tooltips/semantics, enlarged text, keyboard/inset behavior, minimum touch controls and sound preference. `withFeedback`/`ActionFeedback` provide throttled interaction effects; elapsed ticks do not play sounds. OS permission/share/file/channel dialogs remain OS-owned.
 

@@ -198,37 +198,75 @@ target == settings_page {
       );
     }
   });
-  test(
-    'Diagnostics include a line/column and snapshots retain negative money',
-    () {
-      try {
-        RuleCompiler.compile('target == app {\n if (true) { log("X") }\n}');
-      } on FormatException catch (e) {
-        expect(e.message, contains('Line 2, column'));
-      }
-      final day = dayKey(DateTime.now());
-      final data = AppData(
-        [],
-        [
-          Entry(
-            id: 'expense',
-            day: day,
-            kind: 'expense',
-            amount: 50,
-            currency: 'PHP',
-            category: 'Food',
-            method: 'Cash',
-            note: '',
-            occurrence: null,
-          ),
-        ],
-        [],
-        {'customSetting': 'value'},
-      );
-      final snapshot = RuleCatalog.snapshot(data);
-      expect(snapshot['budget.net'], -.5);
-      expect(snapshot['settings.customSetting'], 'value');
-      expect(snapshot['budget.transaction_count'], 1);
-    },
-  );
+  test('Diagnostics include a line/column and snapshots retain negative money', () {
+    try {
+      RuleCompiler.compile('target == app {\n if (true) { log("X") }\n}');
+    } on FormatException catch (e) {
+      expect(e.message, contains('Line 2, column'));
+    }
+    final day = dayKey(DateTime.now());
+    final data = AppData(
+      [],
+      [
+        Entry(
+          id: 'expense',
+          day: day,
+          kind: 'expense',
+          amount: 50,
+          currency: 'PHP',
+          category: 'Food',
+          method: 'Cash',
+          note: '',
+          occurrence: null,
+        ),
+      ],
+      [],
+      {'customSetting': 'value'},
+    );
+    final snapshot = RuleCatalog.snapshot(data);
+    expect(snapshot['budget.net'], -.5);
+    expect(snapshot['budget.balance'], -.5);
+    expect(snapshot['settings.customSetting'], 'value');
+    expect(snapshot['budget.transaction_count'], 1);
+    final previousMonth = dayKey(
+      DateTime(DateTime.now().year, DateTime.now().month - 1),
+    );
+    final history = AppData(
+      [],
+      [
+        ...data.entries,
+        data.entries.first.copyWith(
+          id: 'prior-income',
+          day: previousMonth,
+          kind: 'income',
+          amount: 300,
+        ),
+        data.entries.first.copyWith(
+          id: 'other-currency',
+          kind: 'income',
+          currency: 'USD',
+          amount: 99900,
+        ),
+        data.entries.first.copyWith(id: 'saved', kind: 'savings', amount: 100),
+      ],
+      [],
+      data.prefs,
+    );
+    expect(history.balance, 150);
+    expect(RuleCatalog.snapshot(history)['budget.balance'], 1.5);
+    expect(RuleCatalog.snapshot(history)['budget.net'], -1.5);
+    expect(RuleCatalog.fields, contains('budget.balance'));
+    expect(
+      () => RuleCompiler.compile(
+        'target == app { if (budget.balance < 100) { app.toast("Low balance"); } }',
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == app { if (budget.balance == "100") { log("Wrong type"); } }',
+      ),
+      throwsFormatException,
+    );
+  });
 }
