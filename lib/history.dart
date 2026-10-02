@@ -11,7 +11,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final search = TextEditingController();
   final selected = <String>{};
   int sortColumn = 0;
-  bool ascending = false, selection = false, tableView = false;
+  bool ascending = false,
+      selection = false,
+      tableView = false,
+      filtersExpanded = false;
+  final recordScroll = ScrollController();
   String month = 'All months',
       kind = 'All types',
       weekday = 'All weekdays',
@@ -45,6 +49,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   void dispose() {
     search.dispose();
+    recordScroll.dispose();
     super.dispose();
   }
 
@@ -77,9 +82,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     };
     list.sort((a, b) {
       final av = value(a), bv = value(b);
-      final comparison = av is int
+      var comparison = av is int
           ? av.compareTo(bv as int)
           : (av as String).compareTo(bv as String);
+      if (comparison == 0) comparison = a.started.compareTo(b.started);
+      if (comparison == 0) comparison = a.id.compareTo(b.id);
       return ascending ? comparison : -comparison;
     });
     return list;
@@ -88,7 +95,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Future<void> formats() => panel(
     context,
     StatefulBuilder(
-      builder: (c, setLocal) => Padding(
+      builder: (c, setLocal) => SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -135,6 +142,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       ),
                       selected: (widget.data.prefs['clockFormat'] ?? '24') == f,
                       onSelected: (_) async {
+                        ActionFeedback.tap();
                         await ref.read(databaseProvider).pref('clockFormat', f);
                         if (c.mounted) {
                           Navigator.pop(c);
@@ -149,6 +157,31 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       ),
     ),
   );
+  int get activeFilters => [
+    month != 'All months',
+    kind != 'All types',
+    weekday != 'All weekdays',
+    notes != 'All notes',
+  ].where((v) => v).length;
+
+  void resetFilters() => setState(() {
+    month = 'All months';
+    kind = 'All types';
+    weekday = 'All weekdays';
+    notes = 'All notes';
+    search.clear();
+  });
+
+  @override
+  void didUpdateWidget(HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    selected.removeWhere((id) => !widget.data.sessions.any((s) => s.id == id));
+    if (month != 'All months' &&
+        !widget.data.sessions.any((s) => s.day.startsWith(month))) {
+      month = 'All months';
+    }
+  }
+
   Future<void> bulkDelete() async {
     if (!await confirm(
       context,
@@ -221,47 +254,122 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                   ),
           ),
         ),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
+        Row(
           children: [
-            SizedBox(
-              width: filterWidth,
-              child: selectField('Month', month, [
-                'All months',
-                ...months,
-              ], (v) => setState(() => month = v)),
+            OutlinedButton.icon(
+              onPressed: withFeedback(
+                () => setState(() => filtersExpanded = !filtersExpanded),
+              ),
+              icon: Icon(
+                filtersExpanded
+                    ? LucideIcons.chevronUp
+                    : LucideIcons.slidersHorizontal,
+                size: 16,
+              ),
+              label: Text(
+                activeFilters == 0 ? 'Filters' : 'Filters · $activeFilters',
+              ),
             ),
-            SizedBox(
-              width: filterWidth,
-              child: selectField('Type', kind, [
-                'All types',
-                ...types,
-              ], (v) => setState(() => kind = v)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: PopupMenuButton<int>(
+                tooltip: 'Sort sessions',
+                onSelected: (i) {
+                  ActionFeedback.tap();
+                  setState(() => sortColumn = i);
+                },
+                itemBuilder: (_) => List.generate(
+                  headers.length,
+                  (i) => CheckedPopupMenuItem(
+                    value: i,
+                    checked: sortColumn == i,
+                    child: Text(headers[i]),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 14,
+                    horizontal: 8,
+                  ),
+                  child: Text(
+                    'Sort: ${headers[sortColumn]}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
             ),
-            SizedBox(
-              width: filterWidth,
-              child: selectField('Weekday', weekday, [
-                'All weekdays',
-                'Monday',
-                'Tuesday',
-                'Wednesday',
-                'Thursday',
-                'Friday',
-                'Saturday',
-                'Sunday',
-              ], (v) => setState(() => weekday = v)),
-            ),
-            SizedBox(
-              width: filterWidth,
-              child: selectField('Notes', notes, [
-                'All notes',
-                'With notes',
-                'Without notes',
-              ], (v) => setState(() => notes = v)),
+            IconButton(
+              tooltip: ascending
+                  ? 'Ascending; switch to descending'
+                  : 'Descending; switch to ascending',
+              onPressed: withFeedback(
+                () => setState(() => ascending = !ascending),
+              ),
+              icon: Icon(
+                ascending ? LucideIcons.arrowUp : LucideIcons.arrowDown,
+                size: 18,
+              ),
             ),
           ],
         ),
+        AnimatedSize(
+          duration: Motion.duration(c),
+          curve: Motion.curve,
+          alignment: Alignment.topCenter,
+          child: filtersExpanded
+              ? Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    SizedBox(
+                      width: filterWidth,
+                      child: selectField('Month', month, [
+                        'All months',
+                        ...months,
+                      ], (v) => setState(() => month = v)),
+                    ),
+                    SizedBox(
+                      width: filterWidth,
+                      child: selectField('Type', kind, [
+                        'All types',
+                        ...types,
+                      ], (v) => setState(() => kind = v)),
+                    ),
+                    SizedBox(
+                      width: filterWidth,
+                      child: selectField('Weekday', weekday, [
+                        'All weekdays',
+                        'Monday',
+                        'Tuesday',
+                        'Wednesday',
+                        'Thursday',
+                        'Friday',
+                        'Saturday',
+                        'Sunday',
+                      ], (v) => setState(() => weekday = v)),
+                    ),
+                    SizedBox(
+                      width: filterWidth,
+                      child: selectField('Notes', notes, [
+                        'All notes',
+                        'With notes',
+                        'Without notes',
+                      ], (v) => setState(() => notes = v)),
+                    ),
+                  ],
+                )
+              : const SizedBox.shrink(),
+        ),
+        if (activeFilters > 0 || search.text.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: withFeedback(resetFilters),
+              icon: const Icon(LucideIcons.x, size: 16),
+              label: const Text('Clear filters & search'),
+            ),
+          ),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -271,7 +379,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               icon: const Icon(LucideIcons.calendarDays, size: 16),
               label: const Text('Date & time'),
             ),
-            if (MediaQuery.sizeOf(c).width < 600)
+            if (MediaQuery.sizeOf(c).width < 600 && !selection)
               OutlinedButton.icon(
                 onPressed: withFeedback(
                   () => setState(() => tableView = !tableView),
@@ -284,10 +392,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               ),
             OutlinedButton.icon(
               onPressed: withFeedback(
-                () => setState(() {
-                  selection = !selection;
-                  selected.clear();
-                }),
+                list.isEmpty && !selection
+                    ? null
+                    : () => setState(() {
+                        selection = !selection;
+                        selected.clear();
+                      }),
               ),
               icon: const Icon(LucideIcons.listChecks, size: 16),
               label: Text(selection ? 'Done selecting' : 'Select'),
@@ -319,7 +429,24 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
           )
         else if (MediaQuery.sizeOf(c).width < 600 && !tableView && !selection)
-          ...list.map((s) => sessionTile(c, ref, widget.data, s))
+          SizedBox(
+            height: math.min(
+              MediaQuery.sizeOf(c).height * .5,
+              list.length * 112.0,
+            ),
+            child: Scrollbar(
+              controller: recordScroll,
+              child: ListView.separated(
+                controller: recordScroll,
+                primary: false,
+                padding: const EdgeInsets.only(right: 4),
+                itemCount: list.length,
+                separatorBuilder: (_, index) => const SizedBox(height: 8),
+                itemBuilder: (c, index) =>
+                    sessionTile(c, ref, widget.data, list[index]),
+              ),
+            ),
+          )
         else
           Surface(
             padding: const EdgeInsets.all(8),
@@ -532,10 +659,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               ),
             ),
           ),
-        const Text(
-          'Scroll sideways for more columns. Scroll inside the table for more records. Drag a header divider to resize neighbouring columns; double tap it to reset.',
-          style: TextStyle(fontSize: 12),
-        ),
+        if (tableView || selection || MediaQuery.sizeOf(c).width >= 600)
+          const Text(
+            'Scroll sideways for more columns. Scroll inside the table for more records. Drag a header divider to resize neighbouring columns; double tap it to reset.',
+            style: TextStyle(fontSize: 12),
+          ),
       ],
     );
   }

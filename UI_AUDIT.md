@@ -18,3 +18,7 @@ Validation: Flutter static analysis and whitespace checks. No APK rebuild, devic
 ## Compactness and scrolling follow-up
 
 Reduced the Today clock from 218 to 164 px, recent preview from six to three sessions, shared card padding to 20 px, page gaps to 12 px and large section gaps to 16 px. Budget charts use a 150 px footprint. Session tables have a bounded vertical list and a separate horizontal scroll surface, with pinch/pan removed. PageStorage keys retain page scroll offsets. Tab and settings changes use direction-aware slide/fade transitions; outgoing pages ignore touches and pause tickers, and system reduced-motion disables the transition duration. Static analysis passed; device behavior remains unverified.
+
+## Sessions page audit
+
+Collapsed the four filters by default with an animated reveal and active-filter count. Added sorting and direction controls for both list and table, plus a clear-filters/search action. The phone list uses lazy rows inside a bounded scrolling viewport with a scrollbar. Table instructions only appear for table mode. Empty results disable selection; stale deleted IDs and unavailable month filters are cleared when data updates. Equal sort values use timestamp/ID tie-breaks. The date/time formatting sheet scrolls and its time-format choices provide feedback. Session detail remains accessible through existing record transitions and edit forms. Static analysis passed; device visuals, gestures and enlarged-text verification remain pending.
