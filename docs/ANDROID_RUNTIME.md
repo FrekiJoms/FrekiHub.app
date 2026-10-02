@@ -2,6 +2,8 @@
 
 Reviewed on 2026-10-02. Package/namespace: `com.frekihub.freki_hub`. Native code lives under `android/app/src/main/kotlin/com/frekihub/freki_hub/`. This reference describes implemented behavior, not a guarantee of OEM delivery.
 
+The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 declares that minimum. Supported Xiaomi integration still needs runtime checks; the OS minimum alone does not establish HyperIsland availability.
+
 ## Components and storage owners
 
 | Component | Responsibility |

@@ -4,7 +4,7 @@ Read [Agent instructions](../AGENTS.md) first. This is an Android-first Flutter 
 
 ## Toolchain and installation
 
-The checked-in Dart constraint is `^3.13.4`; use a compatible Flutter SDK and Java 17. Android compile/min/target SDK versions are resolved by the Flutter Gradle plugin, not fixed numbers in the app Gradle file. Dependencies are declared in `pubspec.yaml` with resolved versions in `pubspec.lock`; native dependencies include Play services location 21.3.0 and HyperIsland ToolKit 0.4.0.
+The checked-in Dart constraint is `^3.13.4`; use a compatible Flutter SDK and Java 17. Android compile/target SDK versions are resolved by the Flutter Gradle plugin. The minimum is explicitly API 35 (Android 15), required by HyperIsland ToolKit 0.4.0; devices below Android 15 cannot install this configuration. Dependencies are declared in `pubspec.yaml` with resolved versions in `pubspec.lock`; native dependencies include Play services location 21.3.0 and HyperIsland ToolKit 0.4.0.
 
 From the project root, verify tooling and restore dependencies:
 

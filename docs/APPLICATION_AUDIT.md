@@ -78,6 +78,10 @@ Keep one running session, integer money, original record currencies, occurrence 
 
 The root README now presents current navigation/features and points to complete references. The previous README is retained under `docs/history` so historical implementation notes are not lost. `UI_AUDIT.md` is marked historical and links here. New `AGENT.md` gives fast onboarding; `AGENTS.md` remains canonical agent instructions. Guides distinguish local notifications from server push, queued detection from saved data, planner rules from automation rules, current source from legacy iOS claims and test results from on-device measurement.
 
+## Build follow-up — 2026-10-02
+
+An explicitly requested debug rebuild exposed a manifest incompatibility: HyperIsland ToolKit 0.4.0 requires API 35 while Flutter's default minimum was API 24. Resolved by declaring `minSdk = 35` in the app Gradle configuration; this APK now requires Android 15 or newer. Debug assembly succeeded using a temporary app output override because another process held the standard output's `R.jar` open. Compilation, manifest merge, native library compilation and APK packaging passed. Existing Gradle/SDK deprecation warnings remain; this is not evidence that all device flows pass.
+
 ## Recommended next validation
 
 When device testing is authorized, prioritize repeated cold closes/reopens, foreground notification clock-out, HyperIsland fallback, location-off/denied permission behavior, inside/exit ownership, time-only background service starts, denied/channel-blocked reminders, weekday/time-zone changes, payment format/import/receipt deduplication and map offline recovery. Then profile representative long session/finance/location histories. These are follow-up recommendations, not completed checks or permission to build now.
