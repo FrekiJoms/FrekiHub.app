@@ -147,7 +147,9 @@ class _AppShellState extends ConsumerState<AppShell>
                 Positioned.fill(
                   child: AnimatedSwitcher(
                     duration: Motion.duration(c),
+                    reverseDuration: Motion.duration(c, 200),
                     switchInCurve: Motion.curve,
+                    switchOutCurve: Motion.curve,
                     child: KeyedSubtree(
                       key: ValueKey(index),
                       child: switch (index) {

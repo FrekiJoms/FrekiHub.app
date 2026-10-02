@@ -121,7 +121,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
 
   @override
   Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -294,7 +294,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
 
   @override
   Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -502,7 +502,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
 
   @override
   Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.all(24),
+    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

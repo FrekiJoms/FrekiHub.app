@@ -11,7 +11,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final search = TextEditingController();
   final selected = <String>{};
   int sortColumn = 0;
-  bool ascending = false, selection = false;
+  bool ascending = false, selection = false, tableView = false;
   String month = 'All months',
       kind = 'All types',
       weekday = 'All weekdays',
@@ -172,6 +172,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
   @override
   Widget build(BuildContext c) {
+    final filterWidth = math.min(
+      170.0,
+      (MediaQuery.sizeOf(c).width -
+              (MediaQuery.sizeOf(c).width < 380 ? 44 : 60)) /
+          2,
+    );
     final months = {
       ...widget.data.sessions.map((s) => s.day.substring(0, 7)),
     }.toList()..sort();
@@ -184,7 +190,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }.toList();
     final list = rows;
     return PageBody(
-      title: 'Time, accounted for.',
+      title: 'Sessions.',
       subtitle: 'Session history',
       action: IconButton(
         tooltip: 'Add session',
@@ -220,21 +226,21 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           runSpacing: 12,
           children: [
             SizedBox(
-              width: 170,
+              width: filterWidth,
               child: selectField('Month', month, [
                 'All months',
                 ...months,
               ], (v) => setState(() => month = v)),
             ),
             SizedBox(
-              width: 150,
+              width: filterWidth,
               child: selectField('Type', kind, [
                 'All types',
                 ...types,
               ], (v) => setState(() => kind = v)),
             ),
             SizedBox(
-              width: 170,
+              width: filterWidth,
               child: selectField('Weekday', weekday, [
                 'All weekdays',
                 'Monday',
@@ -247,7 +253,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               ], (v) => setState(() => weekday = v)),
             ),
             SizedBox(
-              width: 150,
+              width: filterWidth,
               child: selectField('Notes', notes, [
                 'All notes',
                 'With notes',
@@ -265,6 +271,17 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               icon: const Icon(LucideIcons.calendarDays, size: 16),
               label: const Text('Date & time'),
             ),
+            if (MediaQuery.sizeOf(c).width < 600)
+              OutlinedButton.icon(
+                onPressed: withFeedback(
+                  () => setState(() => tableView = !tableView),
+                ),
+                icon: Icon(
+                  tableView ? LucideIcons.list : LucideIcons.table2,
+                  size: 16,
+                ),
+                label: Text(tableView ? 'List view' : 'Table view'),
+              ),
             OutlinedButton.icon(
               onPressed: withFeedback(
                 () => setState(() {
@@ -301,6 +318,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               LucideIcons.table2,
             ),
           )
+        else if (MediaQuery.sizeOf(c).width < 600 && !tableView && !selection)
+          ...list.map((s) => sessionTile(c, ref, widget.data, s))
         else
           Surface(
             padding: const EdgeInsets.all(8),

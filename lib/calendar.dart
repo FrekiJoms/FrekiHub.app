@@ -35,7 +35,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget build(BuildContext c) {
     final colors = Theme.of(c).colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 112),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        112 + MediaQuery.paddingOf(c).bottom,
+      ),
       child: Column(
         children: [
           Padding(
@@ -121,8 +126,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       final week = selected.subtract(
                         Duration(days: selected.weekday % 7),
                       );
-                      final single = collapsed || mode == 2;
-                      final rowHeight = (constraints.maxHeight * .64 / rows)
+                      final single =
+                          collapsed || mode == 2 || constraints.maxHeight < 360;
+                      final rowHeight = (constraints.maxHeight * .56 / rows)
                           .clamp(48.0, labels ? 108.0 : 84.0);
                       return Column(
                         children: [
@@ -381,75 +387,80 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         onLongPress: withFeedback(
           () => panel(c, DayPanel(day: dayKey(date), initialData: widget.data)),
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2),
-              height: small
-                  ? 23
-                  : labels
-                  ? 28
-                  : 44,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: active || (small && today) ? blue : null,
-                borderRadius: BorderRadius.circular(small ? 4 : 12),
-              ),
-              child: Text(
-                '${date.day}',
-                style: TextStyle(
-                  fontSize: small ? 9 : 20,
-                  fontWeight: FontWeight.w500,
-                  color: active || (small && today)
-                      ? Colors.white
-                      : outside && !small
-                      ? foreground.withValues(alpha: .25)
-                      : weekend
-                      ? blue
-                      : foreground,
-                ),
-              ),
-            ),
-            if (!small && labels && items.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(2, 3, 2, 0),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 3,
-                    vertical: 2,
-                  ),
+        child: LayoutBuilder(
+          builder: (c, bounds) {
+            final showLabels = labels && bounds.maxHeight >= 64;
+            return Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  height: small
+                      ? 23
+                      : showLabels
+                      ? 28
+                      : 40,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: blue.withValues(alpha: .24),
-                    borderRadius: BorderRadius.circular(3),
+                    color: active || (small && today) ? blue : null,
+                    borderRadius: BorderRadius.circular(small ? 4 : 12),
                   ),
                   child: Text(
-                    items.first,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 9),
+                    '${date.day}',
+                    style: TextStyle(
+                      fontSize: small ? 9 : 20,
+                      fontWeight: FontWeight.w500,
+                      color: active || (small && today)
+                          ? Colors.white
+                          : outside && !small
+                          ? foreground.withValues(alpha: .25)
+                          : weekend
+                          ? blue
+                          : foreground,
+                    ),
                   ),
                 ),
-              ),
-            if (!small && labels && items.length > 1)
-              Text(
-                '+${items.length - 1}',
-                style: const TextStyle(fontSize: 9, color: blue),
-              ),
-            if (!small && !labels)
-              Container(
-                width: 3,
-                height: 3,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: items.isNotEmpty
-                      ? blue
-                      : foreground.withValues(alpha: .2),
-                ),
-              ),
-          ],
+                if (!small && showLabels && items.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(2, 3, 2, 0),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 3,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: blue.withValues(alpha: .24),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Text(
+                        items.first,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 9),
+                      ),
+                    ),
+                  ),
+                if (!small && showLabels && items.length > 1)
+                  Text(
+                    '+${items.length - 1}',
+                    style: const TextStyle(fontSize: 9, color: blue),
+                  ),
+                if (!small && !showLabels)
+                  Container(
+                    width: 3,
+                    height: 3,
+                    margin: const EdgeInsets.only(top: 4),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: items.isNotEmpty
+                          ? blue
+                          : foreground.withValues(alpha: .2),
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
       ),
     );

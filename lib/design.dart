@@ -30,7 +30,7 @@ abstract final class Design {
   ];
   static ThemeData theme(bool dark) {
     final foreground = dark ? const Color(0xfff3f2ef) : const Color(0xff202120);
-    final surface = dark ? const Color(0xff242625) : const Color(0xfffcfcfa);
+    final surface = dark ? const Color(0xff222523) : const Color(0xfffcfcfa);
     final scheme =
         ColorScheme.fromSeed(
           seedColor: foreground,
@@ -40,6 +40,22 @@ abstract final class Design {
           onPrimary: surface,
           surface: surface,
           onSurface: foreground,
+          onSurfaceVariant: dark
+              ? const Color(0xffadb4ae)
+              : const Color(0xff616861),
+          surfaceContainerLow: dark
+              ? const Color(0xff1c201d)
+              : const Color(0xfff5f6f2),
+          surfaceContainer: dark
+              ? const Color(0xff262b27)
+              : const Color(0xffeef0ea),
+          surfaceContainerHigh: dark
+              ? const Color(0xff2c312d)
+              : const Color(0xffe8ece4),
+          outline: dark ? const Color(0xff738077) : const Color(0xff7b857c),
+          outlineVariant: dark
+              ? const Color(0xff3c443e)
+              : const Color(0xffd9dfd6),
           surfaceContainerHighest: dark
               ? const Color(0xff303331)
               : const Color(0xffe9ebe6),
@@ -60,33 +76,93 @@ abstract final class Design {
           color: foreground,
         ),
         headlineLarge: TextStyle(
-          fontSize: 36,
+          fontSize: 32,
           fontWeight: FontWeight.w600,
-          letterSpacing: -1.4,
+          letterSpacing: -1.1,
           color: foreground,
         ),
         titleLarge: TextStyle(
-          fontSize: 22,
+          fontSize: 20,
           fontWeight: FontWeight.w600,
           letterSpacing: -.5,
           color: foreground,
         ),
         bodyLarge: TextStyle(fontSize: 16, height: 1.5, color: foreground),
+        bodyMedium: TextStyle(fontSize: 14, height: 1.45, color: foreground),
+        titleMedium: TextStyle(
+          fontSize: 16,
+          height: 1.35,
+          fontWeight: FontWeight.w600,
+          color: foreground,
+        ),
+        labelLarge: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+          color: foreground,
+        ),
+      ),
+      iconTheme: IconThemeData(size: 20, color: scheme.onSurfaceVariant),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: surface,
+        foregroundColor: foreground,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+      ),
+      listTileTheme: ListTileThemeData(
+        iconColor: scheme.onSurfaceVariant,
+        minVerticalPadding: 12,
+        titleTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          color: foreground,
+        ),
+        subtitleTextStyle: TextStyle(
+          fontFamily: 'Geist',
+          fontSize: 13,
+          height: 1.4,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: scheme.surfaceContainerHighest.withValues(alpha: .65),
+        fillColor: scheme.surfaceContainerLow,
         contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 17,
+          horizontal: 16,
+          vertical: 16,
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: scheme.primary.withValues(alpha: .45),
+            width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: scheme.error, width: 1.5),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
@@ -99,6 +175,8 @@ abstract final class Design {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          side: BorderSide(color: scheme.outlineVariant),
           shape: const StadiumBorder(),
         ),
       ),
@@ -187,12 +265,15 @@ class Surface extends StatelessWidget {
     padding: padding,
     decoration: BoxDecoration(
       color: Theme.of(context).colorScheme.surface,
-      borderRadius: BorderRadius.circular(Design.radius),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .035),
+      ),
       boxShadow: [
         BoxShadow(
-          color: Colors.black.withValues(alpha: .025),
-          blurRadius: 28,
-          offset: const Offset(0, 8),
+          color: Colors.black.withValues(alpha: .018),
+          blurRadius: 20,
+          offset: const Offset(0, 6),
         ),
       ],
     ),
@@ -251,44 +332,61 @@ class PageBody extends StatelessWidget {
     this.action,
   });
   @override
-  Widget build(BuildContext c) => ListView(
-    padding: const EdgeInsets.fromLTRB(24, 24, 24, 126),
-    children: [
-      Entrance(
-        child: Padding(
-          padding: const EdgeInsets.only(right: 56),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      subtitle.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        letterSpacing: 2,
-                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+  Widget build(BuildContext c) => LayoutBuilder(
+    builder: (c, constraints) {
+      final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
+      final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
+      return ListView(
+        padding: EdgeInsets.fromLTRB(
+          horizontal,
+          16,
+          horizontal,
+          126 + MediaQuery.paddingOf(c).bottom,
+        ),
+        children: [
+          Entrance(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(right: 56),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.4,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(c).colorScheme.onSurfaceVariant,
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(title, style: Theme.of(c).textTheme.headlineLarge),
-                  ],
+                      ?action,
+                    ],
+                  ),
                 ),
-              ),
-              ?action,
-            ],
+                const SizedBox(height: 12),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    title,
+                    style: Theme.of(c).textTheme.headlineLarge,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-      const SizedBox(height: 28),
-      for (var i = 0; i < children.length; i++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 20),
-          child: Entrance(index: i + 1, child: children[i]),
-        ),
-    ],
+          const SizedBox(height: 24),
+          for (var i = 0; i < children.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Entrance(index: i + 1, child: children[i]),
+            ),
+        ],
+      );
+    },
   );
 }
 
@@ -316,7 +414,11 @@ class EmptyState extends StatelessWidget {
       children: [
         Icon(icon, size: 30, color: Theme.of(c).colorScheme.onSurfaceVariant),
         const SizedBox(height: 16),
-        Text(title, style: Theme.of(c).textTheme.titleMedium),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(c).textTheme.titleMedium,
+        ),
         const SizedBox(height: 6),
         Text(
           detail,
@@ -345,13 +447,17 @@ class NumberValue extends StatelessWidget {
         child: child,
       ),
     ),
-    child: Text(
-      value,
+    child: FittedBox(
       key: ValueKey(value),
-      style: TextStyle(
-        fontFamily: 'Geist Mono',
-        fontSize: size,
-        letterSpacing: -1.4,
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        value,
+        style: TextStyle(
+          fontFamily: 'Geist Mono',
+          fontSize: size,
+          letterSpacing: -1.4,
+        ),
       ),
     ),
   );
@@ -463,12 +569,23 @@ class _PillNavigationState extends State<PillNavigation> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(icons[i], size: 20),
+                              Icon(
+                                icons[i],
+                                size: 20,
+                                color: widget.index == i
+                                    ? Theme.of(c).colorScheme.onSurface
+                                    : Theme.of(c).colorScheme.onSurfaceVariant,
+                              ),
                               const SizedBox(height: 6),
                               Text(
                                 labels[i],
                                 maxLines: 1,
                                 style: TextStyle(
+                                  color: widget.index == i
+                                      ? Theme.of(c).colorScheme.onSurface
+                                      : Theme.of(c)
+                                            .colorScheme
+                                            .onSurfaceVariant,
                                   fontSize: compact ? 11 : 13,
                                   fontWeight: widget.index == i
                                       ? FontWeight.w600
@@ -520,6 +637,10 @@ Future<T?> panel<T>(BuildContext c, Widget child) => showModalBottomSheet<T>(
   isScrollControlled: true,
   useSafeArea: true,
   showDragHandle: true,
+  constraints: BoxConstraints(
+    maxWidth: 640,
+    maxHeight: MediaQuery.sizeOf(c).height * .92,
+  ),
   sheetAnimationStyle: AnimationStyle(
     duration: Motion.duration(c, 400),
     reverseDuration: Motion.duration(c, 350),

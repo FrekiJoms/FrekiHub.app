@@ -144,6 +144,8 @@ Widget sessionTile(
     title: Text(sessionDate(data, s)),
     subtitle: Text(
       '${s.kind} · ${clockTime(data, s.started)} — ${s.ended == null ? 'running' : clockTime(data, s.ended!)}${s.note.isEmpty ? '' : '\n${s.note}'}',
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
     ),
     trailing: Text(
       elapsed(durationOf(s)),

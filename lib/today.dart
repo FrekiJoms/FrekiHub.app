@@ -119,7 +119,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
     return PageBody(
-      title: 'A little more, every day.',
+      title: 'Today.',
       subtitle: DateFormat('EEEE, d MMMM').format(DateTime.now()),
       action: IconButton(
         tooltip: 'Add record',
@@ -128,7 +128,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
       ),
       children: [
         if (offline)
-          const Chrome(
+          const Surface(
             padding: EdgeInsets.all(16),
             child: Row(
               children: [

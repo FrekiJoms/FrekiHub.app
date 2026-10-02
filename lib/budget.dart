@@ -241,7 +241,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     }
     final days = timeline.keys.toList()..sort();
     return PageBody(
-      title: 'Room to breathe.',
+      title: 'Budget.',
       subtitle: 'Your money, clearly',
       action: IconButton(
         tooltip: 'Add transaction',
@@ -249,7 +249,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         icon: const Icon(LucideIcons.plus),
       ),
       children: [
-        Chrome(
+        Surface(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(
             children: [
               IconButton(
@@ -369,7 +370,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SectionHeading(
-                'A future cushion.',
+                'Savings goal',
                 trailing: IconButton(
                   tooltip: 'Set savings goal',
                   onPressed: withFeedback(() => savingsGoal(c)),

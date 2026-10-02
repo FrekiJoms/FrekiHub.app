@@ -138,7 +138,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final d = widget.data;
     final theme = d.prefs['theme'] ?? 'system';
     return PageBody(
-      title: 'Make yourself at home.',
+      title: 'Settings.',
       subtitle: 'Settings',
       children: [
         Surface(
@@ -178,7 +178,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Amounts stay in their original currency. Totals, calendar and charts show records for the selected currency.',
+                'Budget totals and charts use this currency. Calendar records keep their original currency.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(c).colorScheme.onSurfaceVariant,
@@ -228,7 +228,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const SectionHeading('Your data, in your hands.'),
+              const SectionHeading('Backup & storage'),
               const SizedBox(height: 12),
               const Text(
                 'Save a backup somewhere safe. Removing the app removes the data stored on this phone.',
