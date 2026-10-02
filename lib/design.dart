@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -468,7 +469,7 @@ class NumberValue extends StatelessWidget {
 class PillNavigation extends StatefulWidget {
   final int index;
   final ValueChanged<int> onChanged;
-  final VoidCallback onQuickAdd;
+  final ValueChanged<String> onQuickAdd;
   const PillNavigation({
     super.key,
     required this.index,
@@ -479,10 +480,18 @@ class PillNavigation extends StatefulWidget {
   State<PillNavigation> createState() => _PillNavigationState();
 }
 
-class _PillNavigationState extends State<PillNavigation> {
+class _PillNavigationState extends State<PillNavigation>
+    with SingleTickerProviderStateMixin {
   final keys = List.generate(4, (_) => GlobalKey());
+  final optionKeys = List.generate(5, (_) => GlobalKey());
   final track = GlobalKey();
-  Rect? rect;
+  late final motion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 250),
+  );
+  Rect? from, target;
+  OverlayEntry? menu;
+  int? hovered;
   static const labels = ['Today', 'Calendar', 'Sessions', 'Budget'];
   static const icons = [
     LucideIcons.clock3,
@@ -490,121 +499,265 @@ class _PillNavigationState extends State<PillNavigation> {
     LucideIcons.table2,
     LucideIcons.wallet,
   ];
+  static const actions = ['session', 'expense', 'income', 'savings', 'rule'];
+  static const actionLabels = [
+    'Session / log',
+    'Expense',
+    'Income',
+    'Savings',
+    'Budget rule',
+  ];
+  static const actionIcons = [
+    LucideIcons.clock3,
+    LucideIcons.wallet,
+    LucideIcons.plus,
+    LucideIcons.piggyBank,
+    LucideIcons.slidersHorizontal,
+  ];
+
+  Rect? get current {
+    if (target == null || from == null) return target;
+    final leading = Motion.curve.transform((motion.value / .7).clamp(0.0, 1.0));
+    final trailing = Motion.curve.transform(
+      ((motion.value - .22) / .78).clamp(0.0, 1.0),
+    );
+    final rightward = target!.center.dx >= from!.center.dx;
+    double mix(double a, double b, double t) => a + (b - a) * t;
+    return Rect.fromLTRB(
+      mix(from!.left, target!.left, rightward ? trailing : leading),
+      mix(from!.top, target!.top, leading),
+      mix(from!.right, target!.right, rightward ? leading : trailing),
+      mix(from!.bottom, target!.bottom, leading),
+    );
+  }
+
   void measure() {
-    if (widget.index >= keys.length) {
-      if (rect != null && mounted) setState(() => rect = null);
-      return;
-    }
     final parent = track.currentContext?.findRenderObject() as RenderBox?;
-    final selected =
-        keys[widget.index].currentContext?.findRenderObject() as RenderBox?;
-    if (parent == null || selected == null) {
-      return;
+    if (!mounted || parent == null) return;
+    final selected = widget.index < keys.length
+        ? keys[widget.index].currentContext?.findRenderObject() as RenderBox?
+        : null;
+    final next = selected == null
+        ? null
+        : selected.localToGlobal(Offset.zero, ancestor: parent) & selected.size;
+    if (target == next) return;
+    setState(() {
+      from = current ?? next;
+      target = next;
+      motion.duration = Motion.duration(context);
+      motion.forward(from: 0);
+    });
+  }
+
+  void closeMenu() {
+    menu?.remove();
+    menu = null;
+    hovered = null;
+  }
+
+  void openMenu() {
+    closeMenu();
+    ActionFeedback.tap();
+    final box = track.currentContext!.findRenderObject() as RenderBox;
+    final origin = box.localToGlobal(Offset.zero);
+    final screen = MediaQuery.sizeOf(context);
+    final width = math.min(280.0, screen.width - 32);
+    menu = OverlayEntry(
+      builder: (c) => Positioned(
+        left: (origin.dx + box.size.width / 2 - width / 2).clamp(
+          16.0,
+          screen.width - width - 16,
+        ),
+        bottom: screen.height - origin.dy + 12,
+        width: width,
+        child: Material(
+          color: Theme.of(c).colorScheme.surfaceContainerHigh,
+          elevation: 12,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text(
+                    'Drag to add · release to select',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+                for (var i = 0; i < actions.length; i++)
+                  AnimatedContainer(
+                    key: optionKeys[i],
+                    duration: Motion.duration(c, 150),
+                    decoration: BoxDecoration(
+                      color: hovered == i
+                          ? Theme.of(c).colorScheme.primaryContainer
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SizedBox(
+                      height: 48,
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 14),
+                          Icon(actionIcons[i], size: 20),
+                          const SizedBox(width: 14),
+                          Text(actionLabels[i]),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(menu!);
+  }
+
+  void updateMenu(Offset position) {
+    int? next;
+    for (var i = 0; i < optionKeys.length; i++) {
+      final box =
+          optionKeys[i].currentContext?.findRenderObject() as RenderBox?;
+      if (box != null &&
+          (box.localToGlobal(Offset.zero) & box.size).contains(position)) {
+        next = i;
+      }
     }
-    final position = selected.localToGlobal(Offset.zero, ancestor: parent);
-    final next = position & selected.size;
-    if (rect != next && mounted) {
-      setState(() => rect = next);
-    }
+    if (next == hovered) return;
+    hovered = next;
+    if (next != null) ActionFeedback.tap();
+    menu?.markNeedsBuild();
+  }
+
+  @override
+  void dispose() {
+    closeMenu();
+    motion.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext c) {
     WidgetsBinding.instance.addPostFrameCallback((_) => measure());
     return Chrome(
-      child: LayoutBuilder(
-        builder: (c, constraints) {
-          final compact =
-              constraints.maxWidth < 480 ||
-              MediaQuery.textScalerOf(c).scale(12) > 15;
-          return Stack(
-            key: track,
-            children: [
-              if (rect != null)
-                AnimatedPositioned(
-                  duration: Motion.duration(c),
-                  curve: Motion.curve,
-                  left: rect!.left,
-                  top: rect!.top,
-                  width: rect!.width,
-                  height: rect!.height,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: Theme.of(c).colorScheme.onSurface
-                          .withValues(alpha: .09),
-                      borderRadius: BorderRadius.circular(32),
-                    ),
-                  ),
-                ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(labels.length + 1, (slot) {
-                  if (slot == 2) {
-                    return Expanded(
-                      child: Center(
-                        child: SizedBox.square(
-                          dimension: 48,
-                          child: IconButton.filled(
-                            tooltip: 'Quick add',
-                            onPressed: withFeedback(widget.onQuickAdd),
-                            icon: const Icon(LucideIcons.plus, size: 24),
+      child: Stack(
+        key: track,
+        children: [
+          AnimatedBuilder(
+            animation: motion,
+            builder: (c, _) {
+              final rect = current;
+              return rect == null
+                  ? const SizedBox.shrink()
+                  : Positioned.fromRect(
+                      rect: rect,
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Theme.of(c).colorScheme.onSurface
+                                .withValues(alpha: .09),
+                            borderRadius: BorderRadius.circular(32),
                           ),
                         ),
                       ),
                     );
-                  }
-                  final i = slot > 2 ? slot - 1 : slot;
-                  return Expanded(
-                    child: Semantics(
-                      selected: widget.index == i,
-                      button: true,
-                      label: labels[i],
-                      child: InkWell(
-                        key: keys[i],
-                        borderRadius: BorderRadius.circular(32),
-                        onTap: () => widget.onChanged(i),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: compact ? 5 : 18,
-                            vertical: 12,
+            },
+          ),
+          Row(
+            children: List.generate(
+              labels.length,
+              (i) => Expanded(
+                child: Semantics(
+                  selected: widget.index == i,
+                  button: true,
+                  label: labels[i],
+                  child: InkWell(
+                    key: keys[i],
+                    borderRadius: BorderRadius.circular(32),
+                    onTap: () => widget.onChanged(i),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 12,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            icons[i],
+                            size: 20,
+                            color: widget.index == i
+                                ? Theme.of(c).colorScheme.onSurface
+                                : Theme.of(c).colorScheme.onSurfaceVariant,
                           ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                icons[i],
-                                size: 20,
-                                color: widget.index == i
-                                    ? Theme.of(c).colorScheme.onSurface
-                                    : Theme.of(c).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                labels[i],
-                                maxLines: 1,
-                                style: TextStyle(
-                                  color: widget.index == i
-                                      ? Theme.of(c).colorScheme.onSurface
-                                      : Theme.of(c)
-                                            .colorScheme
-                                            .onSurfaceVariant,
-                                  fontSize: compact ? 11 : 13,
-                                  fontWeight: widget.index == i
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                ),
-                              ),
-                            ],
+                          const SizedBox(height: 6),
+                          Text(
+                            labels[i],
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: widget.index == i
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: widget.index == i
+                                  ? Theme.of(c).colorScheme.onSurface
+                                  : Theme.of(c).colorScheme.onSurfaceVariant,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                  );
-                }),
+                  ),
+                ),
               ),
-            ],
-          );
-        },
+            ),
+          ),
+          Positioned.fill(
+            child: Align(
+              alignment: Alignment.center,
+              child: SizedBox(
+                width: 40,
+                height: double.infinity,
+                child: Semantics(
+                  label: 'Quick add. Hold and drag to choose an action.',
+                  customSemanticsActions: {
+                    const CustomSemanticsAction(
+                      label: 'Add session or log',
+                    ): () =>
+                        widget.onQuickAdd('session'),
+                    const CustomSemanticsAction(label: 'Add expense'): () =>
+                        widget.onQuickAdd('expense'),
+                    const CustomSemanticsAction(label: 'Add income'): () =>
+                        widget.onQuickAdd('income'),
+                    const CustomSemanticsAction(label: 'Add savings'): () =>
+                        widget.onQuickAdd('savings'),
+                    const CustomSemanticsAction(label: 'Add budget rule'): () =>
+                        widget.onQuickAdd('rule'),
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onLongPressStart: (_) => openMenu(),
+                    onLongPressMoveUpdate: (d) => updateMenu(d.globalPosition),
+                    onLongPressCancel: closeMenu,
+                    onLongPressEnd: (d) {
+                      updateMenu(d.globalPosition);
+                      final selection = hovered;
+                      closeMenu();
+                      if (selection != null) {
+                        widget.onQuickAdd(actions[selection]);
+                      }
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

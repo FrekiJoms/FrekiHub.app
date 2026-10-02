@@ -186,6 +186,17 @@ Widget sessionTile(
     ),
   ),
 );
+void openQuickAdd(BuildContext c, AppData data, String day, String kind) {
+  ActionFeedback.tap();
+  if (kind == 'session') {
+    panel(c, SessionForm(data: data, day: day));
+  } else if (kind == 'rule') {
+    panel(c, RuleForm(data: data));
+  } else {
+    panel(c, EntryForm(data: data, day: day, kind: kind));
+  }
+}
+
 Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
   c,
   Padding(
