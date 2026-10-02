@@ -52,7 +52,9 @@ Priority: medium. `AppDatabase.backup` builds the full history/preferences JSON 
 
 ### F06 — Map failure recovery and large history need work
 
-Priority: medium/low. `MapScreen` sets a tile-error flag without an explicit retry/reset action; it keeps dots usable but cannot clearly signal recovery. Full-year/all-range queries materialize every record and marker group, while very large group counts use a small badge. Unchanged-row skips/cache limits help, but no long-history benchmark or spatial clustering exists. Short landscape layouts can crowd fixed controls. Profile before adding heavy dependencies; preserve named legends, complete query semantics and truthful sampled traces.
+Status: **partially resolved, 2026-10-02**. Map tile failures now provide a retry that resets the tile layer and evicts failed images; record-query failures can retry separately. Selected records/dots are preserved during tile retry. Compact controls adapt to short screens, and large badges display `99+` with exact counts retained in accessibility/detail content. The Map widget regression covers retry-triggered image reload, retained selection/trace, a 320 px enlarged-text portrait layout and non-overlapping controls at 640×360; coordinate/query tests also passed (four focused tests total). Static analysis reported no issues. The final widget check verifies zoom activation after map readiness; readiness now rebuilds controls so they cannot remain disabled after initialization.
+
+Remaining: full-year/all-range queries materialize every record and marker group. Unchanged-row skips/cache limits help, but no long-history benchmark or spatial clustering exists. Real network/offline recovery and native GPS permission/provider failures require phone verification. The user's precise location error was not identified from an error message; Map itself does not request GPS. Profile before adding heavy dependencies; preserve named legends, complete query semantics and truthful sampled traces.
 
 ### F07 — Session condition banner is broader than its label — resolved
 

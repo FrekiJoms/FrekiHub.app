@@ -10,6 +10,7 @@ class MapScreen extends ConsumerStatefulWidget {
 
 class _MapScreenState extends ConsumerState<MapScreen> {
   final controller = MapController();
+  final tileReset = StreamController<void>.broadcast();
   late final tileProvider =
       widget.tileProvider ??
       NetworkTileProvider(
@@ -306,15 +307,26 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     IconData icon,
     VoidCallback action, {
     bool active = false,
+    bool enabled = true,
   }) => IconButton(
     tooltip: label,
-    onPressed: withFeedback(action),
+    onPressed: withFeedback(enabled ? action : null),
     style: IconButton.styleFrom(
       minimumSize: const Size(48, 48),
+      padding: const EdgeInsets.all(4),
       foregroundColor: active ? Theme.of(context).colorScheme.primary : null,
     ),
-    icon: Icon(icon, size: 21),
+    icon: Icon(icon, size: 18),
   );
+
+  void retry() {
+    if (loadError != null) setState(watch);
+    if (tileError) {
+      setState(() => tileError = false);
+      tileReset.add(null);
+    }
+  }
+
   @override
   Widget build(BuildContext c) {
     final shown = visible;
@@ -336,297 +348,401 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         : period == 'year'
         ? '${range.from.year}'
         : '${DateFormat('d MMM').format(range.from)} – ${DateFormat('d MMM yyyy').format(range.until.subtract(const Duration(days: 1)))}';
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: FlutterMap(
-            mapController: controller,
-            options: MapOptions(
-              initialCenter: const LatLng(0, 0),
-              initialZoom: 2,
-              minZoom: 2,
-              maxZoom: 19,
-              interactionOptions: InteractionOptions(
-                flags:
-                    InteractiveFlag.all &
-                    ~InteractiveFlag.rotate &
-                    (MediaQuery.disableAnimationsOf(c)
-                        ? ~InteractiveFlag.flingAnimation
-                        : -1),
-                doubleTapZoomDuration: Motion.duration(c, 200),
-                doubleTapZoomCurve: Motion.curve,
-              ),
-              onMapReady: () {
-                ready = true;
-                if (shown.isNotEmpty) fit();
-                publishContext();
-              },
-              onPositionChanged: (_, _) => publishContext(),
-            ),
-            children: [
-              TileLayer(
-                tileProvider: tileProvider,
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.frekihub.freki_hub',
-                tileDisplay: TileDisplay.instantaneous(),
-                errorTileCallback: (_, _, _) {
-                  if (!tileError && mounted) {
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) setState(() => tileError = true);
-                    });
-                  }
-                },
-              ),
-              if (trace && route.length > 1)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: route.map((r) => LatLng(r.lat, r.lng)).toList(),
-                      color: const Color(0xFF456FE8),
-                      strokeWidth: 3,
-                      pattern: StrokePattern.dashed(segments: [8, 5]),
-                    ),
-                  ],
-                ),
-              MarkerLayer(
-                markers: groups.values.map((items) {
-                  final record = items.last;
-                  final chosen = items.any((r) => selected.contains(r.id));
-                  return Marker(
-                    point: LatLng(record.lat, record.lng),
-                    width: 48,
-                    height: 48,
-                    child: Semantics(
-                      label:
-                          '${record.category}: ${record.title}, ${items.length} records at ${record.location}',
-                      button: true,
-                      selected: chosen,
-                      child: GestureDetector(
-                        onTap: withFeedback(() => showRecords(items)),
-                        child: Center(
-                          child: Container(
-                            width: items.length > 1 ? 32 : 22,
-                            height: items.length > 1 ? 32 : 22,
-                            decoration: BoxDecoration(
-                              color: colors[record.category],
-                              shape: BoxShape.circle,
-                              border: Border.all(
-                                color: chosen
-                                    ? const Color(0xFF172034)
-                                    : Colors.white,
-                                width: chosen ? 4 : 3,
-                              ),
-                              boxShadow: const [
-                                BoxShadow(color: Colors.black26, blurRadius: 6),
-                              ],
-                            ),
-                            child: items.length > 1
-                                ? Center(
-                                    child: Text(
-                                      '${items.length}',
-                                      maxLines: 1,
-                                      style: const TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          top: 80,
-          left: 16,
-          right: 16,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Chrome(
-                padding: const EdgeInsets.all(4),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
-                      children: [
-                        control(
-                          'Previous timeline',
-                          LucideIcons.chevronLeft,
-                          () => shift(-1),
-                        ),
-                        Expanded(
-                          child: TextButton(
-                            onPressed: withFeedback(selectDate),
-                            child: Text(dateLabel, textAlign: TextAlign.center),
-                          ),
-                        ),
-                        control(
-                          'Next timeline',
-                          LucideIcons.chevronRight,
-                          () => shift(1),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextButton.icon(
-                            onPressed: withFeedback(choosePeriod),
-                            icon: const Icon(
-                              LucideIcons.slidersHorizontal,
-                              size: 16,
-                            ),
-                            label: Text(
-                              '${period[0].toUpperCase()}${period.substring(1)}',
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: TextButton.icon(
-                            onPressed: withFeedback(() => showRecords()),
-                            icon: const Icon(LucideIcons.listFilter, size: 16),
-                            label: Text('${shown.length} logs'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Positioned(
-          right: 16,
-          bottom: 218 + bottom,
-          child: Chrome(
-            padding: EdgeInsets.zero,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                control('Fit recorded locations', LucideIcons.scan, fit),
-                control(
-                  trace
-                      ? 'Hide chronological trace'
-                      : 'Trace selected logs, or all logs',
-                  LucideIcons.route,
-                  () {
-                    setState(() => trace = !trace);
-                    unawaited(guarded(c, saveView));
+    final buttonStyle = TextButton.styleFrom(
+      minimumSize: const Size(48, 48),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+    );
+    final status = loading
+        ? 'Loading recorded locations…'
+        : loadError ??
+              (shown.isEmpty
+                  ? 'No saved locations in this timeline'
+                  : trace
+                  ? '${route.length} samples · straight-line trace'
+                  : '${selected.length} selected · tap a dot for details');
+    final actions = [
+      control(
+        'Fit recorded locations',
+        LucideIcons.scan,
+        fit,
+        enabled: ready && route.isNotEmpty,
+      ),
+      control(
+        trace ? 'Hide chronological trace' : 'Trace selected logs, or all logs',
+        LucideIcons.route,
+        () {
+          setState(() => trace = !trace);
+          unawaited(guarded(c, saveView));
+        },
+        active: trace,
+      ),
+      control('Zoom in', LucideIcons.plus, () {
+        controller.move(
+          controller.camera.center,
+          math.min(19, controller.camera.zoom + 1),
+        );
+      }, enabled: ready),
+      control('Zoom out', LucideIcons.minus, () {
+        controller.move(
+          controller.camera.center,
+          math.max(2, controller.camera.zoom - 1),
+        );
+      }, enabled: ready),
+    ];
+    return LayoutBuilder(
+      builder: (c, bounds) {
+        final short = bounds.maxHeight < 560;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: FlutterMap(
+                mapController: controller,
+                options: MapOptions(
+                  initialCenter: const LatLng(0, 0),
+                  initialZoom: 2,
+                  minZoom: 2,
+                  maxZoom: 19,
+                  interactionOptions: InteractionOptions(
+                    flags:
+                        InteractiveFlag.all &
+                        ~InteractiveFlag.rotate &
+                        (MediaQuery.disableAnimationsOf(c)
+                            ? ~InteractiveFlag.flingAnimation
+                            : -1),
+                    doubleTapZoomDuration: Motion.duration(c, 200),
+                    doubleTapZoomCurve: Motion.curve,
+                  ),
+                  onMapReady: () {
+                    setState(() => ready = true);
+                    if (shown.isNotEmpty) fit();
+                    publishContext();
                   },
-                  active: trace,
+                  onPositionChanged: (_, _) => publishContext(),
                 ),
-                control('Zoom in', LucideIcons.plus, () {
-                  if (ready) {
-                    controller.move(
-                      controller.camera.center,
-                      math.min(19, controller.camera.zoom + 1),
-                    );
-                  }
-                }),
-                control('Zoom out', LucideIcons.minus, () {
-                  if (ready) {
-                    controller.move(
-                      controller.camera.center,
-                      math.max(2, controller.camera.zoom - 1),
-                    );
-                  }
-                }),
-              ],
-            ),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 114 + bottom,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 560),
-              child: Chrome(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: colors.entries
-                            .map(
-                              (entry) => Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: FilterChip(
-                                  label: Text(entry.key),
-                                  avatar: Icon(
-                                    icons[entry.key],
-                                    size: 16,
-                                    color: entry.value,
+                children: [
+                  TileLayer(
+                    reset: tileReset.stream,
+                    evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+                    tileProvider: tileProvider,
+                    urlTemplate:
+                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    userAgentPackageName: 'com.frekihub.freki_hub',
+                    tileDisplay: TileDisplay.instantaneous(),
+                    errorTileCallback: (_, _, _) {
+                      if (!tileError && mounted) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted && !tileError) {
+                            setState(() => tileError = true);
+                          }
+                        });
+                      }
+                    },
+                  ),
+                  if (trace && route.length > 1)
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: route
+                              .map((r) => LatLng(r.lat, r.lng))
+                              .toList(),
+                          color: const Color(0xFF456FE8),
+                          strokeWidth: 3,
+                          pattern: StrokePattern.dashed(segments: [8, 5]),
+                        ),
+                      ],
+                    ),
+                  MarkerLayer(
+                    markers: groups.values.map((items) {
+                      final record = items.last;
+                      final chosen = items.any((r) => selected.contains(r.id));
+                      return Marker(
+                        point: LatLng(record.lat, record.lng),
+                        width: 48,
+                        height: 48,
+                        child: Semantics(
+                          label:
+                              '${record.category}: ${record.title}, ${items.length} records at ${record.location}',
+                          button: true,
+                          selected: chosen,
+                          child: GestureDetector(
+                            onTap: withFeedback(() => showRecords(items)),
+                            child: Center(
+                              child: Container(
+                                width: items.length > 1 ? 32 : 22,
+                                height: items.length > 1 ? 32 : 22,
+                                decoration: BoxDecoration(
+                                  color: colors[record.category],
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: chosen
+                                        ? const Color(0xFF172034)
+                                        : Colors.white,
+                                    width: chosen ? 4 : 3,
                                   ),
-                                  selected: categories.contains(entry.key),
-                                  onSelected: (_) {
-                                    ActionFeedback.tap();
-                                    setState(() {
-                                      if (!categories.remove(entry.key)) {
-                                        categories.add(entry.key);
-                                      }
-                                    });
-                                    publishContext();
-                                  },
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Colors.black26,
+                                      blurRadius: 6,
+                                    ),
+                                  ],
+                                ),
+                                child: items.length > 1
+                                    ? Center(
+                                        child: Text(
+                                          items.length > 99
+                                              ? '99+'
+                                              : '${items.length}',
+                                          maxLines: 1,
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              top: short ? 64 : 72,
+              left: 12,
+              right: 12,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Chrome(
+                    padding: const EdgeInsets.all(4),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            control(
+                              'Previous timeline',
+                              LucideIcons.chevronLeft,
+                              () => shift(-1),
+                            ),
+                            Expanded(
+                              child: TextButton(
+                                style: buttonStyle,
+                                onPressed: withFeedback(selectDate),
+                                child: Text(
+                                  dateLabel,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                            )
-                            .toList(),
-                      ),
+                            ),
+                            control(
+                              'Next timeline',
+                              LucideIcons.chevronRight,
+                              () => shift(1),
+                            ),
+                            if (short) ...[
+                              control(
+                                'Choose timeline',
+                                LucideIcons.slidersHorizontal,
+                                choosePeriod,
+                              ),
+                              control(
+                                'Choose located logs',
+                                LucideIcons.listFilter,
+                                () => showRecords(),
+                              ),
+                            ],
+                          ],
+                        ),
+                        if (!short)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextButton.icon(
+                                  style: buttonStyle,
+                                  onPressed: withFeedback(choosePeriod),
+                                  icon: const Icon(
+                                    LucideIcons.slidersHorizontal,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    '${period[0].toUpperCase()}${period.substring(1)}',
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextButton.icon(
+                                  style: buttonStyle,
+                                  onPressed: withFeedback(() => showRecords()),
+                                  icon: const Icon(
+                                    LucideIcons.listFilter,
+                                    size: 16,
+                                  ),
+                                  label: Text('${shown.length} logs'),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
                     ),
-                    Text(
-                      loading
-                          ? 'Loading recorded locations…'
-                          : loadError ??
-                                (shown.isEmpty
-                                    ? 'No located logs in this timeline'
-                                    : trace
-                                    ? '${route.length} samples · straight-line trace'
-                                    : '${selected.length} selected · tap a dot for details'),
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(c).textTheme.bodySmall,
-                    ),
-                    if (tileError)
-                      Text(
-                        'Map tiles unavailable · saved dots remain visible',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(c).textTheme.bodySmall,
-                      ),
-                  ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          bottom: 88 + bottom,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-            color: Theme.of(c).colorScheme.surface,
-            child: const Text(
-              '© OpenStreetMap contributors',
-              style: TextStyle(fontSize: 10),
+            Positioned(
+              right: 12,
+              left: short ? 12 : null,
+              top: short ? 120 : null,
+              bottom: short ? null : 230 + bottom,
+              child: Align(
+                alignment: short ? Alignment.center : Alignment.centerRight,
+                child: Chrome(
+                  padding: EdgeInsets.zero,
+                  child: short
+                      ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ...actions,
+                            if (tileError || loadError != null)
+                              control(
+                                'Retry map loading',
+                                LucideIcons.refreshCw,
+                                retry,
+                              ),
+                          ],
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions.take(2).toList(),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: actions.skip(2).toList(),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
             ),
-          ),
-        ),
-      ],
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: (short ? 92 : 104) + bottom,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Chrome(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: colors.entries
+                                .map(
+                                  (entry) => Padding(
+                                    padding: const EdgeInsets.only(right: 4),
+                                    child: FilterChip(
+                                      label: Text(
+                                        entry.key,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                      ),
+                                      labelPadding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      avatar: Icon(
+                                        icons[entry.key],
+                                        size: 16,
+                                        color: entry.value,
+                                      ),
+                                      selected: categories.contains(entry.key),
+                                      onSelected: (_) {
+                                        ActionFeedback.tap();
+                                        setState(() {
+                                          if (!categories.remove(entry.key)) {
+                                            categories.add(entry.key);
+                                          }
+                                        });
+                                        publishContext();
+                                      },
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                        Tooltip(
+                          message: tileError
+                              ? 'Map tiles unavailable. Check your connection and retry; saved dots remain visible.'
+                              : status,
+                          child: Text(
+                            short && tileError
+                                ? 'Tiles unavailable · use Retry above'
+                                : status,
+                            maxLines: short ? 1 : 2,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(c).textTheme.bodySmall,
+                          ),
+                        ),
+                        if (!short && (tileError || loadError != null))
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  tileError
+                                      ? 'Map tiles unavailable. Check your connection and retry.'
+                                      : 'Saved records could not load. Try again.',
+                                  style: Theme.of(c).textTheme.bodySmall,
+                                ),
+                              ),
+                              control(
+                                'Retry map loading',
+                                LucideIcons.refreshCw,
+                                retry,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              bottom: 88 + bottom,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                color: Theme.of(c).colorScheme.surface,
+                child: const Text(
+                  '© OpenStreetMap contributors',
+                  style: TextStyle(fontSize: 10),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -634,6 +750,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void dispose() {
     subscription?.cancel();
     contextTimer?.cancel();
+    tileReset.close();
     controller.dispose();
     super.dispose();
   }
@@ -650,149 +767,164 @@ class _MapLogSheet extends StatefulWidget {
 class _MapLogSheetState extends State<_MapLogSheet> {
   late final Set<String> selected = {...widget.selected};
   @override
-  Widget build(BuildContext c) => SafeArea(
-    top: false,
-    child: SizedBox(
-      height: MediaQuery.sizeOf(c).height * .65,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Located logs',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                TextButton(
-                  onPressed: withFeedback(() => Navigator.pop(c, selected)),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                TextButton(
-                  onPressed: withFeedback(
-                    () => setState(
-                      () => selected.addAll(widget.records.map((r) => r.id)),
+  Widget build(BuildContext c) => TextButtonTheme(
+    data: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        minimumSize: const Size(48, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    ),
+    child: SafeArea(
+      top: false,
+      child: SizedBox(
+        height: MediaQuery.sizeOf(c).height * .65,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Located logs',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  child: const Text('Select all'),
-                ),
-                TextButton(
-                  onPressed: withFeedback(() => setState(selected.clear)),
-                  child: const Text('Clear'),
-                ),
-                Expanded(
-                  child: Text(
-                    '${selected.length} selected',
-                    textAlign: TextAlign.end,
+                  TextButton(
+                    onPressed: withFeedback(() => Navigator.pop(c, selected)),
+                    child: const Text('Done'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              'No selection traces all filtered logs. Expand a record for its stored details.',
-              style: TextStyle(fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  TextButton(
+                    onPressed: withFeedback(
+                      () => setState(
+                        () => selected.addAll(widget.records.map((r) => r.id)),
+                      ),
+                    ),
+                    child: const Text('Select all'),
+                  ),
+                  TextButton(
+                    onPressed: withFeedback(() => setState(selected.clear)),
+                    child: const Text('Clear'),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${selected.length} selected',
+                      textAlign: TextAlign.end,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: widget.records.isEmpty
-                ? ListView(
-                    children: const [
-                      Center(child: Text('No records with a usable location')),
-                    ],
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    itemCount: widget.records.length,
-                    itemBuilder: (c, i) {
-                      final record = widget.records[i];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Surface(
-                          padding: EdgeInsets.zero,
-                          child: ExpansionTile(
-                            leading: Checkbox(
-                              value: selected.contains(record.id),
-                              activeColor:
-                                  _MapScreenState.colors[record.category],
-                              semanticLabel: 'Select ${record.title}',
-                              onChanged: (_) {
-                                ActionFeedback.tap();
-                                setState(() {
-                                  if (!selected.remove(record.id)) {
-                                    selected.add(record.id);
-                                  }
-                                });
-                              },
-                            ),
-                            title: Text(
-                              record.title,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            subtitle: Text(
-                              '${record.category} · ${record.location}\n${DateFormat('d MMM yyyy, HH:mm:ss').format(record.time)}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            childrenPadding: const EdgeInsets.fromLTRB(
-                              16,
-                              0,
-                              16,
-                              16,
-                            ),
-                            children: [
-                              Align(
-                                alignment: Alignment.centerLeft,
-                                child: SelectableText(
-                                  [
-                                    'Coordinates: ${record.lat.toStringAsFixed(6)}, ${record.lng.toStringAsFixed(6)}',
-                                    if (record.position['accuracy'] != null)
-                                      'Accuracy: ±${record.position['accuracy']} m',
-                                    if (record.position['locationTime'] is int)
-                                      'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(record.position['locationTime'] as int))}',
-                                    if (record.details['amount'] != null &&
-                                        record.details['currency'] is String)
-                                      'Amount: ${money(record.details['amount'] is int ? record.details['amount'] as int : parseMoney('${record.details['amount']}', record.details['currency'] as String), record.details['currency'] as String)}',
-                                    for (final entry
-                                        in record.details.entries.where(
-                                          (e) => ![
-                                            'position',
-                                            'lat',
-                                            'lng',
-                                            'accuracy',
-                                            'locationTime',
-                                            'id',
-                                            'time',
-                                            'title',
-                                            'location',
-                                            'amount',
-                                            'currency',
-                                          ].contains(e.key),
-                                        ))
-                                      '${entry.key}: ${entry.value}',
-                                  ].join('\n'),
-                                  style: Theme.of(c).textTheme.bodySmall,
-                                ),
-                              ),
-                            ],
-                          ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'No selection traces all filtered logs. Expand a record for its stored details.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: widget.records.isEmpty
+                  ? ListView(
+                      children: const [
+                        Center(
+                          child: Text('No records with a usable location'),
                         ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      itemCount: widget.records.length,
+                      itemBuilder: (c, i) {
+                        final record = widget.records[i];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Surface(
+                            padding: EdgeInsets.zero,
+                            child: ExpansionTile(
+                              leading: Checkbox(
+                                value: selected.contains(record.id),
+                                activeColor:
+                                    _MapScreenState.colors[record.category],
+                                semanticLabel: 'Select ${record.title}',
+                                onChanged: (_) {
+                                  ActionFeedback.tap();
+                                  setState(() {
+                                    if (!selected.remove(record.id)) {
+                                      selected.add(record.id);
+                                    }
+                                  });
+                                },
+                              ),
+                              title: Text(
+                                record.title,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              subtitle: Text(
+                                '${record.category} · ${record.location}\n${DateFormat('d MMM yyyy, HH:mm:ss').format(record.time)}',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              childrenPadding: const EdgeInsets.fromLTRB(
+                                16,
+                                0,
+                                16,
+                                16,
+                              ),
+                              children: [
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: SelectableText(
+                                    [
+                                      'Coordinates: ${record.lat.toStringAsFixed(6)}, ${record.lng.toStringAsFixed(6)}',
+                                      if (record.position['accuracy'] != null)
+                                        'Accuracy: ±${record.position['accuracy']} m',
+                                      if (record.position['locationTime']
+                                          is int)
+                                        'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(record.position['locationTime'] as int))}',
+                                      if (record.details['amount'] != null &&
+                                          record.details['currency'] is String)
+                                        'Amount: ${money(record.details['amount'] is int ? record.details['amount'] as int : parseMoney('${record.details['amount']}', record.details['currency'] as String), record.details['currency'] as String)}',
+                                      for (final entry
+                                          in record.details.entries.where(
+                                            (e) => ![
+                                              'position',
+                                              'lat',
+                                              'lng',
+                                              'accuracy',
+                                              'locationTime',
+                                              'id',
+                                              'time',
+                                              'title',
+                                              'location',
+                                              'amount',
+                                              'currency',
+                                            ].contains(e.key),
+                                          ))
+                                        '${entry.key}: ${entry.value}',
+                                    ].join('\n'),
+                                    style: Theme.of(c).textTheme.bodySmall,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     ),
   );

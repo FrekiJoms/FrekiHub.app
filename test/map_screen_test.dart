@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/native.dart';
@@ -10,12 +11,15 @@ import 'package:freki_hub/design.dart';
 import 'package:freki_hub/screens.dart';
 
 class _TestTiles extends TileProvider {
+  int requests = 0;
   final bytes = base64Decode(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
   );
   @override
-  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) =>
-      MemoryImage(bytes);
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
+    requests++;
+    return MemoryImage(bytes);
+  }
 }
 
 void main() {
@@ -27,6 +31,7 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final tiles = _TestTiles();
       addTearDown(db.close);
       final time = DateTime.now().millisecondsSinceEpoch;
       final data = (await tester.runAsync(() async {
@@ -64,7 +69,7 @@ void main() {
                 disableAnimations: true,
               ),
               child: Scaffold(
-                body: MapScreen(data: data, tileProvider: _TestTiles()),
+                body: MapScreen(data: data, tileProvider: tiles),
               ),
             ),
           ),
@@ -74,6 +79,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
       expect(find.text('2 logs'), findsOneWidget);
+      final camera = tester
+          .widget<FlutterMap>(find.byType(FlutterMap))
+          .mapController!;
+      final zoom = camera.camera.zoom;
+      await tester.tap(find.byTooltip('Zoom in'));
+      await tester.pump();
+      expect(camera.camera.zoom, zoom + 1);
       await tester.tap(find.text('2 logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
@@ -87,6 +99,48 @@ void main() {
       await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('1 samples · straight-line trace'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      final tile = TileImage(
+        vsync: tester,
+        coordinates: const TileCoordinates(0, 0, 0),
+        imageProvider: MemoryImage(tiles.bytes),
+        onLoadComplete: (_) {},
+        onLoadError: (_, _, _) {},
+        tileDisplay: TileDisplay.instantaneous(),
+        errorImage: null,
+        cancelLoading: Completer<void>(),
+      );
+      addTearDown(tile.dispose);
+      tester.widget<TileLayer>(find.byType(TileLayer)).errorTileCallback!(
+        tile,
+        StateError('Offline'),
+        StackTrace.current,
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.byTooltip('Retry map loading'), findsOneWidget);
+      final requests = tiles.requests;
+      await tester.tap(find.byTooltip('Retry map loading'));
+      await tester.pumpAndSettle();
+      expect(tiles.requests, greaterThan(requests));
+      expect(find.byTooltip('Retry map loading'), findsNothing);
+      expect(find.text('1 samples · straight-line trace'), findsOneWidget);
+      tester.view.physicalSize = const Size(640, 360);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getRect(find.byTooltip('Previous timeline')).bottom,
+        lessThan(tester.getRect(find.byTooltip('Fit recorded locations')).top),
+      );
+      expect(
+        tester.getRect(find.byTooltip('Fit recorded locations')).bottom,
+        lessThan(tester.getRect(find.text('Sessions')).top),
+      );
+      await tester.tap(find.byTooltip('Choose located logs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Located logs'), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));

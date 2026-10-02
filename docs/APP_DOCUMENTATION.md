@@ -75,7 +75,9 @@ Timeline modes are day, Monday-start week, month, year and custom inclusive date
 
 Markers group positions rounded to five decimal places. A dot opens located records with checkboxes and expandable details. No selection traces all category/time-filtered records; a selection limits the chronological trace. Dashed straight lines connect recorded coordinates, not traveled roads or continuous tracking. Opening Map does not request GPS or turn on location logging.
 
-On-demand OpenStreetMap tiles use app identification, visible attribution and a 128 MiB cache configuration. Tile failure leaves saved dots available and displays a message. Viewport context publishes after 500 ms of inactivity; identical raw query rows skip repeated JSON parsing and marker rebuilds. Current shortcomings and long-history limits are listed in [Application audit](APPLICATION_AUDIT.md).
+On-demand OpenStreetMap tiles use app identification, visible attribution and a 128 MiB cache configuration. Tile failure leaves saved dots available and displays a connection/retry message. Retry resets the tile layer and evicts failed images without disposing its network provider or changing selected records; a saved-record query failure retries that query separately. No saved coordinates in a timeline is an empty state, not a GPS permission error. Map never requests current GPS location.
+
+Controls use compact 18 px icons/12 px labels with 48 px button touch targets. The action cluster is a two-by-two grid on tall screens and a horizontal strip on short screens, where timeline/log selectors use labeled tooltips. Category chips retain their named/icon/color legend; large grouped dots display `99+` while accessibility labels and their detail drawer retain the full count. Viewport context publishes after 500 ms of inactivity; identical raw query rows skip repeated JSON parsing and marker rebuilds. Current shortcomings and long-history limits are listed in [Application audit](APPLICATION_AUDIT.md).
 
 ## Settings and bottom sheets
 
