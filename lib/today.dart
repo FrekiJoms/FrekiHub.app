@@ -145,7 +145,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
             children: [
               const SizedBox(height: 8),
               const AnalogClock(),
-              const SizedBox(height: 28),
+              const SizedBox(height: 16),
               Text(
                 running == null
                     ? 'READY WHEN YOU ARE'
@@ -159,7 +159,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
               const SizedBox(height: 12),
               NumberValue(
                 running == null ? elapsed(total) : elapsed(durationOf(running)),
-                size: 42,
+                size: 36,
               ),
               const SizedBox(height: 10),
               Text(
@@ -170,7 +170,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   color: Theme.of(c).colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 26),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -188,7 +188,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 12),
               TextField(
                 controller: note,
                 decoration: const InputDecoration(
@@ -236,7 +236,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
             ),
           )
         else
-          ...recent.take(6).map((s) => sessionTile(c, ref, d, s)),
+          ...recent.take(3).map((s) => sessionTile(c, ref, d, s)),
         Surface(
           child: Row(
             children: [
@@ -291,8 +291,8 @@ class _AnalogClockState extends State<AnalogClock>
   Widget build(BuildContext c) => Semantics(
     label: 'Current time ${DateFormat('HH:mm').format(DateTime.now())}',
     child: SizedBox(
-      width: 218,
-      height: 218,
+      width: 164,
+      height: 164,
       child: CustomPaint(
         painter: _ClockPainter(
           controller,

@@ -14,3 +14,7 @@ Reviewed Today, Calendar, Sessions, Budget, Settings, session/transaction/rule f
 - Motion: shorter tab exit with shared easing; existing reduced-motion handling and haptic/sound feedback retained.
 
 Validation: Flutter static analysis and whitespace checks. No APK rebuild, device screenshot comparison or runtime layout inspection in this pass; phone appearance and enlarged-text layouts still need device verification.
+
+## Compactness and scrolling follow-up
+
+Reduced the Today clock from 218 to 164 px, recent preview from six to three sessions, shared card padding to 20 px, page gaps to 12 px and large section gaps to 16 px. Budget charts use a 150 px footprint. Session tables have a bounded vertical list and a separate horizontal scroll surface, with pinch/pan removed. PageStorage keys retain page scroll offsets. Tab and settings changes use direction-aware slide/fade transitions; outgoing pages ignore touches and pause tickers, and system reduced-motion disables the transition duration. Static analysis passed; device behavior remains unverified.

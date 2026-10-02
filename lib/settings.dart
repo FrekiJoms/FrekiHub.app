@@ -161,7 +161,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       changeTheme(['light', 'dark', 'system'][i]),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               selectField(
                 'Display currency',
                 d.currency,
@@ -233,7 +233,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const Text(
                 'Save a backup somewhere safe. Removing the app removes the data stored on this phone.',
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: withFeedback(busy ? null : backup),
                 icon: const Icon(LucideIcons.download, size: 18),

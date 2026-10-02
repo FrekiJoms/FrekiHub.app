@@ -352,7 +352,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   fontSize: 12,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
               Wrap(
                 spacing: 24,
                 runSpacing: 16,
@@ -408,15 +408,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   LucideIcons.chartPie,
                 )
               else ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 SizedBox(
-                  height: 180,
+                  height: 150,
                   child: Semantics(
                     label:
                         'Category spending total ${money(expenses, d.currency)}',
                     child: PieChart(
                       PieChartData(
-                        centerSpaceRadius: 56,
+                        centerSpaceRadius: 44,
                         sectionsSpace: 4,
                         sections: List.generate(
                           categories.length,
@@ -433,7 +433,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 ...List.generate(
                   categories.length,
                   (i) => Padding(

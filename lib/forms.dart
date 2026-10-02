@@ -130,7 +130,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
           widget.session == null ? 'Add a session' : 'Session details',
           style: Theme.of(c).textTheme.titleLarge,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         spaced(
           selectField('Session type', kind, [
             'OJT',
@@ -303,7 +303,7 @@ class _EntryFormState extends ConsumerState<EntryForm> {
           widget.entry == null ? 'Add $kind' : 'Edit transaction',
           style: Theme.of(c).textTheme.titleLarge,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         spaced(
           selectField('Type', kind, [
             'expense',
@@ -511,7 +511,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
           widget.rule == null ? 'Plan a transaction' : 'Edit planner rule',
           style: Theme.of(c).textTheme.titleLarge,
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         spaced(
           TextField(
             controller: title,

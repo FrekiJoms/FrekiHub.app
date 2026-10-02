@@ -324,12 +324,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           Surface(
             padding: const EdgeInsets.all(8),
             child: SizedBox(
-              height: math.min(620.0, (list.length + 1) * 58.0 + 30),
-              child: InteractiveViewer(
-                constrained: false,
-                minScale: .6,
-                maxScale: 2.5,
-                boundaryMargin: const EdgeInsets.all(24),
+              height: math.min(360.0, (list.length + 1) * 58.0 + 30),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                primary: false,
                 child: SizedBox(
                   width:
                       widths.fold(0.0, (a, b) => a + b) + (selection ? 48 : 0),
@@ -437,8 +435,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         ],
                       ),
                       SizedBox(
-                        height: math.min(538.0, list.length * 58.0),
+                        height: math.min(308.0, list.length * 58.0),
                         child: ListView.builder(
+                          primary: false,
+                          physics: const ClampingScrollPhysics(),
                           itemCount: list.length,
                           itemExtent: 58,
                           itemBuilder: (c, n) {
@@ -533,7 +533,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
             ),
           ),
         const Text(
-          'Pinch to zoom, drag to pan. Drag a header divider to resize neighbouring columns; double tap it to reset.',
+          'Scroll sideways for more columns. Scroll inside the table for more records. Drag a header divider to resize neighbouring columns; double tap it to reset.',
           style: TextStyle(fontSize: 12),
         ),
       ],

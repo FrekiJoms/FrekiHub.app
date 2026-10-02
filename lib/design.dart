@@ -258,7 +258,7 @@ class Surface extends StatelessWidget {
   const Surface({
     super.key,
     required this.child,
-    this.padding = const EdgeInsets.all(24),
+    this.padding = const EdgeInsets.all(20),
   });
   @override
   Widget build(BuildContext context) => Container(
@@ -337,6 +337,7 @@ class PageBody extends StatelessWidget {
       final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
       final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
       return ListView(
+        key: PageStorageKey(title),
         padding: EdgeInsets.fromLTRB(
           horizontal,
           16,
@@ -378,10 +379,10 @@ class PageBody extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           for (var i = 0; i < children.length; i++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Entrance(index: i + 1, child: children[i]),
             ),
         ],

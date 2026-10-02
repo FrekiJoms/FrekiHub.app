@@ -65,6 +65,7 @@ class _AppShellState extends ConsumerState<AppShell>
     with WidgetsBindingObserver {
   int index = 0;
   int lastTab = 0;
+  double slideDirection = 1;
   String? lastRunning;
   @override
   void initState() {
@@ -145,20 +146,44 @@ class _AppShellState extends ConsumerState<AppShell>
             data: (data) => Stack(
               children: [
                 Positioned.fill(
-                  child: AnimatedSwitcher(
-                    duration: Motion.duration(c),
-                    reverseDuration: Motion.duration(c, 200),
-                    switchInCurve: Motion.curve,
-                    switchOutCurve: Motion.curve,
-                    child: KeyedSubtree(
-                      key: ValueKey(index),
-                      child: switch (index) {
-                        0 => TodayScreen(data: data),
-                        1 => CalendarScreen(data: data),
-                        2 => HistoryScreen(data: data),
-                        3 => BudgetScreen(data: data),
-                        _ => SettingsScreen(data: data),
+                  child: ClipRect(
+                    child: AnimatedSwitcher(
+                      duration: Motion.duration(c),
+                      reverseDuration: Motion.duration(c, 200),
+                      switchInCurve: Motion.curve,
+                      switchOutCurve: Motion.curve,
+                      transitionBuilder: (child, animation) {
+                        final incoming = child.key == ValueKey(index);
+                        return IgnorePointer(
+                          ignoring: !incoming,
+                          child: TickerMode(
+                            enabled: incoming,
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: SlideTransition(
+                                position: Tween<Offset>(
+                                  begin: Offset(
+                                    (incoming ? 1 : -1) * slideDirection * .12,
+                                    0,
+                                  ),
+                                  end: Offset.zero,
+                                ).animate(animation),
+                                child: child,
+                              ),
+                            ),
+                          ),
+                        );
                       },
+                      child: KeyedSubtree(
+                        key: ValueKey(index),
+                        child: switch (index) {
+                          0 => TodayScreen(data: data),
+                          1 => CalendarScreen(data: data),
+                          2 => HistoryScreen(data: data),
+                          3 => BudgetScreen(data: data),
+                          _ => SettingsScreen(data: data),
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -177,6 +202,7 @@ class _AppShellState extends ConsumerState<AppShell>
                           if (i == index) return;
                           ActionFeedback.tap(transition: true);
                           setState(() {
+                            slideDirection = i > index ? 1 : -1;
                             index = i;
                             lastTab = i;
                           });
@@ -204,7 +230,10 @@ class _AppShellState extends ConsumerState<AppShell>
                           icon: const Icon(LucideIcons.settings2, size: 22),
                           onPressed: () {
                             ActionFeedback.tap(transition: true);
-                            setState(() => index = index == 4 ? lastTab : 4);
+                            setState(() {
+                              slideDirection = index == 4 ? -1 : 1;
+                              index = index == 4 ? lastTab : 4;
+                            });
                           },
                         ),
                       ),
