@@ -15,6 +15,7 @@ abstract final class RuleCatalog {
     'device.charging',
     'device.connected',
     'app.foreground',
+    'map.trace_enabled',
   };
   static bool numericField(String field) =>
       !field.startsWith('settings.') &&
@@ -33,12 +34,16 @@ abstract final class RuleCatalog {
             'location.accuracy',
             'location.sample_age_seconds',
             'budget.goal',
+            'map.center_lat',
+            'map.center_lng',
+            'map.zoom',
           ].contains(field));
   static const targets = [
     'session_page',
     'sessions_page',
     'budget_page',
     'calendar_page',
+    'map_page',
     'settings_page',
     'activity_logs',
     'device',
@@ -67,6 +72,16 @@ abstract final class RuleCatalog {
     'calendar.selected_date': 'Selected calendar date (yyyy-MM-dd)',
     'calendar.view': 'year, month, week or day',
     'calendar.today': 'Today (yyyy-MM-dd)',
+    'map.period': 'day, week, month, year or custom',
+    'map.from': 'Map timeline start date, inclusive (yyyy-MM-dd)',
+    'map.until': 'Map timeline end date, exclusive (yyyy-MM-dd)',
+    'map.trace_enabled': 'Chronological map trace is visible',
+    'map.visible_count':
+        'Located records matching map category and timeline filters',
+    'map.selected_count': 'Selected records within the visible map filters',
+    'map.center_lat': 'Map viewport latitude',
+    'map.center_lng': 'Map viewport longitude',
+    'map.zoom': 'Map viewport zoom level',
     'settings.theme': 'light, dark or system',
     'settings.sound': 'Sound effects enabled',
     'activity_logs.enabled': 'Activity logging enabled',
@@ -99,6 +114,12 @@ abstract final class RuleCatalog {
   static Map<String, dynamic> snapshot(AppData data) {
     final now = DateTime.now(), current = data.running;
     final month = dayKey(now).substring(0, 7);
+    Map<String, dynamic> mapContext = {};
+    try {
+      mapContext = Map<String, dynamic>.from(
+        jsonDecode(data.prefs['mapContext'] ?? '{}') as Map,
+      );
+    } catch (_) {}
     Entry? last;
     for (final entry in data.entries) {
       if (last == null || entry.day.compareTo(last.day) >= 0) last = entry;
@@ -144,6 +165,18 @@ abstract final class RuleCatalog {
       'calendar.today': dayKey(now),
       'calendar.selected_date': data.prefs['calendarSelected'] ?? dayKey(now),
       'calendar.view': data.prefs['calendarView'] ?? 'month',
+      'map.period':
+          mapContext['map.period'] ?? data.prefs['mapPeriod'] ?? 'day',
+      'map.from': mapContext['map.from'] ?? dayKey(now),
+      'map.until':
+          mapContext['map.until'] ??
+          dayKey(DateTime(now.year, now.month, now.day + 1)),
+      'map.trace_enabled': mapContext['map.trace_enabled'] ?? false,
+      'map.visible_count': mapContext['map.visible_count'] ?? 0,
+      'map.selected_count': mapContext['map.selected_count'] ?? 0,
+      'map.center_lat': mapContext['map.center_lat'] ?? 0,
+      'map.center_lng': mapContext['map.center_lng'] ?? 0,
+      'map.zoom': mapContext['map.zoom'] ?? 2,
       'settings.theme': data.prefs['theme'] ?? 'system',
       'settings.sound': data.prefs['sound'] == 'true',
       'activity_logs.enabled': data.prefs['activityLogging'] == 'true',

@@ -432,7 +432,7 @@ class PageBody extends StatelessWidget {
         key: PageStorageKey(title),
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          16,
+          80,
           horizontal,
           126 + MediaQuery.paddingOf(c).bottom,
         ),
@@ -582,10 +582,10 @@ class _PillNavigationState extends State<PillNavigation>
   Rect? from, target;
   OverlayEntry? menu;
   int? hovered;
-  static const labels = ['Today', 'Calendar', 'Sessions', 'Finance'];
+  static const labels = ['Today', 'Map', 'Sessions', 'Finance'];
   static const icons = [
     LucideIcons.clock3,
-    LucideIcons.calendarDays,
+    LucideIcons.map,
     LucideIcons.table2,
     LucideIcons.wallet,
   ];

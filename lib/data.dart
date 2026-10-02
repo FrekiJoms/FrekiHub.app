@@ -184,6 +184,17 @@ class AppDatabase extends _$AppDatabase {
     'SELECT * FROM activity_logs ORDER BY time DESC LIMIT 1000',
     readsFrom: {preferences, sessions, entries},
   ).watch().map((rows) => rows.map((r) => r.data).toList());
+  Stream<List<Map<String, dynamic>>> watchMapLogs(
+    DateTime from,
+    DateTime until,
+  ) => customSelect(
+    'SELECT * FROM activity_logs WHERE time >= ? AND time < ? ORDER BY time ASC, id ASC',
+    variables: [
+      Variable<int>(from.millisecondsSinceEpoch),
+      Variable<int>(until.millisecondsSinceEpoch),
+    ],
+    readsFrom: {preferences, sessions, entries},
+  ).watch().map((rows) => rows.map((r) => r.data).toList());
   Future<void> addActivity(Map<String, dynamic> event) async {
     final existing = await customSelect(
       'SELECT id FROM activity_logs WHERE id = ?',

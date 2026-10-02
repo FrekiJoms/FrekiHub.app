@@ -1,0 +1,93 @@
+import 'dart:convert';
+
+/// Calendar-aligned local-time ranges, with an exclusive end.
+class MapRange {
+  final DateTime from, until;
+  const MapRange(this.from, this.until);
+  factory MapRange.period(String period, DateTime date) {
+    final day = DateTime(date.year, date.month, date.day);
+    return switch (period) {
+      'week' => MapRange(
+        DateTime(day.year, day.month, day.day - day.weekday + 1),
+        DateTime(day.year, day.month, day.day + 8 - day.weekday),
+      ),
+      'month' => MapRange(
+        DateTime(date.year, date.month),
+        DateTime(date.year, date.month + 1),
+      ),
+      'year' => MapRange(DateTime(date.year), DateTime(date.year + 1)),
+      _ => MapRange(day, DateTime(date.year, date.month, date.day + 1)),
+    };
+  }
+}
+
+class MapRecord {
+  final Map<String, dynamic> row, details, position;
+  final double lat, lng;
+  final DateTime time;
+  const MapRecord(
+    this.row,
+    this.details,
+    this.position,
+    this.lat,
+    this.lng,
+    this.time,
+  );
+  String get id => row['id'].toString();
+  String get title => row['title']?.toString() ?? 'Activity';
+  String get location => row['location']?.toString() ?? 'Recorded location';
+  String get category {
+    final action = row['action']?.toString() ?? '';
+    if (action.contains('clock') || action.startsWith('session')) {
+      return 'Sessions';
+    }
+    if (['purchase', 'expense', 'income', 'savings'].contains(action)) {
+      return 'Finance';
+    }
+    if (action.startsWith('location')) return 'Locations';
+    return 'Other';
+  }
+
+  static Map<String, dynamic> decode(dynamic value) {
+    try {
+      final decoded = value is String ? jsonDecode(value) : value;
+      return decoded is Map ? Map<String, dynamic>.from(decoded) : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static MapRecord? parse(Map<String, dynamic> row) {
+    final details = decode(row['details']);
+    final position = details.containsKey('position')
+        ? decode(details['position'])
+        : details;
+    final lat = num.tryParse('${position['lat']}')?.toDouble();
+    final lng = num.tryParse('${position['lng']}')?.toDouble();
+    final time = int.tryParse('${row['time']}');
+    if (lat == null ||
+        lng == null ||
+        time == null ||
+        !lat.isFinite ||
+        !lng.isFinite ||
+        lat.abs() > 90 ||
+        lng.abs() > 180) {
+      return null;
+    }
+    final sample = int.tryParse('${position['locationTime']}');
+    if (sample != null && (time - sample > 120000 || sample - time > 1000)) {
+      return null;
+    }
+    if (row['location'] == 'Location unavailable' && sample == null) {
+      return null;
+    }
+    return MapRecord(
+      row,
+      details,
+      position,
+      lat,
+      lng,
+      DateTime.fromMillisecondsSinceEpoch(time),
+    );
+  }
+}

@@ -189,10 +189,11 @@ class _AppShellState extends ConsumerState<AppShell>
                   'currentPage',
                   [
                     'session_page',
-                    'calendar_page',
+                    'map_page',
                     'sessions_page',
                     'budget_page',
                     'settings_page',
+                    'calendar_page',
                   ][index],
                 )
                 .catchError((Object _) {}),
@@ -280,9 +281,10 @@ class _AppShellState extends ConsumerState<AppShell>
                             key: ValueKey(index),
                             child: switch (index) {
                               0 => TodayScreen(data: data),
-                              1 => CalendarScreen(data: data),
+                              1 => MapScreen(data: data),
                               2 => HistoryScreen(data: data),
                               3 => BudgetScreen(data: data),
+                              5 => CalendarScreen(data: data),
                               _ => SettingsScreen(data: data),
                             },
                           ),
@@ -313,6 +315,40 @@ class _AppShellState extends ConsumerState<AppShell>
                                 lastTab = i;
                               });
                             },
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 16,
+                      left: 16,
+                      child: SizedBox.square(
+                        dimension: 48,
+                        child: GlassContainer(
+                          useOwnLayer: true,
+                          shape: const LiquidOval(),
+                          settings: const LiquidGlassSettings(
+                            blur: 12,
+                            thickness: 24,
+                          ),
+                          child: Semantics(
+                            selected: index == 5,
+                            child: IconButton(
+                              tooltip: index == 5
+                                  ? 'Close calendar'
+                                  : 'Calendar',
+                              icon: const Icon(
+                                LucideIcons.calendarDays,
+                                size: 22,
+                              ),
+                              onPressed: () {
+                                ActionFeedback.tap(transition: true);
+                                setState(() {
+                                  slideDirection = index == 5 ? 1 : -1;
+                                  index = index == 5 ? lastTab : 5;
+                                });
+                              },
+                            ),
                           ),
                         ),
                       ),

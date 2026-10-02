@@ -7,9 +7,10 @@ Native Flutter app for personal OJT hours and money. Opens directly into Today w
 - **Today:** smooth painted analog clock, persistent running session, haptics, opt-in sounds, notes, offline status, duplicate clock-in protection, recent session details and editing.
 - **Calendar:** twelve-month year overview, session / expense / income filters, animated activity markers, swipeable month summaries with charts, quick add, and a draggable day sheet with remembered height.
 - **Sessions:** sortable searchable table, month/type/weekday/note filters, adjacent-column resizing with double-tap reset, remembered widths, pinch zoom, panning, date/time previews, editing and confirmed bulk deletion.
-- **Budget:** continuous scroll containing net position, elapsed-period ring, safe-to-spend, savings goal, category donut/bars, reorderable/duplicable planner rules, and a combined expected/actual timeline.
+- **Finance:** continuous scroll containing net position, elapsed-period ring, safe-to-spend, savings goal, category donut/bars, reorderable/duplicable planner rules, and a combined expected/actual timeline.
 - **Settings:** light/dark/system appearance with circular reveal, currency selection, custom categories and payment methods, sound toggle, JSON backup/restore, and typed confirmation for clearing data.
-- **Navigation:** four bottom tabs with a central quick-add button for sessions/logs, expenses, income, savings and budget rules; Settings stays fixed in a circular liquid-glass shortcut at the upper right.
+- **Map:** full-screen interactive OpenStreetMap with fixed glass controls, day/week/month/year/custom-date filters, named category legends, grouped location dots, expandable log details and chronological dashed traces. Only valid recorded coordinates are displayed; traces connect samples rather than reconstruct traveled roads. Tiles load on demand and use a bounded local cache. Viewing the map does not enable tracking or request location permissions.
+- **Navigation:** Today, Map, Sessions and Finance in the bottom bar. Long-press the bottom center to reveal quick-add actions. Calendar and Settings stay fixed in matching circular liquid-glass shortcuts at the upper left and upper right.
 
 ## Data and calculations
 

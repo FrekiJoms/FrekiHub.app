@@ -93,9 +93,34 @@ Targets define the action scope, not whether that page is visible. To react to n
 
 ## Targets and fields
 
-Targets: `session_page`, `sessions_page`, `budget_page`, `calendar_page`, `settings_page`, `activity_logs`, `device`, `notifications`, `app`. Several target blocks can share one rule. All fields can be read from any target; modifying actions must match their resource scope.
+Targets: `session_page`, `sessions_page`, `budget_page`, `calendar_page`, `map_page`, `settings_page`, `activity_logs`, `device`, `notifications`, `app`. Several target blocks can share one rule. All fields can be read from any target; modifying actions must match their resource scope.
 
 The Budget tab is now labeled **Finance**. Its existing syntax identifiers remain `budget_page`, `budget.*` and `budget.add_expense(...)`; `app.page` also reports `budget_page` for Finance. Existing rules and saved data continue to work.
+
+**Map** occupies the bottom navigation slot previously used by Calendar. Calendar opens from the fixed upper-left button, opposite Settings. `app.page` reports `map_page` on Map and still reports `calendar_page` on Calendar.
+
+Map fields have completion hints and type checks:
+
+| Field | Type / meaning |
+| --- | --- |
+| `map.period` | String: `day`, `week`, `month`, `year`, `custom` |
+| `map.from`, `map.until` | Strings: local date boundaries (`yyyy-MM-dd`), start inclusive, end exclusive |
+| `map.trace_enabled` | Boolean: chronological trace enabled |
+| `map.visible_count` | Number: located logs matching timeline and category filters |
+| `map.selected_count` | Number: selected logs within those filters |
+| `map.center_lat`, `map.center_lng`, `map.zoom` | Numbers: current viewport, refreshed after interaction settles |
+
+```javascript
+target == map_page {
+  if (data.get("app.page") == "map_page" && data.get("map.visible_count") > 0 && data.get("map.trace_enabled") == true) {
+    app.toast("Showing the recorded location trace");
+  }
+}
+```
+
+Map is a read-only view of located records; existing common `log(...)` and `app.toast(...)` actions work under `map_page`. Session/finance mutations still require their own targets. Map context is stored separately from automation source/programs and is the last viewed state when Map is closed. Saved view preferences remain accessible using `data.get("settings.mapPeriod")`, `settings.mapDate`, `settings.mapFrom`, `settings.mapUntil`, and `settings.mapTrace` (preference values are strings).
+
+Location rule radii use **metres**, currently 100–1,000 m in 50 m increments. Map includes sessions, finance, locations and other actions only when recorded coordinates are valid and their sample is fresh relative to the action (at most two minutes old). Category filters also act as the named/color legend. Day/month/year filters use local calendar boundaries; weeks start Monday. Custom dates include the entire final day. Select records in the logs sheet or from a marker; no selection traces all filtered records. Overlapping coordinates group their records in a selectable marker. Dashed traces join chronological samples with straight lines, not road routes or continuous GPS tracking. The map queries the entire selected interval rather than the activity sheet's 1,000-record limit. Basemap tiles need internet; loading Map does not enable background logging, request GPS, or send log titles, financial details or record payloads to the tile provider. Visible attribution and on-demand cached tiles follow OpenStreetMap's tile usage policy.
 
 The authoritative field catalog is `RuleCatalog.fields` in `lib/rule_language.dart`; completion uses it directly. It exposes session activity/type/note/count/duration/today's time; budget income/expenses/savings/net/currency/goal/counts/latest dated transaction details; calendar date/view; appearance/sound; activity count/latest action/title; location enablement/name/coordinates/accuracy/sample age; purchase detection and notification permission; battery, charging, connectivity, media volume, ringer mode and orientation; current page and foreground state.
 

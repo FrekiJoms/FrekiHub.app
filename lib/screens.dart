@@ -19,6 +19,8 @@ import 'package:flutter/cupertino.dart'
         DatePickerDateOrder;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_map/flutter_map.dart' hide Projection;
+import 'package:latlong2/latlong.dart';
 import 'package:intl/intl.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
@@ -30,10 +32,12 @@ import 'design.dart';
 import 'services.dart';
 import 'theme_reveal.dart';
 import 'rule_language.dart';
+import 'map_records.dart';
 
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 part 'today.dart';
 part 'calendar.dart';
+part 'map.dart';
 part 'history.dart';
 part 'budget.dart';
 part 'settings.dart';

@@ -84,7 +84,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         16,
-        16,
+        80,
         16,
         112 + MediaQuery.paddingOf(c).bottom,
       ),
