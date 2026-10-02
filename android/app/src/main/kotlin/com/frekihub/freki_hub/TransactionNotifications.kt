@@ -25,14 +25,14 @@ object TransactionNotifications {
         val id = receipt["id"] as? String ?: return false
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Saved transactions", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Confirmation after detected purchases are saved to Budget"
+            description = "Confirmation after detected purchases are saved to Finance"
         })
         val open = PendingIntent.getActivity(context, 92,
             Intent(context, MainActivity::class.java).putExtra("openPage", "budget").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         fun builder() = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
         val details = buildString {
-            append("Added to Budget and saved\n")
+            append("Added to Finance and saved\n")
             append("Amount: ${receipt["amount"]}\n")
             append("Merchant / item: ${receipt["merchant"]}\n")
             append("Date: ${receipt["date"]}\n")
@@ -42,11 +42,11 @@ object TransactionNotifications {
             if (!reference.isNullOrBlank()) append("\nReference: $reference")
         }
         val publicVersion = builder().setSmallIcon(R.drawable.ic_transaction)
-            .setContentTitle("Transaction saved").setContentText("Added to your FrekiHub Budget").build()
+            .setContentTitle("Transaction saved").setContentText("Added to your FrekiHub Finance").build()
         val notification = builder().setSmallIcon(R.drawable.ic_transaction)
             .setContentTitle(receipt["title"] as? String ?: "Transaction saved")
             .setContentText("${receipt["amount"]} · ${receipt["merchant"]}")
-            .setSubText("Budget · Expense")
+            .setSubText("Finance · Expense")
             .setStyle(Notification.BigTextStyle().bigText(details))
             .setWhen((receipt["time"] as? Number)?.toLong() ?: System.currentTimeMillis())
             .setShowWhen(true).setAutoCancel(true).setOnlyAlertOnce(true)

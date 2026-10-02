@@ -95,6 +95,8 @@ Targets define the action scope, not whether that page is visible. To react to n
 
 Targets: `session_page`, `sessions_page`, `budget_page`, `calendar_page`, `settings_page`, `activity_logs`, `device`, `notifications`, `app`. Several target blocks can share one rule. All fields can be read from any target; modifying actions must match their resource scope.
 
+The Budget tab is now labeled **Finance**. Its existing syntax identifiers remain `budget_page`, `budget.*` and `budget.add_expense(...)`; `app.page` also reports `budget_page` for Finance. Existing rules and saved data continue to work.
+
 The authoritative field catalog is `RuleCatalog.fields` in `lib/rule_language.dart`; completion uses it directly. It exposes session activity/type/note/count/duration/today's time; budget income/expenses/savings/net/currency/goal/counts/latest dated transaction details; calendar date/view; appearance/sound; activity count/latest action/title; location enablement/name/coordinates/accuracy/sample age; purchase detection and notification permission; battery, charging, connectivity, media volume, ringer mode and orientation; current page and foreground state.
 
 `data.get("settings.someNewPreference")` reads any exported saved preference. Generic preferences are strings, so compare against double-quoted values. For example `data.get("settings.clockFormat") == "12"`. Internal automation programs and pending receipt/toast transport are excluded. New saved settings automatically appear in completion; new feature data must be registered in the shared catalog/snapshot.

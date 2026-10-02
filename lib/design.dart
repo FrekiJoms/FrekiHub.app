@@ -582,7 +582,7 @@ class _PillNavigationState extends State<PillNavigation>
   Rect? from, target;
   OverlayEntry? menu;
   int? hovered;
-  static const labels = ['Today', 'Calendar', 'Sessions', 'Budget'];
+  static const labels = ['Today', 'Calendar', 'Sessions', 'Finance'];
   static const icons = [
     LucideIcons.clock3,
     LucideIcons.calendarDays,

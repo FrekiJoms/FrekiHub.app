@@ -275,7 +275,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Budget totals and charts use this currency. Calendar records keep their original currency.',
+                'Finance totals and charts use this currency. Calendar records keep their original currency.',
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(c).colorScheme.onSurfaceVariant,

@@ -582,7 +582,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               SizedBox(
                 width: 40,
                 child: Text(
-                  'Budget',
+                  'Finance',
                   style: TextStyle(fontSize: 9, color: colors.onSurfaceVariant),
                 ),
               ),

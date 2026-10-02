@@ -97,7 +97,7 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
         'session.continue': ('session.continue();', 'Keep the session running'),
         'budget.add_expense': (
           'budget.add_expense(100, "PHP", "Food", "Lunch");',
-          'Record a budget expense',
+          'Record an expense in Finance',
         ),
         'settings.set_theme': (
           'settings.set_theme("dark");',

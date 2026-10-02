@@ -242,7 +242,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     }
     final days = timeline.keys.toList()..sort();
     return PageBody(
-      title: 'Budget.',
+      title: 'Finance.',
       subtitle: 'Your money, clearly',
       action: IconButton(
         tooltip: 'Add transaction',
