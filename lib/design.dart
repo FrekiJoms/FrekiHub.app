@@ -503,15 +503,26 @@ class PageBody extends StatelessWidget {
               child: header,
             ),
             Expanded(
-              child: ListView(
-                key: PageStorageKey(title),
-                padding: EdgeInsets.fromLTRB(
-                  horizontal,
-                  16,
-                  horizontal,
-                  126 + MediaQuery.paddingOf(c).bottom,
+              child: ShaderMask(
+                blendMode: BlendMode.dstIn,
+                shaderCallback: (bounds) =>
+                    const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.white],
+                    ).createShader(
+                      Rect.fromLTWH(bounds.left, bounds.top, bounds.width, 28),
+                    ),
+                child: ListView(
+                  key: PageStorageKey(title),
+                  padding: EdgeInsets.fromLTRB(
+                    horizontal,
+                    16,
+                    horizontal,
+                    126 + MediaQuery.paddingOf(c).bottom,
+                  ),
+                  children: content,
                 ),
-                children: content,
               ),
             ),
           ],

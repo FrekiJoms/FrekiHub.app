@@ -299,23 +299,6 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
           )
         else
           ...recent.take(3).map((s) => sessionTile(c, ref, d, s)),
-        Surface(
-          child: Row(
-            children: [
-              const Icon(LucideIcons.hardDrive, size: 20),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  'Private by default. Your hours and money stay on this phone.',
-                  style: TextStyle(
-                    color: Theme.of(c).colorScheme.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ],
     );
   }
