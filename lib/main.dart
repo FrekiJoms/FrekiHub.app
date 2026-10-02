@@ -7,6 +7,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'data.dart';
+import 'automation_sync.dart';
 import 'design.dart';
 import 'screens.dart';
 import 'services.dart';
@@ -67,15 +68,22 @@ class _AppShellState extends ConsumerState<AppShell>
   int lastTab = 0;
   double slideDirection = 1;
   String? lastRunning;
+  Timer? automationTimer;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     unawaited(reconcile());
+    automationTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(reconcile());
+      }
+    });
   }
 
   Future<void> reconcile() async {
     try {
+      await AutomationSync.reconcile(ref.read(databaseProvider));
       final pending = await NativeSession.pending();
       if (pending != null) {
         await ref
@@ -99,6 +107,7 @@ class _AppShellState extends ConsumerState<AppShell>
 
   @override
   void dispose() {
+    automationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

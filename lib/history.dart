@@ -236,6 +236,25 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         icon: const Icon(LucideIcons.plus),
       ),
       children: [
+        if ((AutomationSync.config(widget.data)['rules'] as List? ?? [])
+            .isNotEmpty)
+          Surface(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(LucideIcons.workflow, size: 20),
+              title: const Text('Session conditions set'),
+              subtitle: Text(
+                widget.data.prefs['locationEnabled'] == 'true'
+                    ? 'Location automation enabled'
+                    : 'Location automation paused',
+              ),
+              trailing: const Icon(LucideIcons.chevronRight, size: 18),
+              onTap: withFeedback(
+                () => panel(c, const ActivitySheet(initialTab: 1)),
+              ),
+            ),
+          ),
         TextField(
           controller: search,
           onChanged: (_) => setState(() {}),

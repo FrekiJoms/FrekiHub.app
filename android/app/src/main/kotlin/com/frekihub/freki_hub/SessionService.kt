@@ -19,6 +19,7 @@ class SessionService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val prefs = getSharedPreferences("session", MODE_PRIVATE)
         if (intent?.action == "clockOut") {
+            Automation.prefs(this).edit().remove("activeRule").commit()
             val id = prefs.getString("id", null)
             if (id != null) prefs.edit().putString("pendingId", id).putLong("pendingEnd", System.currentTimeMillis()).remove("id").commit()
             stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY

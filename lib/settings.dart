@@ -77,6 +77,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         throw const FormatException('Backup exceeds the 20 MB limit.');
       }
       await ref.read(databaseProvider).restore(utf8.decode(bytes));
+      await NativeSession.channel.invokeMethod('automationReset');
+      await AutomationSync.configure(
+        await ref.read(databaseProvider).readAll(),
+      );
       await NativeSession.stop();
       final running = (await ref.read(databaseProvider).readAll()).running;
       if (running != null) {
@@ -128,6 +132,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (approved == true && mounted) {
       await guarded(context, () async {
         await ref.read(databaseProvider).clear();
+        await NativeSession.channel.invokeMethod('automationReset');
         await NativeSession.stop();
       }, success: 'All data cleared');
     }
@@ -141,6 +146,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: 'Settings.',
       subtitle: 'Settings',
       children: [
+        Surface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Column(
+            children: [
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.activity),
+                title: const Text('Activity logs'),
+                subtitle: const Text('Time, location and recorded actions'),
+                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                onTap: withFeedback(() => panel(c, const ActivitySheet())),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.workflow),
+                title: const Text('Conditions & automation'),
+                subtitle: const Text('If a condition matches, run an action'),
+                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                onTap: withFeedback(
+                  () => panel(c, const ActivitySheet(initialTab: 1)),
+                ),
+              ),
+            ],
+          ),
+        ),
         Surface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

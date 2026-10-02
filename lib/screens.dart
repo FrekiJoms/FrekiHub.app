@@ -25,6 +25,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data.dart';
+import 'automation_sync.dart';
 import 'design.dart';
 import 'services.dart';
 import 'theme_reveal.dart';
@@ -37,6 +38,7 @@ part 'budget.dart';
 part 'settings.dart';
 part 'forms.dart';
 part 'pickers.dart';
+part 'activity.dart';
 
 Future<void> guarded(
   BuildContext c,
@@ -156,9 +158,31 @@ Widget sessionTile(
       maxLines: 3,
       overflow: TextOverflow.ellipsis,
     ),
-    trailing: Text(
-      elapsed(durationOf(s)),
-      style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
+    trailing: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          elapsed(durationOf(s)),
+          style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
+        ),
+        if (s.note.startsWith('Automatic · '))
+          SizedBox(
+            height: 48,
+            child: TextButton(
+              onPressed: withFeedback(
+                () => panel(
+                  c,
+                  ActivitySheet(
+                    initialTab: 1,
+                    conditionName: s.note.substring('Automatic · '.length),
+                  ),
+                ),
+              ),
+              child: const Text('Condition', style: TextStyle(fontSize: 11)),
+            ),
+          ),
+      ],
     ),
   ),
 );

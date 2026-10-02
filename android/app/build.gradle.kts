@@ -49,5 +49,6 @@ flutter {
 }
 
 dependencies {
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("io.github.d4viddf:hyperisland_kit:0.4.0")
 }

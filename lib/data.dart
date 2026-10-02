@@ -120,8 +120,9 @@ class Preferences extends Table {
 @DriftDatabase(tables: [Sessions, Entries, Rules, Preferences])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'frekihub'));
+  AppDatabase.forTesting(super.executor);
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
@@ -129,8 +130,74 @@ class AppDatabase extends _$AppDatabase {
       await customStatement(
         'CREATE UNIQUE INDEX one_running_session ON sessions ((1)) WHERE ended IS NULL',
       );
+      await createActivityLogs();
+    },
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await createActivityLogs();
     },
   );
+  Future<void> createActivityLogs() async {
+    await customStatement(
+      'CREATE TABLE IF NOT EXISTS activity_logs (id TEXT PRIMARY KEY, time INTEGER NOT NULL, action TEXT NOT NULL, title TEXT NOT NULL, location TEXT NOT NULL, details TEXT NOT NULL)',
+    );
+    await customStatement(
+      'CREATE INDEX IF NOT EXISTS activity_logs_time ON activity_logs(time DESC)',
+    );
+    const enabled =
+        "COALESCE((SELECT value FROM preferences WHERE key = 'activityLogging'), 'false') = 'true'";
+    const place =
+        "CASE WHEN CAST(strftime('%s','now') AS INTEGER) * 1000 - CAST(COALESCE((SELECT value FROM preferences WHERE key = 'locationSampleTime'), '0') AS INTEGER) BETWEEN -1000 AND 120000 THEN COALESCE((SELECT value FROM preferences WHERE key = 'locationName'), 'Location unavailable') ELSE 'Location unavailable' END";
+    const position =
+        "COALESCE((SELECT value FROM preferences WHERE key = 'locationDetails'), '')";
+    for (final event in ['session_start', 'session_end', 'transaction']) {
+      final session = event != 'transaction';
+      final table = session ? 'sessions' : 'entries';
+      final when = event == 'session_end'
+          ? 'AFTER UPDATE OF ended ON sessions WHEN OLD.ended IS NULL AND NEW.ended IS NOT NULL AND $enabled'
+          : 'AFTER INSERT ON $table WHEN $enabled';
+      final time = event == 'session_start'
+          ? 'NEW.started'
+          : event == 'session_end'
+          ? 'NEW.ended'
+          : "CAST(strftime('%s','now') AS INTEGER) * 1000";
+      final action = event == 'session_start'
+          ? "'clock_in'"
+          : event == 'session_end'
+          ? "'clock_out'"
+          : 'NEW.kind';
+      final title = event == 'session_start'
+          ? "'Clocked in'"
+          : event == 'session_end'
+          ? "'Clocked out'"
+          : "CASE NEW.kind WHEN 'expense' THEN 'Purchased ' || CASE WHEN NEW.note != '' THEN NEW.note ELSE NEW.category END WHEN 'income' THEN 'Received income' ELSE 'Saved money' END";
+      final details = session
+          ? "json_object('kind', NEW.kind, 'note', NEW.note, 'position', $position)"
+          : "json_object('currency', NEW.currency, 'amount', NEW.amount, 'method', NEW.method, 'note', NEW.note, 'position', $position)";
+      await customStatement(
+        "CREATE TRIGGER IF NOT EXISTS log_$event $when BEGIN INSERT OR IGNORE INTO activity_logs VALUES ('$event:' || NEW.id, $time, $action, $title, $place, $details); END",
+      );
+    }
+  }
+
+  Stream<List<Map<String, dynamic>>> watchActivityLogs() => customSelect(
+    'SELECT * FROM activity_logs ORDER BY time DESC LIMIT 1000',
+    readsFrom: {preferences, sessions, entries},
+  ).watch().map((rows) => rows.map((r) => r.data).toList());
+  Future<void> addActivity(Map<String, dynamic> event) async {
+    await customStatement(
+      'INSERT OR IGNORE INTO activity_logs VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        event['id'],
+        event['time'],
+        event['action'],
+        event['title'],
+        event['location'] ?? 'Location unavailable',
+        jsonEncode(event),
+      ],
+    );
+    await pref('logRevision', DateTime.now().microsecondsSinceEpoch);
+  }
+
   Stream<AppData> watchAll() => customSelect(
     'SELECT (SELECT count(*) FROM sessions) + (SELECT count(*) FROM entries) + (SELECT count(*) FROM rules) + (SELECT count(*) FROM preferences) AS n',
     readsFrom: {sessions, entries, rules, preferences},
@@ -174,6 +241,7 @@ class AppDatabase extends _$AppDatabase {
         ),
       );
   Future<void> clear() => transaction(() async {
+    await customStatement('DELETE FROM activity_logs');
     await delete(entries).go();
     await delete(sessions).go();
     await delete(rules).go();
@@ -188,6 +256,9 @@ class AppDatabase extends _$AppDatabase {
       'entries': d.entries.map((e) => e.toJson()).toList(),
       'rules': d.rules.map((r) => r.toJson()).toList(),
       'preferences': d.prefs,
+      'activityLogs': (await customSelect(
+        'SELECT * FROM activity_logs ORDER BY time',
+      ).get()).map((r) => r.data).toList(),
     });
   }
 
@@ -208,6 +279,35 @@ class AppDatabase extends _$AppDatabase {
         .map((e) => Rule.fromJson(e as Map<String, dynamic>))
         .toList();
     final pp = Map<String, String>.from(raw['preferences'] as Map);
+    if (pp.containsKey('automation')) {
+      final config = jsonDecode(pp['automation']!);
+      if (config is! Map ||
+          config['rules'] != null && config['rules'] is! List ||
+          config['apps'] != null && config['apps'] is! List) {
+        throw const FormatException('Invalid automation settings.');
+      }
+      for (final rule in config['rules'] as List? ?? []) {
+        if (rule is! Map ||
+            rule['id'] is! String ||
+            rule['name'] is! String ||
+            rule['lat'] is! num ||
+            rule['lng'] is! num ||
+            !(rule['lat'] as num).isFinite ||
+            !(rule['lng'] as num).isFinite ||
+            (rule['lat'] as num).abs() > 90 ||
+            (rule['lng'] as num).abs() > 180 ||
+            rule['radius'] is! num ||
+            (rule['radius'] as num) < 100 ||
+            (rule['radius'] as num) > 1000 ||
+            !['continue', 'clock_out'].contains(rule['else']) ||
+            !['OJT', 'Work', 'Study', 'Personal'].contains(rule['kind'])) {
+          throw const FormatException('Invalid location condition.');
+        }
+      }
+      if ((config['apps'] as List? ?? []).any((a) => a is! String)) {
+        throw const FormatException('Invalid payment apps.');
+      }
+    }
     if (pp.containsKey('currency') &&
             !currencyDigits.containsKey(pp['currency']) ||
         pp.containsKey('theme') &&
@@ -292,6 +392,20 @@ class AppDatabase extends _$AppDatabase {
       }
       for (final p in pp.entries) {
         await pref(p.key, p.value);
+      }
+      for (final log in (raw['activityLogs'] as List? ?? const [])) {
+        final item = Map<String, dynamic>.from(log as Map);
+        await customStatement(
+          'INSERT INTO activity_logs VALUES (?, ?, ?, ?, ?, ?)',
+          [
+            item['id'],
+            item['time'],
+            item['action'],
+            item['title'],
+            item['location'],
+            item['details'],
+          ],
+        );
       }
     });
   }
