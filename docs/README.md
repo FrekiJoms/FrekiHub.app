@@ -15,6 +15,7 @@ For a new agent session, read [AGENTS.md](../AGENTS.md), [AGENT.md](../AGENT.md)
 | [Android runtime](ANDROID_RUNTIME.md) | Method channel, services, queues, permissions, notification delivery and closed-app behavior |
 | [Development](DEVELOPMENT.md) | Setup, checks, targeted test routing, device testing and troubleshooting |
 | [Application audit](APPLICATION_AUDIT.md) | Current evidence, page-by-page review, unresolved findings and verification gaps |
+| [Motion film](MOTION_FILM.md) | Product film storyboard, factual boundaries, original soundtrack and reproducible video source |
 | [Rule syntax](../RULE_SYNTAX.md) | User-facing grammar, commands, completion, schedules and limits |
 | [Agent guide](../AGENT.md) | Short onboarding and task-to-file routing |
 | [Agent instructions](../AGENTS.md) | Automatically discovered repository working rules |
