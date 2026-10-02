@@ -1,5 +1,7 @@
 # UI audit and applied changes
 
+This file preserves historical audit passes. For the current six-page architecture, fresh verification and unresolved findings, read [Application audit](docs/APPLICATION_AUDIT.md) and [App documentation](docs/APP_DOCUMENTATION.md). Old page counts, pending-feature statements and test totals below apply only to their original passes.
+
 ## Custom component pass
 
 - Today: timer dialogs inherit FrekiHub typography, neutral surfaces and rounded shapes; session forms use custom selection fields.
