@@ -157,7 +157,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              NumberValue(
+              FlipClock(
                 running == null ? elapsed(total) : elapsed(durationOf(running)),
                 size: 36,
               ),

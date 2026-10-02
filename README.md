@@ -54,3 +54,5 @@ In this Windows desktop execution environment, Java's default temp directory cau
 Calendar provides Year, Month, Week and Day views. The Sunday-first month grid collapses to the selected week using its drag handle; record dots can switch to labels. Weekly sessions use a 24-hour time grid, with budget entries above it. Daily cards list recorded sessions and transactions across all currencies. Tap a record to edit, or use the calendar add button for the selected date.
 
 Date and time inputs use themed wheel-picker sheets matching the original web app: month/day/year and hour/minute/AM-PM, five visible rows, a highlighted selection band, Cancel/Confirm, and selection feedback. Date limits remain enforced; cancelling leaves the form unchanged.
+
+The Today session timer uses individual split-flap digits with a two-stage 360 ms fold; unchanged digits and colon separators stay still. Reduced-motion settings update digits immediately. This display adds no dependency or per-second sound/haptic cues.

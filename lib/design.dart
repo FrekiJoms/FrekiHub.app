@@ -7,6 +7,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import 'services.dart';
+part 'flip_clock.dart';
 
 abstract final class Motion {
   static const curve = Cubic(.22, 1, .36, 1);
