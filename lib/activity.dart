@@ -150,6 +150,23 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       final latitude = double.tryParse(lat.text),
           longitude = double.tryParse(lng.text);
       final program = sourceMode ? RuleCompiler.compile(code.text) : null;
+      final hasSchedules = (program?['schedules'] as List? ?? []).isNotEmpty;
+      bool preciseReminders = true;
+      if (run && hasSchedules) {
+        final allowed =
+            await NativeSession.channel.invokeMethod<bool>(
+              'reminderPermission',
+            ) ??
+            false;
+        if (!allowed) {
+          throw StateError(
+            'Enable FrekiHub notifications before running reminders.',
+          );
+        }
+        final status = await NativeSession.channel
+            .invokeMapMethod<String, dynamic>('reminderStatus');
+        preciseReminders = status?['exact'] == true;
+      }
       final needsLocation = program == null || program['needsLocation'] == true;
       if (name.text.trim().isEmpty ||
           (needsLocation &&
@@ -219,7 +236,9 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
         toast(
           context,
           run
-              ? 'Rule running'
+              ? (hasSchedules && !preciseReminders
+                    ? 'Rule running · reminders may be delayed; use the clock icon for precise timing'
+                    : 'Rule running')
               : sourceMode
               ? 'Rule saved · paused'
               : 'Condition saved',

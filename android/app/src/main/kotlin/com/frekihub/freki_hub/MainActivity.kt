@@ -16,6 +16,11 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    override fun onResume() {
+        super.onResume()
+        // Re-arm after force-stop or changes to Android alarm access.
+        RuleNotifications.sync(this, restore = true)
+    }
     private var soundPool: SoundPool? = null
     private val soundIds = mutableMapOf<String, Int>()
     private val readySounds = mutableSetOf<Int>()
@@ -23,6 +28,7 @@ class MainActivity : FlutterActivity() {
     private var startData: Map<*, *>? = null
     private var locationResult: MethodChannel.Result? = null
     private var receiptPermissionResult: MethodChannel.Result? = null
+    private var reminderPermissionResult: MethodChannel.Result? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
@@ -68,6 +74,19 @@ class MainActivity : FlutterActivity() {
                     try { playSound(call.arguments as? String); result.success(null) }
                     catch (e: Exception) { result.error("sound", e.message, null) }
                 }
+                "reminderPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        if (reminderPermissionResult != null) result.error("busy", "A permission request is already open", null)
+                        else { reminderPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 76) }
+                    } else result.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+                }
+                "exactReminderPermission" -> {
+                    if (Build.VERSION.SDK_INT >= 31 && !RuleNotifications.exactAllowed(this)) {
+                        startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+                    }
+                    result.success(RuleNotifications.exactAllowed(this))
+                }
+                "reminderStatus" -> { result.success(mapOf("exact" to RuleNotifications.exactAllowed(this), "enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled())) }
                 "start" -> {
                     val data = call.arguments as Map<*, *>
                     if (prefs.getString("pendingId", null) != data["id"]) prefs.edit().putString("id", data["id"] as String).putLong("started", (data["started"] as Number).toLong()).commit()
@@ -139,5 +158,6 @@ class MainActivity : FlutterActivity() {
         }
         if (requestCode == 74) { locationResult?.success(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED); locationResult = null }
         if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }
+        if (requestCode == 76) { reminderPermissionResult?.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled()); reminderPermissionResult = null }
     }
 }

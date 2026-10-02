@@ -11,6 +11,7 @@ abstract final class RuleCatalog {
     'location.enabled',
     'notifications.purchases_enabled',
     'notifications.enabled',
+    'notifications.exact_allowed',
     'device.charging',
     'device.connected',
     'app.foreground',
@@ -76,6 +77,8 @@ abstract final class RuleCatalog {
     'location.name': 'Last sampled place name',
     'notifications.purchases_enabled': 'Purchase detection enabled',
     'notifications.enabled': 'Android notifications permitted',
+    'notifications.exact_allowed': 'Precise reminder scheduling permitted',
+    'notifications.schedule_count': 'Active notification schedules',
     'device.battery': 'Battery percentage',
     'device.charging': 'Device is charging',
     'device.connected': 'A network interface is connected',
@@ -246,6 +249,8 @@ class _Parser {
 
   Map<String, dynamic> parse() {
     final targets = <Map<String, dynamic>>[];
+    final schedules = <Map<String, dynamic>>[];
+    int blocks = 0;
     while (next != '<end>') {
       need('target');
       need('==');
@@ -255,6 +260,22 @@ class _Parser {
         fail('Unknown target "$target"');
       }
       need('{');
+      if (next == 'schedule') {
+        if (target != 'notifications') {
+          fail('Schedules require the notifications target');
+        }
+        while (take('schedule')) {
+          final value = schedule();
+          if (schedules.any((s) => s['name'] == value['name'])) {
+            fail('Schedule names must be unique within a rule');
+          }
+          schedules.add(value);
+          if (schedules.length > 16) fail('Use at most sixteen schedules');
+        }
+        need('}');
+        if (++blocks > 16) fail('Use at most sixteen target blocks');
+        continue;
+      }
       need('if');
       final branches = <Map<String, dynamic>>[];
       branches.add(branch(target));
@@ -271,15 +292,86 @@ class _Parser {
       }
       need('}');
       targets.add({'target': target, 'branches': branches});
-      if (targets.length > 16) fail('Use at most sixteen target blocks');
+      if (++blocks > 16) fail('Use at most sixteen target blocks');
     }
-    if (targets.isEmpty) fail('Add a target block');
+    if (blocks == 0) fail('Add a target block');
     return {
       'version': 1,
       'targets': targets,
+      if (schedules.isNotEmpty) 'schedules': schedules,
       'needsLocation': tokens.any(
         (t) => ['location.inside', 'location.outside'].contains(t.value),
       ),
+    };
+  }
+
+  Map<String, dynamic> schedule() {
+    need('(');
+    final name = string();
+    if (!RegExp(r'^[A-Za-z_][A-Za-z_0-9-]{0,63}$').hasMatch(name)) {
+      fail('Schedule name must be a unique identifier of 1–64 characters');
+    }
+    need(')');
+    need('{');
+    String? time, title, body;
+    bool daily = false;
+    int? count;
+    final seen = <String>{};
+    while (!take('}')) {
+      final command = next;
+      cursor++;
+      if (!seen.add(command)) fail('Duplicate schedule command "$command"');
+      need('(');
+      switch (command) {
+        case 'at':
+          time = string();
+          if (!RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(time)) {
+            fail('Use a valid 24-hour time such as "08:00"');
+          }
+        case 'repeat.daily':
+          daily = true;
+        case 'repeat.forever':
+          if (count != null) fail('Choose count or forever, not both');
+          count = -1;
+        case 'repeat.count':
+          if (count != null) fail('Choose count or forever, not both');
+          count = int.tryParse(next);
+          if (count == null || count < 1 || count > 10000) {
+            fail('Repeat count must be an integer from 1 to 10,000');
+          }
+          cursor++;
+        case 'notification.show':
+          title = string();
+          need(',');
+          body = string();
+          if (title.trim().isEmpty ||
+              title.length > 100 ||
+              body.trim().isEmpty ||
+              body.length > 500) {
+            fail(
+              'Use a title of 1–100 characters and body of 1–500 characters',
+            );
+          }
+        default:
+          fail('Unknown schedule command "$command"');
+      }
+      need(')');
+      need(';');
+    }
+    if (time == null || title == null) {
+      fail('A schedule needs at() and notification.show()');
+    }
+    if (daily && count == null) {
+      fail('Daily repeats need repeat.count() or repeat.forever()');
+    }
+    if (!daily && count != null) fail('Repeating requires repeat.daily()');
+    return {
+      'name': name,
+      'time': time,
+      'daily': daily,
+      'count': count ?? 1,
+      'title': title,
+      'body': body,
     };
   }
 

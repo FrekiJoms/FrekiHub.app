@@ -4,6 +4,36 @@ Open Settings → Conditions & automation, select a saved rule or enable Structu
 
 The compiler produces a bounded JSON program. Android interprets this program; source is never executed as JavaScript.
 
+## Scheduled system notifications
+
+Schedules run independently of conditional branch changes and work with the app closed. Put them in a `notifications` target block. A rule can also contain separate conditional target blocks.
+
+```javascript
+target == notifications {
+  schedule("morning_reminder") {
+    at("08:00");
+    repeat.daily();
+    repeat.count(10);
+    notification.show("Session reminder", "Time to clock in");
+  }
+}
+```
+
+- `schedule("name") { ... }`: unique identifier within the rule, 1–64 letters/digits/underscores/hyphens, starting with a letter or underscore.
+- `at("HH:mm");`: required local 24-hour time. Starts at the next occurrence; a time already passed starts tomorrow.
+- `repeat.daily();`: repeat each local calendar day at the specified time.
+- `repeat.count(10);`: total successful notification deliveries, including the first; integer 1–10,000.
+- `repeat.forever();`: unlimited repeats until stopped. Use this instead of `repeat.count()`.
+- `notification.show("Title", "Body");`: required title (1–100 characters) and body (1–500 characters).
+
+For a one-time reminder, omit all `repeat.*` commands. For daily repetition, specify `repeat.daily()` and exactly one of `repeat.count()` or `repeat.forever()`. Command order is flexible; duplicate commands are rejected. Up to 16 schedules per rule are supported.
+
+Run requests notification permission and activates the schedules. Stop/deletion cancels their pending alarms. Stop followed by Run, or changing the rule source, starts a fresh repeat count. Context updates and reopening the app preserve the count. Completed schedules remain saved but inactive. Reminders restore after reboot, app updates, clock/time-zone changes and reopening after force-stop. Missed occurrences are skipped instead of replayed in a burst. Notification permission/channel denial consumes no repeat count; delivery retries at the next local occurrence.
+
+The editor's clock icon opens Android's Alarms & reminders access. With access granted, schedules use precise alarms; otherwise they use Android's inexact fallback and may be delayed. Android battery restrictions and force-stop can prevent delivery; reopening restores the next occurrence. Reminder delivery does not depend on the 15-minute rule evaluation job.
+
+Observable fields: `notifications.exact_allowed` (boolean) and `notifications.schedule_count` (number of active schedules). Sent reminders appear in activity logs when logging is enabled.
+
 ```javascript
 target == session_page {
   if (location.inside() && weekday.in(["Mon", "Tue", "Wed", "Thu", "Fri"])) {

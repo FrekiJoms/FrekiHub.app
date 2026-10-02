@@ -12,6 +12,43 @@ import 'package:freki_hub/services.dart';
 
 void main() {
   testWidgets(
+    'Notification completion inserts valid schedules and repeat commands',
+    (tester) async {
+      final controller = TextEditingController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RuleCodeEditor(
+              controller: controller,
+              running: false,
+              busy: false,
+              run: () {},
+              stop: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.enterText(find.byType(TextField), 'target == notif');
+      await tester.pump();
+      await tester.tap(find.text('notifications'));
+      await tester.pump();
+      final schedules =
+          RuleCompiler.compile(controller.text)['schedules'] as List;
+      expect(schedules.single['count'], -1);
+      await tester.enterText(
+        find.byType(TextField),
+        'target == notifications { schedule("test") { at("08:00"); repeat.co',
+      );
+      await tester.pump();
+      expect(find.text('repeat.count'), findsOneWidget);
+      await tester.tap(find.text('repeat.count'));
+      await tester.pump();
+      expect(controller.text, contains('repeat.count(10);'));
+      await tester.pumpWidget(const SizedBox());
+      controller.dispose();
+    },
+  );
+  testWidgets(
     'Completion offers targets and Run/Stop changes the saved enabled flag',
     (tester) async {
       final controller = TextEditingController();

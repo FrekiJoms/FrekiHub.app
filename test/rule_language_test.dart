@@ -3,6 +3,60 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Compiles one-time, counted and unlimited notification schedules', () {
+    final program = RuleCompiler.compile('''
+target == notifications {
+  schedule("once") { at("23:59"); notification.show("Reminder", "One time"); }
+  schedule("ten_days") { notification.show("Work", "Clock in"); repeat.count(10); repeat.daily(); at("08:00"); }
+  schedule("forever") { at("00:00"); repeat.daily(); repeat.forever(); notification.show("Daily", "Keep going"); }
+}
+target == app { if (notifications.schedule_count > 0 && notifications.exact_allowed == true) { log("Reminders active"); } }
+''');
+    final schedules = program['schedules'] as List;
+    expect(schedules.length, 3);
+    expect(schedules[0]['count'], 1);
+    expect(schedules[0]['daily'], false);
+    expect(schedules[1]['count'], 10);
+    expect(schedules[1]['daily'], true);
+    expect(schedules[2]['count'], -1);
+    expect(program['needsLocation'], false);
+  });
+  test('Rejects ambiguous schedules, invalid times and repeat counts', () {
+    for (final commands in [
+      'at("24:00"); notification.show("A", "B");',
+      'at("8:00"); notification.show("A", "B");',
+      'at("08:00"); repeat.daily(); notification.show("A", "B");',
+      'at("08:00"); repeat.count(2); notification.show("A", "B");',
+      'at("08:00"); repeat.daily(); repeat.count(0); notification.show("A", "B");',
+      'at("08:00"); repeat.daily(); repeat.count(1.5); notification.show("A", "B");',
+      'at("08:00"); repeat.daily(); repeat.count(10001); notification.show("A", "B");',
+      'at("08:00"); repeat.daily(); repeat.forever(); repeat.count(2); notification.show("A", "B");',
+      'at("08:00"); at("09:00"); notification.show("A", "B");',
+      'notification.show("A", "B");',
+      'at("08:00"); notification.show("", "B");',
+      'at("08:00"); notification.show("A", "B")',
+    ]) {
+      expect(
+        () => RuleCompiler.compile(
+          'target == notifications { schedule("test") { $commands } }',
+        ),
+        throwsFormatException,
+        reason: commands,
+      );
+    }
+    expect(
+      () => RuleCompiler.compile(
+        'target == app { schedule("test") { at("08:00"); notification.show("A", "B"); } }',
+      ),
+      throwsFormatException,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == notifications { schedule("same") { at("08:00"); notification.show("A", "B"); } schedule("same") { at("09:00"); notification.show("A", "B"); } }',
+      ),
+      throwsFormatException,
+    );
+  });
   test('Compiles targets, precedence, arrays, else-if and scoped actions', () {
     final program = RuleCompiler.compile('''
 // Workday timer

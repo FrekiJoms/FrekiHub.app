@@ -57,7 +57,9 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
     if (RegExp(r'target\s*==\s*[A-Za-z_]*$').hasMatch(before)) {
       for (final target in RuleCatalog.targets) {
         choices[target] = (
-          '$target {\n  if (true) {\n    log("Message");\n  }\n}',
+          target == 'notifications'
+              ? '$target {\n  schedule("daily_reminder") {\n    at("08:00");\n    repeat.daily();\n    repeat.forever();\n    notification.show("Reminder", "Message");\n  }\n}'
+              : '$target {\n  if (true) {\n    log("Message");\n  }\n}',
           'Target $target',
         );
       }
@@ -159,6 +161,31 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
             key == 'budget.add_expense' && target != 'budget_page' ||
             key.startsWith('settings.set_') && target != 'settings_page';
       });
+      if (target == 'notifications' && !inCondition) {
+        final inSchedule =
+            before.lastIndexOf('schedule(') > before.lastIndexOf('}');
+        if (inSchedule) {
+          choices.clear();
+          choices.addAll({
+            'at': ('at("08:00");', 'Local 24-hour delivery time'),
+            'repeat.daily': ('repeat.daily();', 'Repeat each local day'),
+            'repeat.forever': ('repeat.forever();', 'Repeat until stopped'),
+            'repeat.count': (
+              'repeat.count(10);',
+              'Total successful deliveries, including the first',
+            ),
+            'notification.show': (
+              'notification.show("Reminder", "Message");',
+              'System notification title and body',
+            ),
+          });
+        } else {
+          choices['schedule'] = (
+            'schedule("daily_reminder") {\n  at("08:00");\n  repeat.daily();\n  repeat.forever();\n  notification.show("Reminder", "Message");\n}',
+            'Create a scheduled notification',
+          );
+        }
+      }
     }
     return choices.entries.where((e) => e.key.startsWith(query)).take(8).map((
       entry,
@@ -193,6 +220,27 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
               icon: const Icon(LucideIcons.plus, size: 18),
               onPressed: withFeedback(widget.create),
             ),
+          IconButton(
+            tooltip: 'Allow precise reminders',
+            icon: const Icon(LucideIcons.clock, size: 18),
+            onPressed: widget.busy
+                ? null
+                : withFeedback(() {
+                    guarded(c, () async {
+                      final allowed =
+                          await NativeSession.channel.invokeMethod<bool>(
+                            'exactReminderPermission',
+                          ) ??
+                          false;
+                      if (c.mounted) {
+                        toast(
+                          c,
+                          allowed ? 'Precise reminders enabled' : 'Allow alarms & reminders, then return to FrekiHub',
+                        );
+                      }
+                    });
+                  }),
+          ),
           IconButton(
             tooltip: 'Validate syntax',
             icon: const Icon(LucideIcons.check, size: 18),

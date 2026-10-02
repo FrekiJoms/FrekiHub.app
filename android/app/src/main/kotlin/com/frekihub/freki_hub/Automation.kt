@@ -34,7 +34,7 @@ object Automation {
         payload.remove("snapshot")
         val json = payload.toString()
         val fingerprint = json + ":" + allowed(c)
-        if (prefs(c).getString("configured", null) == fingerprint) { RuleProgram.refresh(c); return }
+        if (prefs(c).getString("configured", null) == fingerprint) { RuleNotifications.sync(c); RuleProgram.refresh(c); return }
         val previousConfig = config(c)
         val nextConfig = JSONObject(json)
         val previousRules = previousConfig.optJSONArray("rules") ?: JSONArray()
@@ -50,6 +50,7 @@ object Automation {
             if (!previousConfig.optBoolean("locationEnabled") || old == null || old.optJSONObject("program")?.toString() != rule.optJSONObject("program")?.toString() || old.optDouble("lat") != rule.optDouble("lat") || old.optDouble("lng") != rule.optDouble("lng") || old.optDouble("radius") != rule.optDouble("radius")) prefs(c).edit().remove("inside:" + rule.getString("id")).commit()
         }
         prefs(c).edit().putString("config", json).commit()
+        RuleNotifications.sync(c)
         val config = config(c)
         val intent = PendingIntent.getBroadcast(c, 91, Intent(c, ZoneReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
         val client = LocationServices.getGeofencingClient(c)
@@ -157,7 +158,12 @@ class LocationLogJob : JobService() {
     override fun onStopJob(params: JobParameters) = true
 }
 class AutomationBootReceiver : BroadcastReceiver() {
-    override fun onReceive(c: Context, intent: Intent) { Automation.prefs(c).edit().remove("configured").commit(); Automation.configure(c, Automation.config(c).toString()) }
+    override fun onReceive(c: Context, intent: Intent) {
+        if (intent.action !in listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_MY_PACKAGE_REPLACED, "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED")) return
+        Automation.prefs(c).edit().remove("configured").commit()
+        Automation.configure(c, Automation.config(c).toString())
+        RuleNotifications.sync(c, restore = true)
+    }
 }
 class PurchaseListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {

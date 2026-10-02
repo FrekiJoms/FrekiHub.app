@@ -87,6 +87,8 @@ object RuleProgram {
             values.put("session.today_seconds", values.optLong("session.today_seconds") + maxOf(0, (System.currentTimeMillis() - values.optLong("_sampleTime", System.currentTimeMillis())) / 1000))
         }
         values.put("notifications.enabled", c.getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+        values.put("notifications.exact_allowed", RuleNotifications.exactAllowed(c))
+        values.put("notifications.schedule_count", RuleNotifications.count(c))
         val battery = c.registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         if (battery != null) {
             val level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1); val scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
