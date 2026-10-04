@@ -115,6 +115,10 @@ The focused device checklist covers cold open/reopen/Retry, light/dark and enlar
 
 ### Capture an Android UI error without rebuilding
 
+For the easiest Windows workflow, open the installed app on the connected phone, then run `./tools/debug-logs.ps1` from the project root. Reproduce the error and press Ctrl+C. The script selects the only authorized device, captures only FrekiHub's process and saves timestamped output under ignored `.tmp/logs`. If both a phone and emulator are connected, pass `-DeviceId DEVICE_ID`. Restart capture after a process restart; its PID filter belongs to the process that was running at capture start. This does not build, install or clear anything.
+
+An emulator can use the same log capture, but requires an installed Android 15/API 35-or-newer system image for this app. Before installing one, check disk space, memory and [hardware acceleration](https://developer.android.com/studio/run/emulator-acceleration). The emulator requires at least 5 GB free at startup **after** SDK/image/virtual-device installation, per [Android troubleshooting](https://developer.android.com/studio/run/emulator-troubleshooting). Do not install it into insufficient storage or delete personal files to create space. Emulator permission/location tests do not verify Xiaomi HyperIsland or OEM background behavior.
+
 Settings activity logs contain saved actions, not Flutter exception stack traces. Connect the phone with USB debugging, authorize the computer, open FrekiHub and capture [Android Logcat](https://developer.android.com/tools/logcat) in PowerShell from the project root:
 
 ```powershell
