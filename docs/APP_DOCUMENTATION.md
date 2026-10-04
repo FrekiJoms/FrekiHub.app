@@ -4,7 +4,7 @@ This is the current product and implementation reference, reviewed on 2026-10-02
 
 ## Product and scope
 
-FrekiHub records session time, personal income/expenses/savings, recurring finance plans, optional activity/location logs and local Android automations. It opens into Today without an account, server connection or sample records. Core storage and calculations work locally. The basemap requires network tiles; there is no remote record synchronization or currency conversion.
+FrekiHub records session time, personal income/expenses/savings, recurring finance plans, optional activity/location logs and local Android automations. It opens into Home without an account, server connection or sample records. Core storage and calculations work locally. The basemap requires network tiles; there is no remote record synchronization or currency conversion.
 
 The current work targets Android 15 (API 35) or newer, matching the minimum declared by HyperIsland ToolKit 0.4.0, including Xiaomi HyperOS integration where supported. Legacy iOS ActivityKit sources remain in the repository but were not built or tested in this audit. Their presence does not imply Android location, purchase or reminder features work on iOS.
 
@@ -14,24 +14,26 @@ The current work targets Android 15 (API 35) or newer, matching the minimum decl
 
 | Index | Visible name | Entry | Widget / target |
 | --- | --- | --- | --- |
-| 0 | Today | Bottom tab | `TodayScreen` / `session_page` |
+| 0 | Home | Bottom tab | `TodayScreen` / `session_page` |
 | 1 | Map | Bottom tab | `MapScreen` / `map_page` |
 | 2 | Sessions | Bottom tab | `HistoryScreen` / `sessions_page` |
 | 3 | Finance | Bottom tab | `BudgetScreen` / `budget_page` |
 | 4 | Settings | Fixed upper-right circle | `SettingsScreen` / `settings_page` |
 | 5 | Calendar | Fixed upper-left circle | `CalendarScreen` / `calendar_page` |
 
+Home (formerly Today) uses the Lucide house icon in the bottom tab and the heading “Home.”. Its implementation remains `TodayScreen` in `today.dart`, with the existing `session_page` automation target.
+
 Calendar and Settings toggle back to the last bottom tab. Navigation uses direction-aware slide/fade transitions and an elastic selected pill. Outgoing pages ignore touches and pause tickers during the transition. This is an `AnimatedSwitcher`, not an always-mounted tab stack; screen-local selections may reset on leaving a page. Persisted preferences and database records survive. Do not assume Android Back represents a stack of tab changes.
 
 Hold the bottom center to reveal quick-add actions, drag over an action and release to choose it; releasing outside cancels. Actions cover session/log entry, expense, income, savings and finance planner rules. The shared navigation also exposes accessible quick-add actions. There is no central plus tab.
 
-## Today and active sessions
+## Home and active sessions
 
-Today shows the analog clock, a split-flap elapsed timer, session note input, clock-in/out control, current-day totals, recent records and an informational offline state. Timer digits update separately from the page; unchanged digits do not animate. The analog clock has a repaint boundary. Reduced motion suppresses smooth hand/flip transitions while keeping the clock updating once per second. Today samples local device time at second boundaries and immediately on app resume; its date, accessibility time label, elapsed display and daily total follow the same sample. Normal-motion analog hands continue moving smoothly between samples. Time changes are sampled again rather than accumulated as timer counts.
+Home shows the analog clock, a split-flap elapsed timer, session note input, clock-in/out control, current-day totals, recent records and an informational offline state. Timer digits update separately from the page; unchanged digits do not animate. The analog clock has a repaint boundary. Reduced motion suppresses smooth hand/flip transitions while keeping the clock updating once per second. Home samples local device time at second boundaries and immediately on app resume; its date, accessibility time label, elapsed display and daily total follow the same sample. Normal-motion analog hands continue moving smoothly between samples. Time changes are sampled again rather than accumulated as timer counts.
 
-Today's compact centered heading and date stay fixed between the floating Calendar/Settings shortcuts, outside the scrolling content viewport. Its fitted balance pill scrolls with the content and shows all-time recorded income minus expenses and savings in the selected currency, with the same value exposed as `budget.balance`. While idle, the flip display shows live device time including seconds and respects the 12/24-hour preference; during a session it shows elapsed time. Today's recorded total remains separate. Page-top add buttons are removed; the bottom long-press quick-add gesture and context-specific inline add actions remain available.
+Home's compact centered heading and date stay fixed between the floating Calendar/Settings shortcuts, outside the scrolling content viewport. Its fitted balance pill scrolls with the content and shows all-time recorded income minus expenses and savings in the selected currency, with the same value exposed as `budget.balance`. While idle, the flip display shows live device time including seconds and respects the 12/24-hour preference; during a session it shows elapsed time. Today's recorded total remains separate. Page-top add buttons are removed; the bottom long-press quick-add gesture and context-specific inline add actions remain available.
 
-The top 28 px of Today's scrolling viewport fades to transparency beneath the fixed header. This uses one static alpha mask, without an animation controller or blur; it does not intercept touches or affect the header. The former bottom privacy reminder card is removed.
+The top 28 px of Home's scrolling viewport fades to transparency beneath the fixed header. This uses one static alpha mask, without an animation controller or blur; it does not intercept touches or affect the header. The former bottom privacy reminder card is removed.
 
 Manual clock-in creates an OJT session through `AppDatabase.clockIn`. It rejects an existing running session or any session already assigned to today's date. This is stricter than the database's one-running-session constraint: manual forms and native automatic imports use other write paths and can create multiple completed records on one day. Preserve that distinction or deliberately change it across paths.
 
@@ -127,7 +129,7 @@ The native queue and pending receipts are transport state, not rule source. Flut
 | `lib/screens.dart` | Shared screen imports/parts, guarded operations, session tiles and quick add |
 | `lib/design.dart` | Design tokens, surfaces/chrome, page layout, motion, navigation, sheets, toasts |
 | `lib/controls.dart`, `lib/pickers.dart` | Custom choice sheets/selectors and wheel date/time pickers |
-| `lib/today.dart`, `lib/flip_clock.dart` | Today, analog clock and elapsed split-flap display |
+| `lib/today.dart`, `lib/flip_clock.dart` | Home, analog clock and elapsed split-flap display |
 | `lib/history.dart`, `lib/calendar.dart`, `lib/budget.dart` | Sessions, calendar and Finance pages |
 | `lib/map.dart`, `lib/map_records.dart` | Map UI, filters, selection, freshness and range parsing |
 | `lib/settings.dart`, `lib/forms.dart` | Settings, list management, backup/reset, session/entry/planner forms |

@@ -4,7 +4,7 @@
 
 Read `AGENT.md`, `docs/APP_DOCUMENTATION.md` and the current findings in `docs/APPLICATION_AUDIT.md` before broad code exploration. Use `docs/README.md` to select the relevant specialist reference, then inspect only affected source/tests before editing. Documentation provides orientation, not permission to edit uninspected code. Check Git status and preserve unrelated changes.
 
-Android is the current target. Six page surfaces are Today, Map, Sessions, Finance, Calendar and Settings; bottom tabs are Today/Map/Sessions/Finance. Calendar and Settings are fixed upper-left/upper-right shortcuts. Logs and the syntax builder are Settings sheets. Preserve `budget_page`, `budget.*`, `BudgetScreen` and native `budget` destinations despite the visible Finance label.
+Android is the current target. Six page surfaces are Home, Map, Sessions, Finance, Calendar and Settings; bottom tabs are Home/Map/Sessions/Finance. Calendar and Settings are fixed upper-left/upper-right shortcuts. Logs and the syntax builder are Settings sheets. Preserve `budget_page`, `budget.*`, `BudgetScreen` and native `budget` destinations despite the visible Finance label.
 
 ## Feature integration
 

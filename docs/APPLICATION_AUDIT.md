@@ -149,3 +149,9 @@ F01 debug release signing, F02 queued closed-Flutter purchases, F03 swallowed na
 - Changed documentation's local links and `git diff --check`: passed.
 - New feedback coverage checks both motion settings, 320×480 at 2× text with a status-bar inset, replacement without stale-timer dismissal, explicit/automatic dismissal, invalid transaction remaining editable with no insert, and invalid syntax retaining line/column diagnostics without running.
 - Tests use in-memory storage and simulated widget/platform inputs. Existing Map tests use memory tiles. Real phone visuals, screen-reader announcements, keyboard/landscape combinations, OS permission flows, background delivery, live payment capture and large-history performance remain device gaps.
+
+## Home naming follow-up — 2026-10-04
+
+Today is now labeled Home in the bottom navigation, its accessibility label and the fixed page heading. The tab uses the Lucide house icon. `TodayScreen`, `today.dart` and `session_page` remain the implementation and automation identifiers; the daily “Today’s total” label retains its date meaning.
+
+Verification: Flutter analysis passed; the existing navigation gesture test and all four layout tests passed. The layout header-date finder now matches full weekday names so a recent-record date cannot make its fixed-header assertion ambiguous. Flutter attached to the connected Android debug app after reopening it to recover VM-service discovery. Hot reload confirmed two updated libraries; the on-device accessibility hierarchy confirmed “Home.” and the Home tab. No APK build/install or data clearing was performed. The debug session stays attached for subsequent design review; this naming check is not a performance or background-lifecycle measurement.

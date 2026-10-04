@@ -131,7 +131,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
     return PageBody(
-      title: 'Today.',
+      title: 'Home.',
       subtitle: DateFormat('EEEE, d MMMM').format(tick.value),
       compactHeader: true,
       children: [

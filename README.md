@@ -1,13 +1,13 @@
 # FrekiHub
 
-FrekiHub is an Android-first Flutter app for session time, personal finance, optional location/activity logs and local automations. It opens into Today without an account or sample records and keeps saved records in SQLite on the phone.
+FrekiHub is an Android-first Flutter app for session time, personal finance, optional location/activity logs and local automations. It opens into Home without an account or sample records and keeps saved records in SQLite on the phone.
 
 > [!NOTE]
 > Core records work locally. Map tiles need internet; Android background features depend on permissions and system restrictions. Purchases detected while Flutter is closed queue until reconciliation. No backend, server push, AI purchase parser or currency conversion is configured.
 
 ## Features
 
-- **Today:** analog clock, split-flap session timer, notes, clock-in/out, recent sessions, offline indicator and native running notification with Xiaomi HyperIsland fallback.
+- **Home:** analog clock, split-flap session timer, notes, clock-in/out, recent sessions, offline indicator and native running notification with Xiaomi HyperIsland fallback.
 - **Map:** full-view map, fixed glass controls, day/week/month/year/custom filters, colored located records, expandable details and chronological sample traces.
 - **Sessions:** searchable/sortable phone list or table, custom filters, resizable remembered columns, editing and confirmed bulk deletion.
 - **Finance:** income/expenses/savings, currency-specific totals, safe-to-spend, savings goals, charts, recurring planner rules and expected/actual timeline.
@@ -15,7 +15,7 @@ FrekiHub is an Android-first Flutter app for session time, personal finance, opt
 - **Settings:** appearance, categories/payment methods, interaction sounds, Android notification sounds, logs, conditions, JSON backup/restore and confirmed reset.
 - **Automation:** beginner location conditions, typed structured editor with completion/errors, Run/Stop, scoped actions, conditional notifications and local one-time/daily/selected-weekday reminders.
 
-Bottom tabs are **Today, Map, Sessions and Finance**. Calendar sits in the fixed upper-left circle; Settings sits upper-right. Long-press the bottom center for quick add. Finance keeps its existing `budget_page` and `budget.*` rule identifiers for compatibility.
+Bottom tabs are **Home, Map, Sessions and Finance**. Calendar sits in the fixed upper-left circle; Settings sits upper-right. Long-press the bottom center for quick add. Finance keeps its existing `budget_page` and `budget.*` rule identifiers for compatibility.
 
 ## Technology
 
