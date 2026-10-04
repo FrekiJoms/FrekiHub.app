@@ -19,9 +19,7 @@ class LogsSheet extends ConsumerWidget {
     return PanelContent(
       header: const PanelHeading(title: 'Activity logs'),
       scrollable: true,
-      child: data == null
-          ? const Center(child: CircularProgressIndicator())
-          : logs(context, ref, data),
+      child: data == null ? const SkeletonList() : logs(context, ref, data),
     );
   }
 
@@ -45,7 +43,8 @@ class LogsSheet extends ConsumerWidget {
             value: data.prefs['activityLogging'] == 'true',
             onChanged: (v) => toggle(c, ref, v),
           ),
-          if (events.isEmpty)
+          if (!snapshot.hasData) const SkeletonList(scrollable: false),
+          if (snapshot.hasData && events.isEmpty)
             const EmptyState(
               'No activity yet',
               'Enable logging to record new actions.',

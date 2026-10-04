@@ -9,6 +9,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool busy = false;
+  String? busyAction;
   Offset themeOrigin = const Offset(160, 230);
   Future<void> changeTheme(String mode) async {
     ActionFeedback.tap(transition: true);
@@ -52,7 +53,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> backup() async {
-    setState(() => busy = true);
+    setState(() {
+      busy = true;
+      busyAction = 'backup';
+    });
     await guarded(context, () async {
       final source = await ref.read(databaseProvider).backup();
       final directory = await getTemporaryDirectory();
@@ -79,7 +83,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> restore() async {
     if (busy) return;
-    setState(() => busy = true);
+    setState(() {
+      busy = true;
+      busyAction = 'restore';
+    });
     List<PlatformFile> picked = [];
     await guarded(context, () async {
       picked = await FilePicker.pickFiles(
@@ -102,7 +109,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (!mounted) {
       return;
     }
-    setState(() => busy = true);
+    setState(() {
+      busy = true;
+      busyAction = 'restore';
+    });
     await guarded(context, () async {
       final file = picked.single;
       if ((await file.length() ?? 0) > 20 * 1024 * 1024) {
@@ -374,13 +384,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               FilledButton.icon(
                 onPressed: withFeedback(busy ? null : backup),
                 icon: const Icon(LucideIcons.download, size: 18),
-                label: const Text('Export everything'),
+                label: SkeletonValue(
+                  loading: busy && busyAction == 'backup',
+                  semanticsLabel: 'Exporting backup',
+                  child: const Text('Export everything'),
+                ),
               ),
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: withFeedback(busy ? null : restore),
                 icon: const Icon(LucideIcons.upload, size: 18),
-                label: const Text('Restore a backup'),
+                label: SkeletonValue(
+                  loading: busy && busyAction == 'restore',
+                  semanticsLabel: 'Restoring backup',
+                  child: const Text('Restore a backup'),
+                ),
               ),
               const SizedBox(height: 16),
               TextButton(
@@ -430,6 +448,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
   late List<String> items;
   final name = TextEditingController();
   bool saving = false;
+  String? savingItem;
   @override
   void initState() {
     super.initState();
@@ -444,7 +463,12 @@ class _ManageListState extends ConsumerState<_ManageList> {
 
   Future<void> save(List<String> next, {bool clearName = false}) async {
     if (saving) return;
-    setState(() => saving = true);
+    setState(() {
+      saving = true;
+      savingItem = clearName
+          ? null
+          : items.firstWhere((item) => !next.contains(item), orElse: () => '');
+    });
     await guarded(context, () async {
       await ref.read(databaseProvider).pref(widget.setting, jsonEncode(next));
       if (!mounted) return;
@@ -486,7 +510,11 @@ class _ManageListState extends ConsumerState<_ManageList> {
                         await save([...items, value], clearName: true);
                       },
               ),
-              icon: const Icon(LucideIcons.plus),
+              icon: SkeletonValue(
+                loading: saving && savingItem == null,
+                semanticsLabel: 'Saving list item',
+                child: const Icon(LucideIcons.plus),
+              ),
             ),
           ),
         ),
@@ -509,7 +537,11 @@ class _ManageListState extends ConsumerState<_ManageList> {
                           await save(items.where((s) => s != item).toList());
                         },
                 ),
-                icon: const Icon(LucideIcons.x, size: 18),
+                icon: SkeletonValue(
+                  loading: saving && savingItem == item,
+                  semanticsLabel: 'Removing $item',
+                  child: const Icon(LucideIcons.x, size: 18),
+                ),
               ),
             ),
           )

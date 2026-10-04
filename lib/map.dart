@@ -389,9 +389,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ? 'Basemap not configured · saved dots remain'
         : tileError
         ? 'Basemap unavailable · saved dots remain'
-        : loading
-        ? 'Loading recorded locations…'
         : loadError;
+    final status = notice == null ? counts : '$counts · $notice';
     return LayoutBuilder(
       builder: (c, bounds) {
         return Stack(
@@ -438,6 +437,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               setState(() => tileError = true);
                             }
                           });
+                          WidgetsBinding.instance.ensureVisualUpdate();
                         }
                       },
                     ),
@@ -683,32 +683,23 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                               ),
                               Opacity(
                                 opacity: .55,
-                                child: Text(
-                                  counts,
-                                  key: const ValueKey('map-record-counts'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 9,
-                                    height: 1.3,
+                                child: SkeletonValue(
+                                  loading: loading,
+                                  semanticsLabel: 'Loading recorded locations',
+                                  child: Text(
+                                    status,
+                                    key: const ValueKey('map-record-counts'),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      height: 1.3,
+                                    ),
                                   ),
                                 ),
                               ),
-                              if (notice != null)
-                                Text(
-                                  notice,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    height: 1.3,
-                                    color: Theme.of(c)
-                                        .colorScheme
-                                        .onSurfaceVariant,
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -719,13 +710,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             Positioned(
-              top: math.max(
-                76,
-                64 +
-                    MediaQuery.textScalerOf(c).scale(9) *
-                        1.3 *
-                        (notice == null ? 1 : 2),
-              ),
+              top: math.max(76, 64 + MediaQuery.textScalerOf(c).scale(9) * 1.3),
               left: 16,
               right: 16,
               child: Align(

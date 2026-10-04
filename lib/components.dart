@@ -90,7 +90,11 @@ class AppButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final action = withFeedback(busy ? null : onPressed);
-    final text = Text(busy ? 'Saving…' : label);
+    final text = SkeletonValue(
+      loading: busy,
+      semanticsLabel: '$label in progress',
+      child: Text(label),
+    );
     if (quiet) {
       return TextButton(
         onPressed: action,
@@ -332,4 +336,88 @@ Future<T?> showChoiceMenu<T>(
         ),
     ],
   );
+}
+
+/// Loading keeps the value's intrinsic layout and animates only its placeholder.
+class SkeletonValue extends StatelessWidget {
+  final bool loading;
+  final Widget child;
+  final String semanticsLabel;
+  const SkeletonValue({
+    super.key,
+    required this.loading,
+    required this.child,
+    this.semanticsLabel = 'Loading',
+  });
+  @override
+  Widget build(BuildContext context) {
+    if (!loading) return child;
+    final placeholder = DecoratedBox(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .15),
+        borderRadius: BorderRadius.circular(6),
+      ),
+    );
+    return Semantics(
+      label: semanticsLabel,
+      child: IgnorePointer(
+        child: ExcludeSemantics(
+          child: Stack(
+            children: [
+              Opacity(opacity: 0, child: child),
+              Positioned.fill(
+                child: MediaQuery.disableAnimationsOf(context)
+                    ? placeholder
+                    : placeholder
+                          .animate(
+                            onPlay: (controller) =>
+                                controller.repeat(reverse: true),
+                          )
+                          .fade(
+                            begin: .5,
+                            end: 1,
+                            duration: const Duration(milliseconds: 900),
+                          ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shared record placeholders for drawers and workspaces awaiting data.
+class SkeletonList extends StatelessWidget {
+  final bool scrollable;
+  final int count;
+  const SkeletonList({super.key, this.scrollable = true, this.count = 4});
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      for (var i = 0; i < count; i++)
+        const Padding(
+          padding: EdgeInsets.only(bottom: 10),
+          child: SkeletonValue(
+            loading: true,
+            child: SizedBox(width: double.infinity, height: 56),
+          ),
+        ),
+    ];
+    return Semantics(
+      label: 'Loading records',
+      child: ExcludeSemantics(
+        child: scrollable
+            ? ListView(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                children: rows,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: rows,
+              ),
+      ),
+    );
+  }
 }

@@ -382,7 +382,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 760),
                       child: data == null
-                          ? const Center(child: CircularProgressIndicator())
+                          ? const SkeletonList()
                           : builder(c, data),
                     ),
                   ),
@@ -581,8 +581,10 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                 TextButton.icon(
                   onPressed: withFeedback(busy ? null : currentPlace),
                   icon: const Icon(LucideIcons.locateFixed, size: 18),
-                  label: Text(
-                    busy ? 'Finding location…' : 'Use current location',
+                  label: SkeletonValue(
+                    loading: busy,
+                    semanticsLabel: 'Finding location',
+                    child: const Text('Use current location'),
                   ),
                 ),
             ],
@@ -697,7 +699,12 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
           onPressed: withFeedback(
             busy || (sourceMode && ruleRunning) ? null : () => saveRule(data),
           ),
-          child: Text(editing == null ? 'Save condition' : 'Update condition'),
+          child: SkeletonValue(
+            loading: busy,
+            child: Text(
+              editing == null ? 'Save condition' : 'Update condition',
+            ),
+          ),
         ),
         const SizedBox(height: 20),
         SwitchListTile(

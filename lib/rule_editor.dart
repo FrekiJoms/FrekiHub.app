@@ -278,9 +278,12 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
                             }
                           },
                   ),
-            icon: Icon(
-              widget.running ? LucideIcons.square : LucideIcons.play,
-              size: 18,
+            icon: SkeletonValue(
+              loading: widget.busy,
+              child: Icon(
+                widget.running ? LucideIcons.square : LucideIcons.play,
+                size: 18,
+              ),
             ),
             style: IconButton.styleFrom(
               backgroundColor: Theme.of(c).colorScheme.primaryContainer,

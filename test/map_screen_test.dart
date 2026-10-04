@@ -48,8 +48,29 @@ void main() {
           ),
         ),
       );
+      expect(
+        tester
+            .widgetList<SkeletonValue>(find.byType(SkeletonValue))
+            .where((value) => value.loading)
+            .length,
+        1,
+      );
+      expect(find.text('Loading recorded locations…'), findsNothing);
+      expect(
+        find.ancestor(
+          of: find.text('October'),
+          matching: find.byType(SkeletonValue),
+        ),
+        findsNothing,
+      );
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('October'), findsOneWidget);
+      expect(
+        tester
+            .widgetList<SkeletonValue>(find.byType(SkeletonValue))
+            .every((value) => !value.loading),
+        isTrue,
+      );
       expect(find.text('By month'), findsNothing);
       final pillWidth = tester
           .getSize(find.byKey(const ValueKey('map-date-pill')))
@@ -157,7 +178,7 @@ void main() {
     expect(find.byType(TileLayer), findsNothing);
     expect(tiles.requests, 0);
     expect(
-      find.text('Basemap not configured · saved dots remain'),
+      find.textContaining('Basemap not configured · saved dots remain'),
       findsOneWidget,
     );
     expect(find.byTooltip('Choose located logs'), findsOneWidget);
@@ -431,6 +452,10 @@ void main() {
         cancelLoading: Completer<void>(),
       );
       addTearDown(tile.dispose);
+      tester.view.physicalSize = const Size(640, 720);
+      await tester.pumpAndSettle();
+      final beforeNotice = tester.getRect(datePill);
+      final beforeLegendTop = tester.getRect(legends).top;
       tester.widget<TileLayer>(find.byType(TileLayer)).errorTileCallback!(
         tile,
         StateError('Offline'),
@@ -439,6 +464,17 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(find.byTooltip('Retry map loading'), findsOneWidget);
+      final withNotice = tester.getRect(datePill);
+      expect(withNotice.width, greaterThan(beforeNotice.width));
+      expect(withNotice.height, beforeNotice.height);
+      expect(withNotice.top, beforeNotice.top);
+      expect(withNotice.width, lessThanOrEqualTo(640 - 144));
+      expect(tester.getRect(legends).top, beforeLegendTop);
+      final statusText = tester.widget<Text>(counts);
+      expect(statusText.maxLines, 1);
+      expect(statusText.softWrap, isFalse);
+      expect(statusText.overflow, TextOverflow.ellipsis);
+
       final requests = tiles.requests;
       await tester.tap(find.byTooltip('Retry map loading'));
       await tester.pumpAndSettle();

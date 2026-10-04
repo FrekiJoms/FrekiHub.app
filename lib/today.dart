@@ -334,12 +334,12 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                       running == null ? LucideIcons.play : LucideIcons.square,
                       size: 19,
                     ),
-                    label: Text(
-                      busy
-                          ? 'Saving…'
-                          : running == null
-                          ? 'Clock in'
-                          : 'Clock out',
+                    label: SkeletonValue(
+                      loading: busy,
+                      semanticsLabel: running == null
+                          ? 'Clocking in'
+                          : 'Clocking out',
+                      child: Text(running == null ? 'Clock in' : 'Clock out'),
                     ),
                   ),
                 ),
