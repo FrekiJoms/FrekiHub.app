@@ -206,3 +206,13 @@ Verification: 18 targeted widget checks passed across navigation, sheets, Home n
 
 Device delivery: incremental Gradle `:app:installDebug` succeeded on the connected Android phone (37 tasks executed, 137 up-to-date). Reopened the installed app; Android window inspection confirmed `adjust=nothing`. An inspected screenshot confirmed Home, its active session and saved note remained intact. No phone scrolling, typing, session ending, uninstall or data clearing was performed. Physical keyboard animation frame times remain unmeasured.
 Flutter attachment completed and a hot reload succeeded; the debug session remains attached for review.
+
+## End-session note editing and session island label — 2026-10-04
+
+Home's end-session sheet now includes a multiline Session note field prefilled from the current Home draft, including changes still waiting for autosave. The sheet owns a local controller: editing does not write to SQLite or change the Home note. Keep running, Back and dismissal discard those edits. End session returns the trimmed draft (including an empty note), waits for outstanding Home autosaves, and commits it with clock-out in the existing transaction. The note field reuses central input styling, the shared scrolling body and the global keyboard overlay policy. Live elapsed updates rebuild only the elapsed text.
+
+`SessionService` uses one `Session In progress` label for the standard notification title, HyperIsland builder text and expanded island title. Session kind remains stored; chronometer timing, actions and fallback behavior are unchanged.
+
+Verification: seven focused Home confirmation/note checks passed across normal/reduced motion and light/dark themes, covering current-note prefill, edited-note saving, cancellation/Back discarding edits, repeated confirmation and pending autosave ordering. Phone hot reload accepted the note UI. No actual phone session was ended or note changed by the agent.
+Final static analysis found no issues. Incremental Gradle `:app:installDebug` succeeded on the phone, including native Kotlin compilation (28 tasks executed, 146 up-to-date). The installed app was reopened with records preserved. Dynamic Island layout/expanded appearance remains a manual phone-review gap; the compiler confirms all session titles share the requested text.
+Device notification inspection confirmed the installed notification title and HyperIsland ticker/chat title all read `Session In progress`. Flutter VM-service attachment completed successfully and remains attached.

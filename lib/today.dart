@@ -144,18 +144,21 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
   Future<void> clock() async {
     if (busy || confirming) return;
     final running = widget.data.running;
+    var endingNote = note.text.trim();
     try {
       if (running != null) {
         setState(() => confirming = true);
-        final accepted = await panel<bool>(
+        final accepted = await panel<String>(
           context,
           _EndSessionConfirmation(
             data: widget.data,
             session: running,
             tick: tick,
+            initialNote: note.text,
           ),
         );
-        if (!mounted || accepted != true) return;
+        if (!mounted || accepted == null) return;
+        endingNote = accepted;
       }
       if (!mounted) return;
       setState(() => busy = true);
@@ -172,7 +175,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         await db.transaction(() async {
           await (db.update(db.sessions)
                 ..where((s) => s.id.equals(running.id) & s.ended.isNull()))
-              .write(SessionsCompanion(note: Value(note.text.trim())));
+              .write(SessionsCompanion(note: Value(endingNote)));
           await db.clockOut(running.id);
         });
         HapticFeedback.mediumImpact();
@@ -377,19 +380,34 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
   }
 }
 
-class _EndSessionConfirmation extends StatelessWidget {
+class _EndSessionConfirmation extends StatefulWidget {
   final AppData data;
   final Session session;
   final ValueNotifier<DateTime> tick;
+  final String initialNote;
   const _EndSessionConfirmation({
     required this.data,
     required this.session,
     required this.tick,
+    required this.initialNote,
   });
+
+  @override
+  State<_EndSessionConfirmation> createState() =>
+      _EndSessionConfirmationState();
+}
+
+class _EndSessionConfirmationState extends State<_EndSessionConfirmation> {
+  late final draft = TextEditingController(text: widget.initialNote);
+  @override
+  void dispose() {
+    draft.dispose();
+    super.dispose();
+  }
 
   void choose(BuildContext context, bool accepted) {
     if (ModalRoute.of(context)?.isCurrent == true) {
-      Navigator.of(context).pop(accepted);
+      Navigator.of(context).pop(accepted ? draft.text.trim() : null);
     }
   }
 
@@ -433,12 +451,13 @@ class _EndSessionConfirmation extends StatelessWidget {
             const Text('Session duration'),
             const SizedBox(height: 6),
             ValueListenableBuilder<DateTime>(
-              valueListenable: tick,
+              valueListenable: widget.tick,
               builder: (context, now, _) => Text(
                 elapsed(
                   math.max(
                     0,
-                    (now.millisecondsSinceEpoch - session.started) ~/ 1000,
+                    (now.millisecondsSinceEpoch - widget.session.started) ~/
+                        1000,
                   ),
                 ),
                 style: const TextStyle(
@@ -450,13 +469,28 @@ class _EndSessionConfirmation extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '${session.kind} · Started at ${clockTime(data, session.started)}',
+              '${widget.session.kind} · Started at ${clockTime(widget.data, widget.session.started)}',
               style: TextStyle(
                 fontSize: 12,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 20),
+        RepaintBoundary(
+          child: TextField(
+            key: const ValueKey('end-session-note'),
+            controller: draft,
+            minLines: 2,
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              labelText: 'Session note',
+              hintText: 'What did you work on?',
+              alignLabelWithHint: true,
+            ),
+          ),
         ),
       ],
     ),

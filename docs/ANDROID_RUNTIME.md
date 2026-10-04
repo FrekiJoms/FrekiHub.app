@@ -9,7 +9,7 @@ The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 
 | Component | Responsibility |
 | --- | --- |
 | `MainActivity` | Flutter method channel, posting/location access prompts, native settings intents, sound effects, reminder restore on resume |
-| `SessionService` | Sticky foreground session chronometer, clock-out action and optional Xiaomi HyperIsland |
+| `SessionService` | Sticky foreground session chronometer, clock-out action and optional Xiaomi HyperIsland; both notification and island display `Session In progress` |
 | `Automation` | Config/snapshot separation, geofences, rule transition ownership, location capture, durable events |
 | `ZoneReceiver` | Receives geofence enter/exit and evaluates the owning rule |
 | `LocationLogJob` | Persisted approximately fifteen-minute location/recheck and rule-refresh job |

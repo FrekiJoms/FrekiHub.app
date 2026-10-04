@@ -45,7 +45,7 @@ void main() {
                   textScaler: const TextScaler.linear(1.3),
                   disableAnimations: reduced,
                 ),
-                child: child!,
+                child: KeyboardOverlay(child: child!),
               ),
               home: Scaffold(
                 body: TodayScreen(
@@ -70,10 +70,18 @@ void main() {
         expect(find.text('End this session?'), findsOneWidget);
         expect(find.text('End session').hitTestable(), findsOneWidget);
         expect(find.text('Keep running').hitTestable(), findsOneWidget);
+        final noteField = find.byKey(const ValueKey('end-session-note'));
+        expect(
+          tester.widget<TextField>(noteField).controller!.text,
+          'Session note',
+        );
+        await tester.enterText(noteField, 'Discard this change');
         await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
         await frames();
         expect(find.text('00:01:00'), findsOneWidget);
         expect((await db.readAll()).running?.id, session.id);
+
+        expect((await db.readAll()).sessions.single.note, 'Session note');
         now = now.add(const Duration(seconds: 2));
         await tester.pump(const Duration(seconds: 2));
         expect(find.text('00:01:02'), findsOneWidget);
@@ -86,13 +94,20 @@ void main() {
 
         await tester.tap(find.text('Clock out'));
         await frames();
+        expect(
+          tester.widget<TextField>(noteField).controller!.text,
+          'Session note',
+        );
+        await tester.enterText(noteField, 'Discard on Back');
         await tester.binding.handlePopRoute();
         await frames();
         expect(find.text('End this session?'), findsNothing);
         expect((await db.readAll()).running?.id, session.id);
+        expect((await db.readAll()).sessions.single.note, 'Session note');
 
         await tester.tap(find.text('Clock out'));
         await frames();
+        await tester.enterText(noteField, '  Completed the design review  ');
         await tester.ensureVisible(find.text('End session'));
         await tester.pump(const Duration(milliseconds: 300));
         final endAgain = tester
@@ -106,7 +121,7 @@ void main() {
         final saved = await tester.runAsync(() => db.readAll());
         expect(saved!.running, isNull);
         expect(saved.sessions, hasLength(1));
-        expect(saved.sessions.single.note, 'Session note');
+        expect(saved.sessions.single.note, 'Completed the design review');
         expect(saved.sessions.single.ended, isNotNull);
         expect(find.text('End this session?'), findsNothing);
         await tester.pumpWidget(const SizedBox());
