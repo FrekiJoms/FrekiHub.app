@@ -55,6 +55,20 @@ void main() {
           .getSize(find.byKey(const ValueKey('map-date-pill')))
           .width;
       expect(pillWidth, lessThan(656));
+      final pillRect = tester.getRect(
+        find.byKey(const ValueKey('map-date-pill')),
+      );
+      expect(
+        tester.getRect(find.byTooltip('Previous timeline')).left -
+            pillRect.left,
+        10,
+      );
+      expect(
+        pillRect.right - tester.getRect(find.byTooltip('Next timeline')).right,
+        10,
+      );
+      expect(find.text('Month'), findsNothing);
+
       await tester.tap(find.byTooltip('Timeline mode'));
       await tester.pumpAndSettle();
       expect(find.text('Confirm'), findsOneWidget);
@@ -70,7 +84,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Week'), findsOneWidget);
-      expect(find.text('Month'), findsNWidgets(2));
+      expect(find.text('Month'), findsOneWidget);
       expect(find.text('Year'), findsOneWidget);
       await tester.tap(find.text('Year'));
       await tester.pumpAndSettle();
@@ -302,7 +316,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
       expect(find.text('2 located · 0 without location'), findsOneWidget);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 18);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 26);
       expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
       final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
       expect(rail.center.dy, 389);
@@ -414,7 +428,7 @@ void main() {
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 18);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 26);
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       expect(find.text('Timeline logs'), findsOneWidget);

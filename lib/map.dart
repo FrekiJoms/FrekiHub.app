@@ -519,160 +519,146 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               right: 72,
               child: Align(
                 alignment: Alignment.topCenter,
-                child: Chrome(
-                  key: const ValueKey('map-date-pill'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 25,
-                    vertical: 2,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        height: 28,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              tooltip: 'Previous timeline',
-                              disabledColor: Theme.of(c).colorScheme.onSurface
-                                  .withValues(alpha: .3),
-                              onPressed: period == 'custom'
-                                  ? null
-                                  : withFeedback(() => shift(-1)),
-                              constraints: const BoxConstraints.tightFor(
-                                width: 24,
-                                height: 28,
+                child: Builder(
+                  builder: (anchor) => Semantics(
+                    hint: 'Long press to change timeline mode',
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onLongPress: withFeedback(() async {
+                        final value = await showChoiceMenu<String>(
+                          anchor,
+                          choices: const {
+                            'day': 'Day',
+                            'week': 'Week',
+                            'month': 'Month',
+                            'year': 'Year',
+                            'custom': 'Custom',
+                          },
+                          selected: period,
+                        );
+                        if (mounted && value != null) {
+                          await choosePeriod(value);
+                        }
+                      }),
+                      child: Chrome(
+                        key: const ValueKey('map-date-pill'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 10,
+                        ),
+                        child: SizedBox(
+                          height: 28,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                tooltip: 'Previous timeline',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(24, 28),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                disabledColor: Theme.of(c).colorScheme.onSurface
+                                    .withValues(alpha: .3),
+                                onPressed: period == 'custom'
+                                    ? null
+                                    : withFeedback(() => shift(-1)),
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 24,
+                                  height: 28,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(
+                                  LucideIcons.chevronLeft,
+                                  size: 14,
+                                ),
                               ),
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(
-                                LucideIcons.chevronLeft,
-                                size: 14,
-                              ),
-                            ),
-                            Flexible(
-                              child: InkWell(
-                                onTap: withFeedback(selectDate),
-                                borderRadius: BorderRadius.circular(12),
-                                child: AnimatedSwitcher(
-                                  duration: Motion.duration(c, 200),
-                                  transitionBuilder: (child, animation) =>
-                                      FadeTransition(
-                                        opacity: animation,
-                                        child: SlideTransition(
-                                          position:
-                                              Tween<Offset>(
-                                                begin: Offset(
-                                                  child.key ==
-                                                          ValueKey(
-                                                            '$period:${range.from}',
-                                                          )
-                                                      ? shiftDirection * .15
-                                                      : -shiftDirection * .15,
-                                                  0,
-                                                ),
-                                                end: Offset.zero,
-                                              ).animate(
-                                                CurvedAnimation(
-                                                  parent: animation,
-                                                  curve: Motion.curve,
-                                                ),
-                                              ),
-                                          child: child,
+                              Flexible(
+                                child: Tooltip(
+                                  message: 'Timeline mode',
+                                  triggerMode: TooltipTriggerMode.manual,
+                                  child: InkWell(
+                                    onTap: withFeedback(selectDate),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedSwitcher(
+                                      duration: Motion.duration(c, 200),
+                                      transitionBuilder: (child, animation) =>
+                                          FadeTransition(
+                                            opacity: animation,
+                                            child: SlideTransition(
+                                              position:
+                                                  Tween<Offset>(
+                                                    begin: Offset(
+                                                      child.key ==
+                                                              ValueKey(
+                                                                '$period:${range.from}',
+                                                              )
+                                                          ? shiftDirection * .15
+                                                          : -shiftDirection *
+                                                                .15,
+                                                      0,
+                                                    ),
+                                                    end: Offset.zero,
+                                                  ).animate(
+                                                    CurvedAnimation(
+                                                      parent: animation,
+                                                      curve: Motion.curve,
+                                                    ),
+                                                  ),
+                                              child: child,
+                                            ),
+                                          ),
+                                      child: Text(
+                                        period == 'year'
+                                            ? '${date.year}'
+                                            : period == 'day'
+                                            ? DateFormat('d MMM').format(date)
+                                            : period == 'week'
+                                            ? DateFormat('d MMM')
+                                                  .format(range.from)
+                                            : period == 'custom'
+                                            ? 'Custom range'
+                                            : DateFormat.MMMM().format(date),
+                                        key: ValueKey('$period:${range.from}'),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                  child: Text(
-                                    period == 'year'
-                                        ? '${date.year}'
-                                        : period == 'day'
-                                        ? DateFormat('d MMM').format(date)
-                                        : period == 'week'
-                                        ? DateFormat('d MMM').format(range.from)
-                                        : period == 'custom'
-                                        ? 'Custom range'
-                                        : DateFormat.MMMM().format(date),
-                                    key: ValueKey('$period:${range.from}'),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                            IconButton(
-                              tooltip: 'Next timeline',
-                              disabledColor: Theme.of(c).colorScheme.onSurface
-                                  .withValues(alpha: .3),
-                              onPressed: period == 'custom'
-                                  ? null
-                                  : withFeedback(() => shift(1)),
-                              constraints: const BoxConstraints.tightFor(
-                                width: 24,
-                                height: 28,
-                              ),
-                              padding: EdgeInsets.zero,
-                              icon: const Icon(
-                                LucideIcons.chevronRight,
-                                size: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        height: 16,
-                        child: Builder(
-                          builder: (anchor) => Tooltip(
-                            message: 'Timeline mode',
-                            child: Semantics(
-                              button: true,
-                              label: 'Choose $period value',
-                              hint: 'Long press to change timeline mode',
-                              child: InkWell(
-                                onTap: withFeedback(selectDate),
-                                onLongPress: withFeedback(() async {
-                                  final value = await showChoiceMenu<String>(
-                                    anchor,
-                                    choices: const {
-                                      'day': 'Day',
-                                      'week': 'Week',
-                                      'month': 'Month',
-                                      'year': 'Year',
-                                      'custom': 'Custom',
-                                    },
-                                    selected: period,
-                                  );
-                                  if (mounted && value != null) {
-                                    await choosePeriod(value);
-                                  }
-                                }),
-                                borderRadius: BorderRadius.circular(12),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      period == 'day'
-                                          ? 'Date'
-                                          : '${period[0].toUpperCase()}${period.substring(1)}',
-                                      style: const TextStyle(fontSize: 9),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    const Icon(
-                                      LucideIcons.chevronDown,
-                                      size: 10,
-                                    ),
-                                  ],
+                              IconButton(
+                                tooltip: 'Next timeline',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(24, 28),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                disabledColor: Theme.of(c).colorScheme.onSurface
+                                    .withValues(alpha: .3),
+                                onPressed: period == 'custom'
+                                    ? null
+                                    : withFeedback(() => shift(1)),
+                                constraints: const BoxConstraints.tightFor(
+                                  width: 24,
+                                  height: 28,
+                                ),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 14,
                                 ),
                               ),
-                            ),
+                            ],
                           ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
