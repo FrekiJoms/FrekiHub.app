@@ -236,11 +236,11 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
                 ? null
                 : withFeedback(() {
                     guarded(c, () async {
-                      final allowed =
-                          await NativeSession.channel.invokeMethod<bool>(
-                            'exactReminderPermission',
-                          ) ??
-                          false;
+                      final allowed = await PermissionHints.request<bool>(
+                        c,
+                        'exactReminderPermission',
+                      );
+                      if (allowed == null) return;
                       if (c.mounted) {
                         toast(
                           c,

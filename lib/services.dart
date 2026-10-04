@@ -8,16 +8,29 @@ import 'data.dart';
 
 abstract final class NativeSession {
   static const channel = MethodChannel('frekihub/session');
+  static Map<String, dynamic> _payload(Session s) => {
+    'id': s.id,
+    'started': s.started,
+    'day': s.day,
+    'kind': s.kind,
+    'note': s.note,
+  };
+
+  /// Record running state independently of optional notification access.
+  static Future<bool> cache(Session s) async {
+    try {
+      return await channel.invokeMethod<bool>('cacheSession', _payload(s)) ??
+          false;
+    } on PlatformException {
+      return false;
+    } on MissingPluginException {
+      return false;
+    }
+  }
+
   static Future<bool> start(Session s) async {
     try {
-      return await channel.invokeMethod<bool>('start', {
-            'id': s.id,
-            'started': s.started,
-            'day': s.day,
-            'kind': s.kind,
-            'note': s.note,
-          }) ??
-          false;
+      return await channel.invokeMethod<bool>('start', _payload(s)) ?? false;
     } on PlatformException {
       return false;
     } on MissingPluginException {

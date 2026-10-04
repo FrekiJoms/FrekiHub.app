@@ -94,8 +94,9 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       await AutomationSync.configure(
         await ref.read(databaseProvider).readAll(),
       );
-      if (key == 'purchaseScanning' && value) {
-        await NativeSession.channel.invokeMethod<bool>(
+      if (key == 'purchaseScanning' && value && mounted) {
+        await PermissionHints.request<bool>(
+          context,
           'receiptNotificationPermission',
         );
         await refresh();
@@ -106,11 +107,11 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
   Future<void> currentPlace() async {
     setState(() => busy = true);
     await guarded(context, () async {
-      final allowed =
-          await NativeSession.channel.invokeMethod<bool>(
-            'locationPermission',
-          ) ??
-          false;
+      final allowed = await PermissionHints.request<bool>(
+        context,
+        'locationPermission',
+      );
+      if (allowed == null) return;
       if (!allowed) {
         throw StateError(
           'Precise location permission is needed to pick this place.',
@@ -153,11 +154,11 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       final hasSchedules = (program?['schedules'] as List? ?? []).isNotEmpty;
       bool preciseReminders = true;
       if (run && program?['needsNotifications'] == true) {
-        final allowed =
-            await NativeSession.channel.invokeMethod<bool>(
-              'reminderPermission',
-            ) ??
-            false;
+        final allowed = await PermissionHints.request<bool>(
+          context,
+          'reminderPermission',
+        );
+        if (allowed == null) return;
         if (!allowed) {
           throw StateError(
             'Enable FrekiHub notifications before running reminders.',
@@ -542,18 +543,24 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
             children: [
               OutlinedButton(
                 onPressed: withFeedback(() async {
-                  await NativeSession.channel.invokeMethod(
-                    'locationPermission',
-                  );
+                  await guarded(context, () async {
+                    await PermissionHints.request<bool>(
+                      context,
+                      'locationPermission',
+                    );
+                  });
                   await refresh();
                 }),
                 child: const Text('Allow precise location'),
               ),
               OutlinedButton(
                 onPressed: withFeedback(
-                  () => NativeSession.channel.invokeMethod(
-                    'backgroundPermission',
-                  ),
+                  () => guarded(context, () async {
+                    await PermissionHints.request<void>(
+                      context,
+                      'backgroundPermission',
+                    );
+                  }),
                 ),
                 child: const Text('Allow location all the time'),
               ),
@@ -820,8 +827,12 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
         if (status['notifications'] != true)
           OutlinedButton(
             onPressed: withFeedback(
-              () =>
-                  NativeSession.channel.invokeMethod('notificationPermission'),
+              () => guarded(context, () async {
+                await PermissionHints.request<void>(
+                  context,
+                  'notificationPermission',
+                );
+              }),
             ),
             child: const Text('Allow notification access'),
           ),
@@ -829,9 +840,12 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
             status['receipts'] != true)
           OutlinedButton(
             onPressed: withFeedback(() async {
-              await NativeSession.channel.invokeMethod<bool>(
-                'receiptNotificationPermission',
-              );
+              await guarded(context, () async {
+                await PermissionHints.request<bool>(
+                  context,
+                  'receiptNotificationPermission',
+                );
+              });
               await refresh();
             }),
             child: const Text('Allow saved-transaction notifications'),

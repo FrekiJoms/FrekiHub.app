@@ -102,11 +102,16 @@ The native event queues without writing SQLite. Flutter imports a regular expens
 
 ## Method-channel reference
 
+App-owned permission entry points use the shared Flutter hint before requesting session/receipt/reminder notifications, precise/background location, notification-listener purchase access, exact alarms or overlays. `permissionStatus` reports those existing grants; `permissionSettings` accepts only the corresponding known method keys and opens the appropriate Android page. Explicit management still explains the feature when already granted. Cancellation leaves the OS untouched. The native cross-app overlay hint continues using its existing native renderer while Flutter is closed.
+
+`cacheSession` commits the running ID/start/kind/note independently of notification access and rejects an already pending end for the same ID. Flutter caches before the optional notification hint, then starts the foreground timer only after acceptance or when notifications are already allowed. Declining leaves SQLite and native rule session context active; it does not imply a visible notification. No permission is automatically granted.
+
 Channel name: `frekihub/session`. Most payloads are maps or JSON strings; confirm the affected call's types before changing them.
 
 | Methods | Contract |
 | --- | --- |
-| `start`, `stop`, `pending`, `acknowledge` | Timer payload, stop, nullable pending ID/end map and pending-end acknowledgement |
+| `cacheSession`, `start`, `stop`, `pending`, `acknowledge` | Cache running context, timer payload, stop, nullable pending ID/end/note map and pending-end acknowledgement |
+| `permissionStatus`, `permissionSettings` | Existing permission status map; whitelisted permission key to Android settings |
 | `automationConfig`, `automationAppState`, `automationReset` | JSON config plus separate snapshot, foreground boolean, clear native automation/reconfigure |
 | `automationEvents`, `automationAck`, `automationStatus` | Queued JSON array, list of acknowledged IDs, location/background/listener access map |
 | `locationPermission`, `backgroundPermission`, `currentLocation` | Precise access prompt, OS app settings, current-position JSON or platform error |

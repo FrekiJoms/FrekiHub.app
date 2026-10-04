@@ -1,5 +1,13 @@
 # FrekiHub application audit
 
+## Shared permission hints — 2026-10-04
+
+Source-confirmed: all Flutter permission entry points use one `PermissionHints` gate and `PermissionHint` panel with feature-specific purpose, benefit, user control and Android instructions. Coverage includes session notifications, transaction receipt notifications, reminder notifications, precise/background location, purchase notification-listener access, exact alarms and overlays. Actions remain fixed around the shared scrolling body. Cancellation does not invoke an OS request; existing grants skip the hint unless managing access. A busy guard prevents stacked requests and resets after native failures. The native cross-app overlay card remains shared with its confirmation renderer.
+
+Running-session state is cached natively before optional notification access, preserving rule context and the saved session when Not now is chosen. Native permission status and settings methods read existing permissions and reject unknown settings targets. No new permission, saved preference, schema, rule field or action was introduced.
+
+Verification: focused permission, overlay reconciliation, rule editor, transaction notification and navigation checks passed. The added AppShell integration check confirms native ID/note caching before the hint, no timer-start call on cancellation, and a still-running SQLite session. Flutter analysis reported no issues. Incremental Gradle `:app:installDebug` compiled Kotlin and installed successfully on the connected Android 16 phone (25 tasks executed, 149 up-to-date), preserving records. Flutter VM-service attachment succeeded and remains connected for hot reload. Actual grant/denial flows for every Android permission and physical animation feel remain manual device-review gaps. The agent did not change grants, end a real session or test phone scrolling.
+
 Audit date: **2026-10-02**. Starting code revision: `f91f75e`. This pass reviews product structure, data contracts, native background paths, selectors/motion, startup, tests and documentation. It is a source and automated-regression audit, not a device visual review, security certification or benchmark.
 
 ## Initial verification results

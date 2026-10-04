@@ -11,6 +11,7 @@ import 'services.dart';
 part 'flip_clock.dart';
 part 'components.dart';
 part 'sheets.dart';
+part 'permissions.dart';
 
 abstract final class Motion {
   static const curve = Cubic(.22, 1, .36, 1);

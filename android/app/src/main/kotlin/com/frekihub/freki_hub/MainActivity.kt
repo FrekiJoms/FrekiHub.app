@@ -34,6 +34,36 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             when (call.method) {
+                "cacheSession" -> result.success(cacheSession(call.arguments as Map<*, *>))
+                "permissionStatus" -> {
+                    val notifications = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+                    result.success(mapOf(
+                        "start" to notifications,
+                        "receiptNotificationPermission" to TransactionNotifications.allowed(this),
+                        "reminderPermission" to notifications,
+                        "locationPermission" to (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
+                        "backgroundPermission" to Automation.allowed(this),
+                        "notificationPermission" to getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java)),
+                        "exactReminderPermission" to RuleNotifications.exactAllowed(this),
+                        "overlayPermission" to Settings.canDrawOverlays(this)
+                    ))
+                }
+                "permissionSettings" -> {
+                    val method = call.arguments as? String
+                    val settings = when (method) {
+                        "start", "receiptNotificationPermission", "reminderPermission" -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                        "locationPermission", "backgroundPermission" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+                        "notificationPermission" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        "exactReminderPermission" -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
+                        "overlayPermission" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                        else -> null
+                    }
+                    if (settings == null) result.error("permission", "Unknown permission settings", null)
+                    else {
+                        startActivity(settings)
+                        result.success(if (method == "receiptNotificationPermission") TransactionNotifications.allowed(this) else null)
+                    }
+                }
                 "overlayAllowed" -> result.success(Settings.canDrawOverlays(this))
                 "overlayPermission" -> {
                     startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
@@ -87,7 +117,11 @@ class MainActivity : FlutterActivity() {
                     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         if (reminderPermissionResult != null) result.error("busy", "A permission request is already open", null)
                         else { reminderPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 76) }
-                    } else result.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+                    } else {
+                        val allowed = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
+                        if (!allowed) startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                        result.success(allowed)
+                    }
                 }
                 "exactReminderPermission" -> {
                     if (Build.VERSION.SDK_INT >= 31 && !RuleNotifications.exactAllowed(this)) {
@@ -98,10 +132,13 @@ class MainActivity : FlutterActivity() {
                 "reminderStatus" -> { result.success(mapOf("exact" to RuleNotifications.exactAllowed(this), "enabled" to getSystemService(NotificationManager::class.java).areNotificationsEnabled())) }
                 "start" -> {
                     val data = call.arguments as Map<*, *>
-                    if (prefs.getString("pendingId", null) != data["id"]) prefs.edit().putString("id", data["id"] as String).putLong("started", (data["started"] as Number).toLong()).commit()
+                    if (!cacheSession(data)) { result.success(false); return@setMethodCallHandler }
                     if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         startData = data; pendingResult = result
                         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 73)
+                    } else if (!getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
+                        startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                        result.success(false)
                     } else { startTimer(data); result.success(true) }
                 }
                 "stop" -> { stopService(Intent(this, SessionService::class.java)); prefs.edit().remove("id").commit(); Automation.prefs(this).edit().remove("activeRule").commit(); result.success(null) }
@@ -157,6 +194,15 @@ class MainActivity : FlutterActivity() {
         if (getSharedPreferences("session", MODE_PRIVATE).getString("pendingId", null) == id) return
         val intent = Intent(this, SessionService::class.java).putExtra("id", id).putExtra("started", (data["started"] as Number).toLong()).putExtra("day", data["day"] as String).putExtra("kind", data["kind"] as? String ?: "OJT").putExtra("note", data["note"] as? String ?: "")
         if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+    }
+    private fun cacheSession(data: Map<*, *>): Boolean {
+        val prefs = getSharedPreferences("session", MODE_PRIVATE)
+        val id = data["id"] as String
+        if (prefs.getString("pendingId", null) == id) return false
+        return prefs.edit().putString("id", id)
+            .putLong("started", (data["started"] as Number).toLong())
+            .putString("kind", data["kind"] as? String ?: "OJT")
+            .putString("note", data["note"] as? String ?: "").commit()
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

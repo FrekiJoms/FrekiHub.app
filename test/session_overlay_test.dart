@@ -6,7 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freki_hub/automation_sync.dart';
 import 'package:freki_hub/data.dart';
 import 'package:freki_hub/design.dart';
-import 'package:freki_hub/screens.dart';
 import 'package:freki_hub/services.dart';
 
 void main() {

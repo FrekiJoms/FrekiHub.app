@@ -149,6 +149,38 @@ class _AppShellState extends ConsumerState<AppShell>
     super.dispose();
   }
 
+  Future<void> syncSessionTimer(Session running) async {
+    try {
+      if (!await NativeSession.cache(running) || !mounted) return;
+      if (ref.read(dataProvider).value?.running?.id != running.id) return;
+      final ok = await PermissionHints.perform<bool>(
+        context,
+        'start',
+        () async {
+          if (!mounted ||
+              ref.read(dataProvider).value?.running?.id != running.id) {
+            return null;
+          }
+          return NativeSession.start(running);
+        },
+      );
+      if (ok == false && mounted) {
+        toast(
+          context,
+          'Timer saved. Enable notifications / Live Activities for the outside-app timer.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(
+          context,
+          'Timer saved. Could not request notification access.',
+          error: true,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext c) {
     ref.listen(dataProvider, (before, after) {
@@ -169,16 +201,7 @@ class _AppShellState extends ConsumerState<AppShell>
       if (running == null) {
         unawaited(NativeSession.stop());
       } else {
-        unawaited(
-          NativeSession.start(running).then((ok) {
-            if (!ok && mounted) {
-              toast(
-                context,
-                'Timer saved. Enable notifications / Live Activities for the outside-app timer.',
-              );
-            }
-          }),
-        );
+        unawaited(syncSessionTimer(running));
       }
     });
     if (savedPage != index) {
