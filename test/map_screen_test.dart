@@ -212,6 +212,8 @@ void main() {
       );
       final legends = find.byKey(const ValueKey('map-legends'));
       expect(tester.getRect(legends).top, 76);
+      expect(find.text('MAP'), findsNothing);
+      expect(tester.getRect(legends).height, lessThanOrEqualTo(44));
       await tester.drag(
         find.descendant(
           of: legends,

@@ -618,46 +618,65 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: 76,
               left: 16,
               right: 16,
-              child: Chrome(
-                key: const ValueKey('map-legends'),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    const PageTitle('MAP'),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: colors.entries
-                              .map(
-                                (entry) => Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: FilterChip(
-                                    label: Text(entry.key),
-                                    avatar: Icon(
-                                      icons[entry.key],
-                                      size: 16,
-                                      color: entry.value,
-                                    ),
-                                    selected: categories.contains(entry.key),
-                                    onSelected: (_) {
-                                      ActionFeedback.tap();
-                                      setState(() {
-                                        if (!categories.remove(entry.key)) {
-                                          categories.add(entry.key);
-                                        }
-                                      });
-                                      publishContext();
-                                    },
-                                  ),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Chrome(
+                  key: const ValueKey('map-legends'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: colors.entries
+                          .map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                              ),
+                              child: FilterChip(
+                                label: Text(
+                                  entry.key,
+                                  maxLines: 1,
+                                  softWrap: false,
                                 ),
-                              )
-                              .toList(),
-                        ),
-                      ),
+                                labelStyle: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                labelPadding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                showCheckmark: false,
+                                avatar: Icon(
+                                  icons[entry.key],
+                                  size: 13,
+                                  color: entry.value,
+                                ),
+                                selected: categories.contains(entry.key),
+                                onSelected: (_) {
+                                  ActionFeedback.tap();
+                                  setState(() {
+                                    if (!categories.remove(entry.key)) {
+                                      categories.add(entry.key);
+                                    }
+                                  });
+                                  publishContext();
+                                },
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),

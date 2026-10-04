@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Compact Map legend pill — 2026-10-04
+
+Removed MAP from the legend strip at the user's request. The centered glass pill shrinks to content width, capped by screen margins, and retains horizontal scrolling for overflow. Single-line 11 px category labels, 13 px icons, compact chip density and reduced padding make the strip smaller. Category colors, selected semantics, filtering, feedback, shadows and the right tool rail remain intact. This supersedes the Map title addition below.
+
 ## Resume physical-phone design review — 2026-10-04
 
 The compatible Xiaomi 25080RABDG (Android 16/API 36) reconnected. The incremental Gradle `:app:installDebug` completed successfully with the locally configured Geoapify Dart define; app data was preserved. Flutter attached with the same define file and advertised its VM service and reload controls. An inspected screenshot of the user's current Sessions page confirmed the uppercase title and stronger shortcut/navigation shadows. Map tile rendering and native picker appearance are ready for user review but were not established by that screenshot. No phone scrolling, record edits, session ending or permission changes were performed. Updated attachment instructions retain the define file for subsequent hot reloads.
