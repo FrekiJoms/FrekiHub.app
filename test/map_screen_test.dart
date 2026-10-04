@@ -154,18 +154,32 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('2 located · 0 without location'), findsOneWidget);
       expect(tester.getRect(find.byTooltip('Choose timeline')).top, 16);
-      expect(tester.getRect(find.byTooltip('Map tools')).height, 48);
+      expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
+      final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
+      expect(rail.center.dy, 360);
+      expect(rail.right, 308);
+      expect(
+        tester.getRect(find.byTooltip('Fit recorded locations')).bottom,
+        lessThanOrEqualTo(tester.getRect(find.byTooltip('Zoom in')).top),
+      );
+      final legends = find.byKey(const ValueKey('map-legends'));
+      expect(tester.getRect(legends).top, 76);
+      await tester.drag(
+        find.descendant(
+          of: legends,
+          matching: find.byType(SingleChildScrollView),
+        ),
+        const Offset(-600, 0),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Other').hitTestable(), findsOneWidget);
       final camera = tester
           .widget<FlutterMap>(find.byType(FlutterMap))
           .mapController!;
       final zoom = camera.camera.zoom;
-      await tester.tap(find.byTooltip('Map tools'));
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Zoom in'));
       await tester.pump();
       expect(camera.camera.zoom, zoom + 1);
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
@@ -176,10 +190,7 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Map tools'));
-      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
-      await tester.binding.handlePopRoute();
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('1 samples · straight-line trace'), findsOneWidget);
       expect(tester.takeException(), isNull);

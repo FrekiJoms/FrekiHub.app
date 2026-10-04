@@ -57,12 +57,13 @@ void main() {
       );
       await tester.tap(find.text('Date'));
       await tester.pumpAndSettle();
+      expect(find.byType(CupertinoDatePicker), findsOneWidget);
       final now = DateTime.now();
       await tester.tap(find.byTooltip('Jump to today'));
       await tester.pump();
       if (!reduced) {
-        final confirm = tester.widget<AppButton>(
-          find.widgetWithText(AppButton, 'Confirm'),
+        final confirm = tester.widget<TextButton>(
+          find.widgetWithText(TextButton, 'Confirm'),
         );
         expect(confirm.onPressed, isNull);
       }
@@ -72,15 +73,31 @@ void main() {
           .toList();
       expect(wheels[0].scrollController!.selectedItem, now.month - 1);
       expect(wheels[1].scrollController!.selectedItem, now.day - 1);
-      expect(wheels[2].scrollController!.selectedItem, now.year - 2000);
+      expect(wheels[2].scrollController!.selectedItem, now.year);
       await tester.tap(find.text('Confirm'));
       await tester.pumpAndSettle();
       expect(chosen, DateUtils.dateOnly(now));
       await tester.tap(find.text('Time'));
       await tester.pumpAndSettle();
       final currentTime = TimeOfDay.now();
+      expect(find.byType(CupertinoDatePicker), findsOneWidget);
       await tester.tap(find.byTooltip('Jump to current time'));
       await tester.pumpAndSettle();
+      final timeWheels = tester
+          .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
+          .toList();
+      expect(
+        timeWheels[0].scrollController!.selectedItem % 24,
+        currentTime.hour,
+      );
+      expect(
+        timeWheels[1].scrollController!.selectedItem % 60,
+        currentTime.minute,
+      );
+      expect(
+        timeWheels[2].scrollController!.selectedItem,
+        currentTime.hour >= 12 ? 1 : 0,
+      );
       await tester.tap(find.text('Confirm'));
       await tester.pumpAndSettle();
       expect(chosenTime, currentTime);
@@ -117,7 +134,7 @@ void main() {
       var wheels = tester
           .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
           .toList();
-      wheels[2].scrollController!.jumpToItem(0);
+      wheels[2].scrollController!.jumpToItem(2023);
       await tester.pumpAndSettle();
       wheels = tester
           .widgetList<CupertinoPicker>(find.byType(CupertinoPicker))
@@ -130,7 +147,7 @@ void main() {
           .toList();
       expect(wheels[0].scrollController!.selectedItem, 2);
       expect(wheels[1].scrollController!.selectedItem, 0);
-      expect(wheels[2].scrollController!.selectedItem, 2);
+      expect(wheels[2].scrollController!.selectedItem, 2025);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(result, isNull);

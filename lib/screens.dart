@@ -11,6 +11,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart'
     show
         CupertinoPicker,
+        CupertinoDatePicker,
+        CupertinoDatePickerMode,
+        DatePickerDateOrder,
         CupertinoTheme,
         CupertinoThemeData,
         CupertinoTextThemeData;

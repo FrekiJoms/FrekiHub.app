@@ -376,7 +376,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  List<Widget> mapActions(VoidCallback refreshSheet) => [
+  List<Widget> mapActions() => [
     control(
       'Fit recorded locations',
       LucideIcons.scan,
@@ -388,7 +388,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       LucideIcons.route,
       () {
         setState(() => trace = !trace);
-        refreshSheet();
         unawaited(guarded(context, saveView));
       },
       active: trace,
@@ -406,54 +405,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
     }, enabled: ready),
   ];
-  Future<void> showTools() => panel(
-    context,
-    StatefulBuilder(
-      builder: (c, update) => PanelContent(
-        header: const PanelHeading(title: 'Map tools'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(children: mapActions(() => update(() {}))),
-            const SizedBox(height: 12),
-            const Text('Show recorded categories'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: colors.entries
-                  .map(
-                    (entry) => FilterChip(
-                      label: Text(entry.key),
-                      avatar: Icon(
-                        icons[entry.key],
-                        size: 16,
-                        color: entry.value,
-                      ),
-                      selected: categories.contains(entry.key),
-                      onSelected: (_) {
-                        ActionFeedback.tap();
-                        setState(() {
-                          if (!categories.remove(entry.key)) {
-                            categories.add(entry.key);
-                          }
-                        });
-                        update(() {});
-                        publishContext();
-                      },
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Dots are saved samples. Traces connect those samples with straight lines, not travelled roads.',
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-
   Widget control(
     String label,
     IconData icon,
@@ -505,7 +456,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         : loadError ??
               (shown.isEmpty
                   ? records.isNotEmpty
-                        ? 'Categories hidden · open Map tools'
+                        ? 'Categories hidden · select a legend'
                         : '${previousRows.length} logs · no usable locations'
                   : trace
                   ? '${route.length} samples · straight-line trace'
@@ -651,19 +602,75 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         LucideIcons.listFilter,
                         () => showRecords(),
                       ),
-                      control(
-                        'Map tools',
-                        LucideIcons.slidersHorizontal,
-                        showTools,
-                      ),
                     ],
                   ),
                 ),
               ),
             ),
             Positioned(
+              top: 76,
               left: 16,
               right: 16,
+              child: Chrome(
+                key: const ValueKey('map-legends'),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: colors.entries
+                        .map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: FilterChip(
+                              label: Text(entry.key),
+                              avatar: Icon(
+                                icons[entry.key],
+                                size: 16,
+                                color: entry.value,
+                              ),
+                              selected: categories.contains(entry.key),
+                              onSelected: (_) {
+                                ActionFeedback.tap();
+                                setState(() {
+                                  if (!categories.remove(entry.key)) {
+                                    categories.add(entry.key);
+                                  }
+                                });
+                                publishContext();
+                              },
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              bottom: 0,
+              right: 12,
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.max(48, bounds.maxHeight - 280 - bottom),
+                  ),
+                  child: Chrome(
+                    key: const ValueKey('map-tools-rail'),
+                    padding: EdgeInsets.zero,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: mapActions(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 16,
+              right: 80,
               bottom: 112 + bottom,
               child: Center(
                 child: Chrome(

@@ -64,7 +64,7 @@ flutter analyze
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |
 | Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, completion and saved enabled flags) |
 | Position freshness/full-range query/map catalog | `test/map_records_test.dart` |
-| Compact map toolbar/record selection/trace/recovery | `test/map_screen_test.dart` (late location camera fitting, unlocated logs, top alignment, narrow/enlarged text, landscape, zoom, selection/trace and tile retry) |
+| Compact map toolbar/record selection/trace/recovery | `test/map_screen_test.dart` (late location camera fitting, unlocated logs, top alignment, centered vertical tool rail, horizontal legend scrolling, narrow/enlarged text, landscape, zoom, selection/trace and tile retry) |
 | Native local reminder clock calculation | `android/app/src/test/java/com/frekihub/freki_hub/RuleNotificationScheduleCheck.java` |
 
 Example targeted run:
