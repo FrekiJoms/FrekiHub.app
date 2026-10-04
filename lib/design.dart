@@ -419,6 +419,8 @@ class PageBody extends StatelessWidget {
   final List<Widget> children;
   final Widget? action;
   final bool compactHeader;
+  final ScrollController? scrollController;
+  final Widget? leading;
   const PageBody({
     super.key,
     required this.title,
@@ -426,6 +428,8 @@ class PageBody extends StatelessWidget {
     required this.children,
     this.action,
     this.compactHeader = false,
+    this.scrollController,
+    this.leading,
   });
   @override
   Widget build(BuildContext c) => LayoutBuilder(
@@ -491,6 +495,8 @@ class PageBody extends StatelessWidget {
               ),
       );
       final content = <Widget>[
+        if (leading != null)
+          Padding(padding: const EdgeInsets.only(bottom: 12), child: leading),
         for (var i = 0; i < children.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -517,6 +523,7 @@ class PageBody extends StatelessWidget {
                     ),
                 child: ListView(
                   key: PageStorageKey(title),
+                  controller: scrollController,
                   padding: EdgeInsets.fromLTRB(
                     horizontal,
                     16,
@@ -532,6 +539,7 @@ class PageBody extends StatelessWidget {
       }
       return ListView(
         key: PageStorageKey(title),
+        controller: scrollController,
         padding: EdgeInsets.fromLTRB(
           horizontal,
           80,

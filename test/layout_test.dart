@@ -202,7 +202,12 @@ void main() {
         );
       }
       if (page is TodayScreen) {
-        expect(find.text('Balance'), findsOneWidget);
+        final balance = find.byKey(const ValueKey('home-balance-pill'));
+        expect(
+          find.descendant(of: balance, matching: find.text('Balance')),
+          findsOneWidget,
+        );
+        final originalBalance = tester.getRect(balance);
         expect(find.text('Current time'), findsOneWidget);
         final headingPosition = tester.getTopLeft(find.text('Home.'));
         final date = find.textContaining(
@@ -213,6 +218,8 @@ void main() {
         final datePosition = tester.getTopLeft(date);
         await tester.drag(find.byType(ListView).first, const Offset(0, -220));
         await tester.pump(const Duration(milliseconds: 100));
+        expect(tester.getRect(balance).top, closeTo(73, .01));
+        expect(tester.getRect(balance).right, closeTo(320 - 16, .01));
         expect(tester.getTopLeft(find.text('Home.')), headingPosition);
         expect(tester.getTopLeft(date), datePosition);
         expect(
@@ -221,6 +228,12 @@ void main() {
           ),
           findsOneWidget,
         );
+        tester
+            .widget<ListView>(find.byType(ListView).first)
+            .controller!
+            .jumpTo(0);
+        await tester.pump();
+        expect(tester.getRect(balance), originalBalance);
       }
       for (final tooltip in [
         'Add record',
@@ -239,6 +252,69 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await db.close();
   });
+
+  testWidgets(
+    'Home balance docks smoothly and returns with large text and safe insets',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 720);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp(
+            theme: Design.theme(true),
+            home: MediaQuery(
+              data: const MediaQueryData(
+                size: Size(320, 720),
+                padding: EdgeInsets.only(top: 24),
+                textScaler: TextScaler.linear(2),
+              ),
+              child: Scaffold(
+                body: SafeArea(
+                  child: TodayScreen(data: AppData([], [], [], {})),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump();
+      final pill = find.byKey(const ValueKey('home-balance-pill'));
+      final original = tester.getRect(pill);
+      final scroll = tester
+          .widget<ListView>(find.byType(ListView).first)
+          .controller!;
+      scroll.jumpTo(60);
+      await tester.pump();
+      final halfway = tester.getRect(pill);
+      scroll.jumpTo(200);
+      await tester.pump();
+      final docked = tester.getRect(pill);
+      expect(docked.top, closeTo(24 + 16 + 48 + 9, .01));
+      expect(docked.right, closeTo(320 - 16, .01));
+      expect(halfway.left, greaterThan(original.left));
+      expect(halfway.left, lessThan(docked.left));
+      expect(halfway.top, greaterThan(docked.top));
+      expect(halfway.top, lessThan(original.top));
+      expect(docked.left, greaterThanOrEqualTo(16));
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Total balance in ')),
+        findsOneWidget,
+      );
+      scroll.jumpTo(60);
+      await tester.pump();
+      expect(tester.getRect(pill), halfway);
+      scroll.jumpTo(0);
+      await tester.pump();
+      expect(tester.getRect(pill), original);
+      expect(tester.takeException(), isNull);
+      semantics.dispose();
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets('External filter reset updates the displayed selection', (
     tester,

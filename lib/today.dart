@@ -130,189 +130,288 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         todaySessions.fold(0, (sum, s) => sum + duration(s, now));
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
-    return PageBody(
-      title: 'Home.',
-      subtitle: DateFormat('EEEE, d MMMM').format(tick.value),
-      compactHeader: true,
-      children: [
-        Center(
-          child: Semantics(
-            label:
-                'Total balance in ${d.currency}: ${money(d.balance, d.currency)}',
-            child: ExcludeSemantics(
-              child: Surface(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
-                ),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 8,
-                  runSpacing: 4,
-                  children: [
-                    Icon(
-                      LucideIcons.wallet,
-                      size: 15,
-                      color: Theme.of(c).colorScheme.onSurfaceVariant,
-                    ),
-                    Text(
-                      'Balance',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(c).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    Text(
-                      money(d.balance, d.currency),
-                      style: const TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        if (offline)
-          const Surface(
-            padding: EdgeInsets.all(16),
-            child: Row(
+    return _HomeBalanceDock(
+      balance: Semantics(
+        label:
+            'Total balance in ${d.currency}: ${money(d.balance, d.currency)}',
+        child: ExcludeSemantics(
+          child: Chrome(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
-                Icon(LucideIcons.wifiOff, size: 18),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text('Offline · all records save on this phone'),
+                Icon(
+                  LucideIcons.wallet,
+                  size: 15,
+                  color: Theme.of(c).colorScheme.onSurfaceVariant,
+                ),
+                Text(
+                  'Balance',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(c).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  money(d.balance, d.currency),
+                  style: const TextStyle(
+                    fontFamily: 'Geist Mono',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
           ),
-        Surface(
-          child: Column(
-            children: [
-              const SizedBox(height: 8),
-              RepaintBoundary(
-                child: ValueListenableBuilder<DateTime>(
-                  valueListenable: tick,
-                  builder: (c, now, _) =>
-                      AnalogClock(now: now, clockNow: widget.clockNow),
-                ),
+        ),
+      ),
+      builder: (scrollController, balanceSlot) => PageBody(
+        scrollController: scrollController,
+        leading: balanceSlot,
+        title: 'Home.',
+        subtitle: DateFormat('EEEE, d MMMM').format(tick.value),
+        compactHeader: true,
+        children: [
+          if (offline)
+            const Surface(
+              padding: EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(LucideIcons.wifiOff, size: 18),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Offline · all records save on this phone'),
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              Text(
-                running == null
-                    ? 'READY WHEN YOU ARE'
-                    : 'YOUR SESSION IS RUNNING',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 2,
-                  color: Theme.of(c).colorScheme.onSurfaceVariant,
+            ),
+          Surface(
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                RepaintBoundary(
+                  child: ValueListenableBuilder<DateTime>(
+                    valueListenable: tick,
+                    builder: (c, now, _) =>
+                        AnalogClock(now: now, clockNow: widget.clockNow),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              ValueListenableBuilder<DateTime>(
-                valueListenable: tick,
-                builder: (c, now, _) => FlipClock(
+                const SizedBox(height: 16),
+                Text(
                   running == null
-                      ? DateFormat(
-                          d.prefs['clockFormat'] == '12'
-                              ? 'hh:mm:ss'
-                              : 'HH:mm:ss',
-                        ).format(now)
-                      : elapsed(duration(running, now)),
-                  size: 36,
-                  label: running == null ? 'Current time' : 'Elapsed time',
-                ),
-              ),
-              const SizedBox(height: 10),
-              ValueListenableBuilder<DateTime>(
-                valueListenable: tick,
-                builder: (c, now, _) => Text(
-                  running == null
-                      ? d.prefs['clockFormat'] == '12'
-                            ? 'Current time · ${DateFormat('a').format(now)}'
-                            : 'Current time'
-                      : 'Clocked in at ${clockTime(d, running.started)}',
+                      ? 'READY WHEN YOU ARE'
+                      : 'YOUR SESSION IS RUNNING',
                   style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 2,
                     color: Theme.of(c).colorScheme.onSurfaceVariant,
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: withFeedback(busy ? null : clock),
-                  icon: Icon(
-                    running == null ? LucideIcons.play : LucideIcons.square,
-                    size: 19,
-                  ),
-                  label: Text(
-                    busy
-                        ? 'Saving…'
-                        : running == null
-                        ? 'Clock in'
-                        : 'Clock out',
+                const SizedBox(height: 12),
+                ValueListenableBuilder<DateTime>(
+                  valueListenable: tick,
+                  builder: (c, now, _) => FlipClock(
+                    running == null
+                        ? DateFormat(
+                            d.prefs['clockFormat'] == '12'
+                                ? 'hh:mm:ss'
+                                : 'HH:mm:ss',
+                          ).format(now)
+                        : elapsed(duration(running, now)),
+                    size: 36,
+                    label: running == null ? 'Current time' : 'Elapsed time',
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: note,
-                decoration: const InputDecoration(
-                  labelText: 'What are you working on?',
-                  prefixIcon: Icon(LucideIcons.pencilLine, size: 18),
-                ),
-                onChanged: (value) {
-                  if (running != null) {
-                    final db = ref.read(databaseProvider);
-                    unawaited(
-                      (db.update(db.sessions)
-                            ..where((s) => s.id.equals(running.id)))
-                          .write(SessionsCompanion(note: Value(value))),
-                    );
-                  }
-                },
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: 20),
-                child: ValueListenableBuilder<DateTime>(
+                const SizedBox(height: 10),
+                ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
                   builder: (c, now, _) => Text(
-                    'Today’s total  ${elapsed(total(now))}',
-                    style: const TextStyle(
-                      fontFamily: 'Geist Mono',
-                      fontSize: 12,
+                    running == null
+                        ? d.prefs['clockFormat'] == '12'
+                              ? 'Current time · ${DateFormat('a').format(now)}'
+                              : 'Current time'
+                        : 'Clocked in at ${clockTime(d, running.started)}',
+                    style: TextStyle(
+                      color: Theme.of(c).colorScheme.onSurfaceVariant,
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        SectionHeading(
-          'Recent sessions',
-          trailing: Text(
-            '${d.sessions.length} records',
-            style: TextStyle(color: Theme.of(c).colorScheme.onSurfaceVariant),
-          ),
-        ),
-        if (recent.isEmpty)
-          const Surface(
-            child: EmptyState(
-              'Your first session starts here.',
-              'Clock in above, or add a past session.',
-              LucideIcons.clock3,
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: withFeedback(busy ? null : clock),
+                    icon: Icon(
+                      running == null ? LucideIcons.play : LucideIcons.square,
+                      size: 19,
+                    ),
+                    label: Text(
+                      busy
+                          ? 'Saving…'
+                          : running == null
+                          ? 'Clock in'
+                          : 'Clock out',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: note,
+                  decoration: const InputDecoration(
+                    labelText: 'What are you working on?',
+                    prefixIcon: Icon(LucideIcons.pencilLine, size: 18),
+                  ),
+                  onChanged: (value) {
+                    if (running != null) {
+                      final db = ref.read(databaseProvider);
+                      unawaited(
+                        (db.update(db.sessions)
+                              ..where((s) => s.id.equals(running.id)))
+                            .write(SessionsCompanion(note: Value(value))),
+                      );
+                    }
+                  },
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(top: 20),
+                  child: ValueListenableBuilder<DateTime>(
+                    valueListenable: tick,
+                    builder: (c, now, _) => Text(
+                      'Today’s total  ${elapsed(total(now))}',
+                      style: const TextStyle(
+                        fontFamily: 'Geist Mono',
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          )
-        else
-          ...recent.take(3).map((s) => sessionTile(c, ref, d, s)),
-      ],
+          ),
+          SectionHeading(
+            'Recent sessions',
+            trailing: Text(
+              '${d.sessions.length} records',
+              style: TextStyle(color: Theme.of(c).colorScheme.onSurfaceVariant),
+            ),
+          ),
+          if (recent.isEmpty)
+            const Surface(
+              child: EmptyState(
+                'Your first session starts here.',
+                'Clock in above, or add a past session.',
+                LucideIcons.clock3,
+              ),
+            )
+          else
+            ...recent.take(3).map((s) => sessionTile(c, ref, d, s)),
+        ],
+      ),
     );
   }
+}
+
+// The invisible slot reserves the original layout; only one pill is painted
+// and exposed to accessibility. Scroll updates rebuild its transform alone.
+class _HomeBalanceDock extends StatefulWidget {
+  final Widget balance;
+  final Widget Function(ScrollController, Widget) builder;
+  const _HomeBalanceDock({required this.balance, required this.builder});
+
+  @override
+  State<_HomeBalanceDock> createState() => _HomeBalanceDockState();
+}
+
+class _HomeBalanceDockState extends State<_HomeBalanceDock> {
+  final scroll = ScrollController();
+  final stackKey = GlobalKey();
+  final slotKey = GlobalKey();
+  final geometry = ValueNotifier<({double top, double width})?>(null);
+  late final movement = Listenable.merge([scroll, geometry]);
+
+  void measure() {
+    if (!mounted) return;
+    final stack = stackKey.currentContext?.findRenderObject() as RenderBox?;
+    final slot = slotKey.currentContext?.findRenderObject() as RenderBox?;
+    if (stack == null || slot == null || !slot.attached) return;
+    geometry.value = (
+      top: slot.localToGlobal(Offset.zero, ancestor: stack).dy + scroll.offset,
+      width: slot.size.width,
+    );
+  }
+
+  @override
+  void dispose() {
+    scroll.dispose();
+    geometry.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => measure());
+      final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
+      final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
+      final reduced = MediaQuery.disableAnimationsOf(context);
+      return Stack(
+        key: stackKey,
+        children: [
+          Positioned.fill(
+            child: widget.builder(
+              scroll,
+              Center(
+                child: Visibility(
+                  visible: false,
+                  maintainState: true,
+                  maintainAnimation: true,
+                  maintainSize: true,
+                  child: KeyedSubtree(key: slotKey, child: widget.balance),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: horizontal,
+            right: horizontal,
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: movement,
+                child: RepaintBoundary(
+                  child: KeyedSubtree(
+                    key: const ValueKey('home-balance-pill'),
+                    child: widget.balance,
+                  ),
+                ),
+                builder: (context, child) {
+                  final measured = geometry.value;
+                  if (measured == null) return const SizedBox.shrink();
+                  final offset = scroll.hasClients ? scroll.offset : 0.0;
+                  final progress = reduced
+                      ? (offset > 48 ? 1.0 : 0.0)
+                      : Curves.easeInOutCubic.transform(
+                          (offset / 120).clamp(0.0, 1.0),
+                        );
+                  // Settings is at y=16 with a 48px touch target; dock 9px below.
+                  final top = measured.top + (73 - measured.top) * progress;
+                  final rightShift =
+                      (constraints.maxWidth - measured.width) / 2 - 16;
+                  return Transform.translate(
+                    offset: Offset(rightShift * progress, top),
+                    child: Center(child: child),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 class AnalogClock extends StatefulWidget {
