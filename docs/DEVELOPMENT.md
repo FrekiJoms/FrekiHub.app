@@ -109,6 +109,27 @@ adb devices
 
 The command above is for this Windows workspace; from `android` on a Unix host, use `./gradlew installDebug`. Confirm the intended device before installing. Retain the documented Java/temp/output-directory workaround where necessary. Use `flutter run -d DEVICE_ID` when an attached development session/hot reload is wanted; use the real `DEVICE_ID` from the listing. For a profile performance run, use `flutter run --profile -d DEVICE_ID` with device-testing authorization. Do not claim frame time improvements from debug widget tests. Android builds currently use debug signing even for release; they are not production-store signed.
 
+### Fast development loop
+
+During authorized phone testing, keep the installed debug app open and attach once:
+
+```powershell
+flutter attach -d DEVICE_ID
+```
+
+Use the actual connected device ID. Confirm the tool reports a successful attachment and reload controls; attachment/VM-service discovery has previously failed in this workspace, so the command alone is not evidence of a working connection. Resolve USB forwarding/service discovery before defaulting to another full build. An authorized `flutter run -d DEVICE_ID` can establish a new attached session when needed, but it may build/install the app.
+
+| Change or check | Preferred workflow |
+| --- | --- |
+| Supported Dart UI changes: layout, cards, colors, selectors, animations | `r` for hot reload; preserves current app state |
+| Initialization/state changes not applied by reload | `R` for hot restart; resets Flutter state |
+| Feature logic or regression | Relevant targeted checks from the test-routing table |
+| Kotlin, manifest, native plugins or unsupported reload changes | Incremental `installDebug` when reinstall is authorized |
+| Frame timing, memory or scrolling optimization | Profile mode plus DevTools on the physical phone |
+| Startup, reopening or background lifecycle | Explicit lifecycle checks; hot restart is not a cold launch |
+
+Flutter's [hot reload guide](https://docs.flutter.dev/tools/hot-reload) describes reload limits; the [performance guide](https://docs.flutter.dev/perf/ui-performance) explains physical-device/profile-mode measurement. Prefer this loop over reinstalling for every UI edit. Keep normal feature documentation and commit/push delivery; avoid repeated broad tests without new evidence.
+
 The focused device checklist covers cold open/reopen/Retry, light/dark and enlarged text, reduced motion, selector/wheel cancel/confirm, long-press quick add, active-service clock-out, HyperIsland fallback, notification permission denial/retry, sound settings, location-off behavior, enter/exit radius, periodic samples, daily/weekday reminders, purchase listener formats, map network failure and backup/reset. Force-stop must be tested separately from normal closing; it intentionally suspends background execution until reopening.
 
 ## Troubleshooting
