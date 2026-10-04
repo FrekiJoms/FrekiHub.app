@@ -208,17 +208,6 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  running == null
-                      ? 'READY WHEN YOU ARE'
-                      : 'YOUR SESSION IS RUNNING',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 2,
-                    color: Theme.of(c).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
                 ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
                   builder: (c, now, _) => FlipClock(
@@ -231,6 +220,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                         : elapsed(duration(running, now)),
                     size: 36,
                     label: running == null ? 'Current time' : 'Elapsed time',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  running == null
+                      ? 'READY WHEN YOU ARE'
+                      : 'YOUR SESSION IS RUNNING',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    color: Theme.of(c).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 16),

@@ -162,11 +162,11 @@ void main() {
       );
       expect(
         tester.getBottomLeft(liveTime).dy,
-        lessThan(tester.getTopLeft(find.text('YOUR SESSION IS RUNNING')).dy),
+        lessThan(tester.getTopLeft(find.byType(FlipClock)).dy),
       );
       expect(
-        tester.getBottomLeft(find.text('YOUR SESSION IS RUNNING')).dy,
-        lessThan(tester.getTopLeft(find.byType(FlipClock)).dy),
+        tester.getBottomLeft(find.byType(FlipClock)).dy,
+        lessThan(tester.getTopLeft(find.text('YOUR SESSION IS RUNNING')).dy),
       );
       expect(find.textContaining('Today’s total'), findsNothing);
       await tester.pumpWidget(const SizedBox());
