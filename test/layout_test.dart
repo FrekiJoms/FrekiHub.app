@@ -8,7 +8,7 @@ import 'package:freki_hub/screens.dart';
 
 void main() {
   testWidgets(
-    'Session drawer opens without errors, snaps twice and keeps nested inputs usable',
+    'Session drawer opens without errors, caps height and keeps nested inputs usable',
     (tester) async {
       tester.view.physicalSize = const Size(320, 720);
       tester.view.devicePixelRatio = 1;
@@ -55,18 +55,20 @@ void main() {
       final sheet = tester.widget<DraggableScrollableSheet>(
         find.byType(DraggableScrollableSheet),
       );
-      expect(sheet.controller!.size, closeTo(.56, .001));
+      expect(sheet.controller!.size, lessThanOrEqualTo(.70));
       await tester.drag(
         find.byKey(const ValueKey('panel-drag-handle')),
         const Offset(0, -220),
       );
       await tester.pumpAndSettle();
-      expect(sheet.controller!.size, closeTo(.92, .001));
+      expect(sheet.controller!.size, closeTo(.70, .001));
       await tester.tap(find.text('Session type'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Study'));
       await tester.pumpAndSettle();
       expect(find.text('Study'), findsOneWidget);
+      await tester.ensureVisible(find.textContaining('Clock in ·'));
+      await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Clock in ·'));
       await tester.pumpAndSettle();
       expect(find.text('Select date'), findsOneWidget);
@@ -78,12 +80,6 @@ void main() {
       expect(tester.takeException(), isNull);
       tester.view.resetViewInsets();
       await tester.pumpAndSettle();
-      await tester.drag(
-        find.byKey(const ValueKey('panel-drag-handle')),
-        const Offset(0, 240),
-      );
-      await tester.pumpAndSettle();
-      expect(sheet.controller!.size, closeTo(.56, .001));
       await tester.ensureVisible(find.text('Cancel'));
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
@@ -311,6 +307,7 @@ void main() {
       await tester.pump();
       expect(tester.getRect(pill), original);
       expect(tester.takeException(), isNull);
+      await tester.pump(const Duration(milliseconds: 500));
       semantics.dispose();
       await tester.pumpWidget(const SizedBox());
     },

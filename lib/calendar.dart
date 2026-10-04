@@ -854,62 +854,72 @@ class DayPanel extends ConsumerWidget {
     final d = ref.watch(dataProvider).value ?? initialData;
     final sessions = d.sessions.where((s) => s.day == day).toList();
     final entries = d.entries.where((e) => e.day == day).toList();
-    return ListView(
-      primary: true,
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 36),
-      children: [
-        Center(
-          child: Text(
-            DateFormat('EEEE, d MMMM yyyy').format(calendarDate(day)),
-            style: Theme.of(c).textTheme.titleLarge,
-          ),
-        ),
-        const SizedBox(height: 20),
-        FilledButton.icon(
-          onPressed: withFeedback(() => quickAdd(c, d, day)),
-          icon: const Icon(LucideIcons.plus, size: 18),
-          label: const Text('Add to this day'),
-        ),
-        const SizedBox(height: 24),
-        const SectionHeading('Sessions'),
-        const SizedBox(height: 12),
-        if (sessions.isEmpty)
-          const Text('No hours recorded.')
-        else
-          ...sessions.map((s) => sessionTile(c, ref, d, s)),
-        const Divider(),
-        const SectionHeading('Money'),
-        const SizedBox(height: 12),
-        if (entries.isEmpty)
-          const Text('No transactions recorded.')
-        else
-          ...entries.map(
-            (e) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              onTap: withFeedback(
-                () => panel(
-                  c,
-                  EntryForm(data: d, day: day, kind: e.kind, entry: e),
-                ),
-              ),
-              leading: Icon(
-                e.kind == 'income'
-                    ? LucideIcons.arrowDownLeft
-                    : e.kind == 'savings'
-                    ? LucideIcons.piggyBank
-                    : LucideIcons.arrowUpRight,
-              ),
-              title: Text(e.category),
-              subtitle: Text(
-                '${e.kind} · ${e.method}${e.note.isEmpty ? '' : '\n${e.note}'}',
-              ),
-              trailing: Text(
-                money(e.amount, e.currency),
-                style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
-              ),
+    return PanelContent(
+      header: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Text(
+              DateFormat('EEEE, d MMMM yyyy').format(calendarDate(day)),
+              style: Theme.of(c).textTheme.titleLarge,
             ),
           ),
-      ],
+          const SizedBox(height: 20),
+          FilledButton.icon(
+            onPressed: withFeedback(() => quickAdd(c, d, day)),
+            icon: const Icon(LucideIcons.plus, size: 18),
+            label: const Text('Add to this day'),
+          ),
+        ],
+      ),
+      scrollable: true,
+      child: ListView(
+        primary: true,
+        padding: EdgeInsets.zero,
+        children: [
+          const SectionHeading('Sessions'),
+          const SizedBox(height: 12),
+          if (sessions.isEmpty)
+            const Text('No hours recorded.')
+          else
+            ...sessions.map((s) => sessionTile(c, ref, d, s)),
+          const Divider(),
+          const SectionHeading('Money'),
+          const SizedBox(height: 12),
+          if (entries.isEmpty)
+            const Text('No transactions recorded.')
+          else
+            ...entries.map(
+              (e) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                onTap: withFeedback(
+                  () => panel(
+                    c,
+                    EntryForm(data: d, day: day, kind: e.kind, entry: e),
+                  ),
+                ),
+                leading: Icon(
+                  e.kind == 'income'
+                      ? LucideIcons.arrowDownLeft
+                      : e.kind == 'savings'
+                      ? LucideIcons.piggyBank
+                      : LucideIcons.arrowUpRight,
+                ),
+                title: Text(e.category),
+                subtitle: Text(
+                  '${e.kind} · ${e.method}${e.note.isEmpty ? '' : '\n${e.note}'}',
+                ),
+                trailing: Text(
+                  money(e.amount, e.currency),
+                  style: const TextStyle(
+                    fontFamily: 'Geist Mono',
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

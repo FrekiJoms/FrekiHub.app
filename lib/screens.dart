@@ -202,17 +202,15 @@ void openQuickAdd(BuildContext c, AppData data, String day, String kind) {
 
 Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
   c,
-  Padding(
-    padding: const EdgeInsets.all(24),
+  PanelContent(
+    header: Text(
+      'Add to ${DateFormat('d MMMM').format(calendarDate(day))}',
+      style: Theme.of(c).textTheme.titleLarge,
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Add to ${DateFormat('d MMMM').format(calendarDate(day))}',
-          style: Theme.of(c).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 20),
         for (final kind in ['session', 'expense', 'income', 'savings', 'rule'])
           spaced(
             OutlinedButton(
@@ -236,5 +234,4 @@ Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
       ],
     ),
   ),
-  scrollable: true,
 );

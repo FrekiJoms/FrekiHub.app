@@ -140,116 +140,87 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
     final values = widget.values
         .where((v) => v.toLowerCase().contains(query.toLowerCase()))
         .toList();
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: math.max(
-              120,
-              (MediaQuery.sizeOf(c).height -
-                      MediaQuery.viewInsetsOf(c).bottom) *
-                  .7,
+    return PanelContent(
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          PanelHeading(
+            title: widget.title,
+            trailing: IconButton(
+              tooltip: 'Close selection',
+              onPressed: withFeedback(() => Navigator.pop(c)),
+              icon: const Icon(LucideIcons.x, size: 18),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Semantics(
-                      header: true,
-                      child: Text(
-                        widget.title,
-                        style: Theme.of(c).textTheme.titleLarge,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Close selection',
-                    onPressed: withFeedback(() => Navigator.pop(c)),
-                    icon: const Icon(LucideIcons.x, size: 18),
-                  ),
-                ],
+          if (widget.values.length > 8)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, bottom: 12),
+              child: TextField(
+                onChanged: (v) => setState(() => query = v.trim()),
+                decoration: const InputDecoration(
+                  hintText: 'Find an option',
+                  prefixIcon: Icon(LucideIcons.search, size: 18),
+                ),
               ),
-              if (widget.values.length > 8)
+            ),
+        ],
+      ),
+      scrollable: true,
+      child: values.isEmpty
+          ? ListView(
+              children: const [
                 Padding(
-                  padding: const EdgeInsets.only(top: 8, bottom: 12),
-                  child: TextField(
-                    onChanged: (v) => setState(() => query = v.trim()),
-                    decoration: const InputDecoration(
-                      hintText: 'Find an option',
-                      prefixIcon: Icon(LucideIcons.search, size: 18),
-                    ),
+                  padding: EdgeInsets.all(24),
+                  child: Text(
+                    'No matching options',
+                    textAlign: TextAlign.center,
                   ),
                 ),
-              const SizedBox(height: 4),
-              Flexible(
-                child: values.isEmpty
-                    ? ListView(
-                        children: const [
-                          Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text(
-                              'No matching options',
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ],
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: values.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 4),
-                        itemBuilder: (c, i) {
-                          final selected = values[i] == widget.selected;
-                          return Semantics(
-                            selected: selected,
-                            child: Material(
-                              color: selected
-                                  ? colors.primaryContainer
-                                  : colors.surfaceContainerLow,
-                              borderRadius: BorderRadius.circular(14),
-                              clipBehavior: Clip.antiAlias,
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                ),
-                                title: Text(
-                                  values[i],
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: selected
-                                        ? colors.onPrimaryContainer
-                                        : colors.onSurface,
-                                  ),
-                                ),
-                                trailing: selected
-                                    ? Icon(
-                                        LucideIcons.check,
-                                        size: 18,
-                                        color: colors.onPrimaryContainer,
-                                      )
-                                    : null,
-                                onTap: withFeedback(
-                                  () => Navigator.pop(c, values[i]),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
+              ],
+            )
+          : ListView.separated(
+              itemCount: values.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 4),
+              itemBuilder: (c, i) {
+                final selected = values[i] == widget.selected;
+                return Semantics(
+                  selected: selected,
+                  child: Material(
+                    color: selected
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerLow,
+                    borderRadius: BorderRadius.circular(14),
+                    clipBehavior: Clip.antiAlias,
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
                       ),
-              ),
-            ],
-          ),
-        ),
-      ),
+                      title: Text(
+                        values[i],
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: selected
+                              ? FontWeight.w600
+                              : FontWeight.w500,
+                          color: selected
+                              ? colors.onPrimaryContainer
+                              : colors.onSurface,
+                        ),
+                      ),
+                      trailing: selected
+                          ? Icon(
+                              LucideIcons.check,
+                              size: 18,
+                              color: colors.onPrimaryContainer,
+                            )
+                          : null,
+                      onTap: withFeedback(() => Navigator.pop(c, values[i])),
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }

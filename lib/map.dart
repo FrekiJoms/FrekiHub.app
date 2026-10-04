@@ -775,157 +775,141 @@ class _MapLogSheetState extends State<_MapLogSheet> {
         textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
       ),
     ),
-    child: SafeArea(
-      top: false,
-      child: SizedBox(
-        height: MediaQuery.sizeOf(c).height * .65,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Located logs',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+    child: PanelContent(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      header: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Located logs',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                TextButton(
+                  onPressed: withFeedback(() => Navigator.pop(c, selected)),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                TextButton(
+                  onPressed: withFeedback(
+                    () => setState(
+                      () => selected.addAll(widget.records.map((r) => r.id)),
+                    ),
+                  ),
+                  child: const Text('Select all'),
+                ),
+                TextButton(
+                  onPressed: withFeedback(() => setState(selected.clear)),
+                  child: const Text('Clear'),
+                ),
+                Expanded(
+                  child: Text(
+                    '${selected.length} selected',
+                    textAlign: TextAlign.end,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'No selection traces all filtered logs. Expand a record for its stored details.',
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
+      scrollable: true,
+      child: widget.records.isEmpty
+          ? ListView(
+              children: const [
+                Center(child: Text('No records with a usable location')),
+              ],
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+              itemCount: widget.records.length,
+              itemBuilder: (c, i) {
+                final record = widget.records[i];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Surface(
+                    padding: EdgeInsets.zero,
+                    child: ExpansionTile(
+                      leading: Checkbox(
+                        value: selected.contains(record.id),
+                        activeColor: _MapScreenState.colors[record.category],
+                        semanticLabel: 'Select ${record.title}',
+                        onChanged: (_) {
+                          ActionFeedback.tap();
+                          setState(() {
+                            if (!selected.remove(record.id)) {
+                              selected.add(record.id);
+                            }
+                          });
+                        },
                       ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: withFeedback(() => Navigator.pop(c, selected)),
-                    child: const Text('Done'),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  TextButton(
-                    onPressed: withFeedback(
-                      () => setState(
-                        () => selected.addAll(widget.records.map((r) => r.id)),
+                      title: Text(
+                        record.title,
+                        style: const TextStyle(fontSize: 14),
                       ),
-                    ),
-                    child: const Text('Select all'),
-                  ),
-                  TextButton(
-                    onPressed: withFeedback(() => setState(selected.clear)),
-                    child: const Text('Clear'),
-                  ),
-                  Expanded(
-                    child: Text(
-                      '${selected.length} selected',
-                      textAlign: TextAlign.end,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'No selection traces all filtered logs. Expand a record for its stored details.',
-                style: TextStyle(fontSize: 12),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: widget.records.isEmpty
-                  ? ListView(
-                      children: const [
-                        Center(
-                          child: Text('No records with a usable location'),
+                      subtitle: Text(
+                        '${record.category} · ${record.location}\n${DateFormat('d MMM yyyy, HH:mm:ss').format(record.time)}',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: SelectableText(
+                            [
+                              'Coordinates: ${record.lat.toStringAsFixed(6)}, ${record.lng.toStringAsFixed(6)}',
+                              if (record.position['accuracy'] != null)
+                                'Accuracy: ±${record.position['accuracy']} m',
+                              if (record.position['locationTime'] is int)
+                                'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(record.position['locationTime'] as int))}',
+                              if (record.details['amount'] != null &&
+                                  record.details['currency'] is String)
+                                'Amount: ${money(record.details['amount'] is int ? record.details['amount'] as int : parseMoney('${record.details['amount']}', record.details['currency'] as String), record.details['currency'] as String)}',
+                              for (final entry in record.details.entries.where(
+                                (e) => ![
+                                  'position',
+                                  'lat',
+                                  'lng',
+                                  'accuracy',
+                                  'locationTime',
+                                  'id',
+                                  'time',
+                                  'title',
+                                  'location',
+                                  'amount',
+                                  'currency',
+                                ].contains(e.key),
+                              ))
+                                '${entry.key}: ${entry.value}',
+                            ].join('\n'),
+                            style: Theme.of(c).textTheme.bodySmall,
+                          ),
                         ),
                       ],
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                      itemCount: widget.records.length,
-                      itemBuilder: (c, i) {
-                        final record = widget.records[i];
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Surface(
-                            padding: EdgeInsets.zero,
-                            child: ExpansionTile(
-                              leading: Checkbox(
-                                value: selected.contains(record.id),
-                                activeColor:
-                                    _MapScreenState.colors[record.category],
-                                semanticLabel: 'Select ${record.title}',
-                                onChanged: (_) {
-                                  ActionFeedback.tap();
-                                  setState(() {
-                                    if (!selected.remove(record.id)) {
-                                      selected.add(record.id);
-                                    }
-                                  });
-                                },
-                              ),
-                              title: Text(
-                                record.title,
-                                style: const TextStyle(fontSize: 14),
-                              ),
-                              subtitle: Text(
-                                '${record.category} · ${record.location}\n${DateFormat('d MMM yyyy, HH:mm:ss').format(record.time)}',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                              childrenPadding: const EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                16,
-                              ),
-                              children: [
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: SelectableText(
-                                    [
-                                      'Coordinates: ${record.lat.toStringAsFixed(6)}, ${record.lng.toStringAsFixed(6)}',
-                                      if (record.position['accuracy'] != null)
-                                        'Accuracy: ±${record.position['accuracy']} m',
-                                      if (record.position['locationTime']
-                                          is int)
-                                        'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(record.position['locationTime'] as int))}',
-                                      if (record.details['amount'] != null &&
-                                          record.details['currency'] is String)
-                                        'Amount: ${money(record.details['amount'] is int ? record.details['amount'] as int : parseMoney('${record.details['amount']}', record.details['currency'] as String), record.details['currency'] as String)}',
-                                      for (final entry
-                                          in record.details.entries.where(
-                                            (e) => ![
-                                              'position',
-                                              'lat',
-                                              'lng',
-                                              'accuracy',
-                                              'locationTime',
-                                              'id',
-                                              'time',
-                                              'title',
-                                              'location',
-                                              'amount',
-                                              'currency',
-                                            ].contains(e.key),
-                                          ))
-                                        '${entry.key}: ${entry.value}',
-                                    ].join('\n'),
-                                    style: Theme.of(c).textTheme.bodySmall,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
                     ),
+                  ),
+                );
+              },
             ),
-          ],
-        ),
-      ),
     ),
   );
 }

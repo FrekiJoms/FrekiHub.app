@@ -15,7 +15,7 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 - Android-first Flutter app; local SQLite storage; no login, backend, remote sync or AI purchase parser.
 - Six main page surfaces: Home, Map, Sessions, Finance, Calendar and Settings. Four bottom tabs; Calendar top-left and Settings top-right. Logs and automation are Settings bottom sheets.
 - Quick add is a center-bottom long-press/drag gesture with accessible actions, not a visible plus tab.
-- Record editing and Settings sheets use the shared two-position bottom drawer. Follow the drawer contract in [App documentation](docs/APP_DOCUMENTATION.md) and the canonical instructions before introducing a new modal.
+- Record editing and Settings sheets use the shared content-fit/70% bottom drawer. Follow the drawer contract in [App documentation](docs/APP_DOCUMENTATION.md) and the canonical instructions before introducing a new modal.
 - Finance retains `BudgetScreen`, `budget.dart`, `budget_page`, `budget.*` and native receipt destination `budget` for compatibility.
 - `Session` stores epoch milliseconds and a date key; money uses integer minor units. Planner rules and automation rules are different resources.
 - Flutter commits queued native purchases, settings, toasts and automatic-session records on reconciliation. Do not claim Finance commits immediately while Flutter is closed.
@@ -28,7 +28,7 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 
 | Task | Read | Inspect first |
 | --- | --- | --- |
-| Navigation, glass, transitions, selectors | App documentation | `main.dart`, `design.dart`, `controls.dart`, `pickers.dart` |
+| Navigation, glass, transitions, selectors | App documentation | `main.dart`, `design.dart`, `components.dart`, `sheets.dart`, `controls.dart`, `pickers.dart` |
 | Clock, session editing, history | App documentation + data reference | `today.dart`, `flip_clock.dart`, `history.dart`, `forms.dart`, `data.dart` |
 | Finance math/planner | Data reference | `budget.dart`, `data.dart`, `forms.dart` |
 | Calendar | App documentation | `calendar.dart`, `screens.dart`, `data.dart` |

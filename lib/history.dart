@@ -95,17 +95,15 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Future<void> formats() => panel(
     context,
     StatefulBuilder(
-      builder: (c, setLocal) => SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+      builder: (c, setLocal) => PanelContent(
+        header: Text(
+          'Make dates your own.',
+          style: Theme.of(c).textTheme.titleLarge,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Make dates your own.',
-              style: Theme.of(c).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
             for (final f in [
               'EEE, d MMM',
               'dd/MM/yyyy',

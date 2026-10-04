@@ -37,7 +37,7 @@ The top 28 px of Home's scrolling viewport fades to transparency beneath the fix
 
 Manual clock-in creates an OJT session through `AppDatabase.clockIn`. It rejects an existing running session or any session already assigned to today's date. This is stricter than the database's one-running-session constraint: manual forms and native automatic imports use other write paths and can create multiple completed records on one day. Preserve that distinction or deliberately change it across paths.
 
-Home's manual Clock out action opens an “End this session?” confirmation in the shared two-position drawer. It previews live elapsed time, session type and the formatted start time. End session and Keep running remain fixed at the bottom; details use the drawer's primary scroll controller. Keep running, Back and barrier dismissal preserve the active session. Only explicit confirmation commits the existing note/clock-out transaction. Repeated opening/confirmation is guarded. Opening/closing reuse the shared 250/150 ms motion and reduced-motion behavior. Native notification and automation clock-outs retain their existing behavior.
+Home's manual Clock out action opens an “End this session?” confirmation in the shared adaptive drawer. It previews live elapsed time, session type and the formatted start time. End session and Keep running remain fixed at the bottom; details use the drawer's primary scroll controller. Keep running, Back and barrier dismissal preserve the active session. Only explicit confirmation commits the existing note/clock-out transaction. Repeated opening/confirmation is guarded. Opening/closing reuse the shared 250/150 ms motion and reduced-motion behavior. Native notification and automation clock-outs retain their existing behavior.
 
 The timestamp is authoritative for duration; a ticking Flutter widget is not the source of elapsed time. Android's foreground chronometer uses the original start instant. A system notification clock-out stores an exact pending end instant and Flutter reconciles it later. Automatic records use notes beginning `Automatic · PLACE`; visible condition links currently derive the location name from that note, so changing the note can remove the shortcut.
 
@@ -67,7 +67,7 @@ Calendar is the fixed upper-left shortcut. Its local toolbar switches Year, Mont
 
 The year view shows twelve months. Month view uses recorded markers or labels and a draggable collapse handle that reduces to the selected week. Week view has a 24-hour session grid and a finance band; Day view has a visual cover and recorded session/finance agenda. Records are real saved data, not the gaming events in the original reference screenshots. Calendar records retain original currency denominations.
 
-Sessions and entries are indexed by date when their record lists change. The selected date/view are exported as rule context. The day agenda uses the shared two-position drawer, without a nested draggable sheet. The legacy `dayPanel` preference remains in saved/exported data but no longer controls drawer height. Initial Calendar selection/view currently start at today/month when remounted; exported preferences should not be mistaken for complete view-state restoration.
+Sessions and entries are indexed by date when their record lists change. The selected date/view are exported as rule context. The day agenda uses the shared adaptive drawer, without a nested draggable sheet. The legacy `dayPanel` preference remains in saved/exported data but no longer controls drawer height. Initial Calendar selection/view currently start at today/month when remounted; exported preferences should not be mistaken for complete view-state restoration.
 
 ## Map
 
@@ -85,9 +85,11 @@ Controls use compact 18 px icons/12 px labels with 48 px button touch targets. T
 
 ## Settings and bottom sheets
 
-The shared `panel` in `design.dart` is the standard bottom drawer for record details, forms, pickers and Settings sheets. It opens at 56% of available height and snaps between that compact position and 92% expanded. Drag the handle or scroll the content to resize; tapping the handle toggles positions. Accessibility increase/decrease actions do the same. The keyboard expands the drawer within the remaining viewport. Opening/closing use 250/150 ms transitions; reduced motion skips those transitions and uses immediate handle resizing.
+The shared `panel` implementation lives in `sheets.dart`, a part of `design.dart`, and is the standard bottom drawer for details, forms, selectors, pickers, confirmations and Settings sheets. Default height fits its contents, capped at 70% of the available viewport. Expanded height is 70%; dragging or swiping downward closes the route. Content-fit default and expanded are predefined snap positions, with a closed extent of zero. For long content, default and expanded coincide. The handle toggles default/expanded on tap and exposes increase, decrease and Close sheet accessibility actions. Opening/closing reuse 250/150 ms transitions; reduced motion skips route/handle transitions. Keyboard appearance expands within the remaining viewport.
 
-Content with a vertical scrollable inherits the drawer's `PrimaryScrollController`; do not give it an independent controller or nest another draggable sheet. Pass `scrollable: true` for plain columns and wheel pickers so `panel` supplies the scrolling wrapper. Flutter requires the sheet's controller to be attached to the child scrollable for coordinated resizing, as described in the [DraggableScrollableSheet API](https://api.flutter.dev/flutter/widgets/DraggableScrollableSheet-class.html). Keep empty/loading content scrollable too. Picker wheels retain their own wheel interaction while surrounding drawer content scrolls.
+`PanelContent` provides fixed `header` and `footer` slots around one primary scrollable body. Plain content gets the shared scrolling wrapper; pass `PanelContent(scrollable: true)` for an existing lazy ListView. The legacy `panel(scrollable: true)` wrapper supports plain content without slots. The supplied `PrimaryScrollController` coordinates content scrolling with resizing; do not supply an independent controller or nest a draggable sheet. Short content is measured from its laid-out viewport and scroll extent, without intrinsic layout or constructing a second copy. Long lists remain lazy. Content/metrics changes update the default snap height. Empty/loading content stays scrollable. Picker wheels retain their own wheel interaction while surrounding content uses the drawer controller.
+
+Headers, search/filter controls and primary actions stay outside body scrolling. Save/Cancel remain pinned in forms; contextual Delete actions scroll with the form fields. `PanelActions` places two actions side by side on short/keyboard layouts. `components.dart` owns the reusable `AppButton` (primary, secondary, quiet, saving and destructive-text variants), `PanelActions`, `PanelHeading`, opaque `Surface` cards/containers and liquid-glass `Chrome`. Standard Flutter controls continue to use the shared themes in `Design.theme`; no additional package or parallel styling system is needed.
 
 Settings contains Activity logs, Conditions & automation, saved-transaction posting access, notification sounds, appearance, display currency, category/payment-method management, in-app sound effects, export, restore and clear-data controls.
 
@@ -103,7 +105,7 @@ Backup exports local data as JSON through native sharing. Restore asks for confi
 
 ## Architecture and ownership
 
-The architecture has three layers: Flutter presentation, Drift data/calculations and native Android runtime. `screens.dart` groups most screens as `part` files, sharing imports and helper functions. These are not standalone libraries: adding an import directly to a part file is invalid. `design.dart` similarly owns the `flip_clock.dart` part.
+The architecture has three layers: Flutter presentation, Drift data/calculations and native Android runtime. `screens.dart` groups most screens as `part` files, sharing imports and helper functions. These are not standalone libraries: adding an import directly to a part file is invalid. `design.dart` similarly owns the `flip_clock.dart`, `components.dart` and `sheets.dart` parts.
 
 ```mermaid
 flowchart LR
@@ -129,7 +131,9 @@ The native queue and pending receipts are transport state, not rule source. Flut
 | `lib/main.dart` | Bootstrap, router, theme selectors, shell navigation, lifecycle, foreground reconciliation |
 | `lib/startup.dart` | Glass preparation deadline, orbit loader, readiness-driven intro |
 | `lib/screens.dart` | Shared screen imports/parts, guarded operations, session tiles and quick add |
-| `lib/design.dart` | Design tokens, surfaces/chrome, page layout, motion, navigation, sheets, toasts |
+| `lib/design.dart` | Owning design library, tokens/themes, page layout, motion, navigation and toasts |
+| `lib/components.dart` | Reusable buttons, action groups, sheet headings, Surface cards/containers and glass Chrome (design part) |
+| `lib/sheets.dart` | Universal content-fit/70% drawer, fixed slots, snapping/dismissal and confirmations (design part) |
 | `lib/controls.dart`, `lib/pickers.dart` | Custom choice sheets/selectors and wheel date/time pickers |
 | `lib/today.dart`, `lib/flip_clock.dart` | Home, analog clock and elapsed split-flap display |
 | `lib/history.dart`, `lib/calendar.dart`, `lib/budget.dart` | Sessions, calendar and Finance pages |

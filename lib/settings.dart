@@ -123,12 +123,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> clear() async {
     final typed = TextEditingController();
-    final approved = await showDialog<bool>(
-      context: context,
-      builder: (c) => StatefulBuilder(
-        builder: (c, setLocal) => AlertDialog(
-          title: const Text('Clear everything?'),
-          content: Column(
+    final approved = await panel<bool>(
+      context,
+      StatefulBuilder(
+        builder: (c, setLocal) => PanelContent(
+          header: Text(
+            'Clear everything?',
+            style: Theme.of(c).textTheme.titleLarge,
+          ),
+          footer: PanelActions(
+            children: [
+              AppButton(
+                label: 'Clear all data',
+                onPressed: typed.text == 'DELETE'
+                    ? () => Navigator.pop(c, true)
+                    : null,
+              ),
+              AppButton(
+                label: 'Cancel',
+                secondary: true,
+                onPressed: () => Navigator.pop(c, false),
+              ),
+            ],
+          ),
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
@@ -142,18 +160,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: withFeedback(() => Navigator.pop(c, false)),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: withFeedback(
-                typed.text == 'DELETE' ? () => Navigator.pop(c, true) : null,
-              ),
-              child: const Text('Clear all data'),
-            ),
-          ],
         ),
       ),
     );
@@ -417,87 +423,63 @@ class _ManageListState extends ConsumerState<_ManageList> {
   }
 
   @override
-  Widget build(BuildContext c) => SizedBox(
-    height: MediaQuery.sizeOf(c).height * .7,
-    child: Column(
+  Widget build(BuildContext c) => PanelContent(
+    header: Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Text(
-                widget.setting == 'categories'
-                    ? 'Categories'
-                    : 'Payment methods',
-                style: Theme.of(c).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: name,
-                decoration: InputDecoration(
-                  labelText: 'Add a name',
-                  suffixIcon: IconButton(
-                    tooltip: 'Add',
-                    onPressed: withFeedback(
-                      saving
-                          ? null
-                          : () async {
-                              final value = name.text.trim();
-                              if (value.isEmpty ||
-                                  items.any(
-                                    (s) =>
-                                        s.toLowerCase() == value.toLowerCase(),
-                                  )) {
-                                toast(
-                                  c,
-                                  'Enter a new, unique name.',
-                                  error: true,
-                                );
-                                return;
-                              }
-                              await save([...items, value], clearName: true);
-                            },
-                    ),
-                    icon: const Icon(LucideIcons.plus),
-                  ),
-                ),
-              ),
-            ],
-          ),
+        Text(
+          widget.setting == 'categories' ? 'Categories' : 'Payment methods',
+          style: Theme.of(c).textTheme.titleLarge,
         ),
-        Expanded(
-          child: ListView(
-            children: items
-                .map(
-                  (item) => ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-                    title: Text(item),
-                    trailing: IconButton(
-                      tooltip: 'Remove $item',
-                      onPressed: withFeedback(
-                        saving || items.length <= 1
-                            ? null
-                            : () async {
-                                await save(
-                                  items.where((s) => s != item).toList(),
-                                );
-                              },
-                      ),
-                      icon: const Icon(LucideIcons.x, size: 18),
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(20),
-          child: FilledButton(
-            onPressed: withFeedback(() => Navigator.pop(c)),
-            child: const Text('Done'),
+        const SizedBox(height: 20),
+        TextField(
+          controller: name,
+          decoration: InputDecoration(
+            labelText: 'Add a name',
+            suffixIcon: IconButton(
+              tooltip: 'Add',
+              onPressed: withFeedback(
+                saving
+                    ? null
+                    : () async {
+                        final value = name.text.trim();
+                        if (value.isEmpty ||
+                            items.any(
+                              (s) => s.toLowerCase() == value.toLowerCase(),
+                            )) {
+                          toast(c, 'Enter a new, unique name.', error: true);
+                          return;
+                        }
+                        await save([...items, value], clearName: true);
+                      },
+              ),
+              icon: const Icon(LucideIcons.plus),
+            ),
           ),
         ),
       ],
+    ),
+    footer: AppButton(label: 'Done', onPressed: () => Navigator.pop(c)),
+    scrollable: true,
+    child: ListView(
+      children: items
+          .map(
+            (item) => ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+              title: Text(item),
+              trailing: IconButton(
+                tooltip: 'Remove $item',
+                onPressed: withFeedback(
+                  saving || items.length <= 1
+                      ? null
+                      : () async {
+                          await save(items.where((s) => s != item).toList());
+                        },
+                ),
+                icon: const Icon(LucideIcons.x, size: 18),
+              ),
+            ),
+          )
+          .toList(),
     ),
   );
 }

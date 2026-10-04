@@ -11,14 +11,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   DateTime period = DateTime(DateTime.now().year, DateTime.now().month);
   Future<void> occurrence(Projection p) => panel(
     context,
-    Padding(
-      padding: const EdgeInsets.all(24),
+    PanelContent(
+      header: PanelHeading(title: p.rule.title),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(p.rule.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 10),
           Text('${p.day} · ${money(p.amount, widget.data.currency)}'),
           const SizedBox(height: 20),
           if (p.status != 'complete')
@@ -75,18 +73,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ],
       ),
     ),
-    scrollable: true,
   );
   Future<void> ruleMenu(Rule r) => panel(
     context,
-    Padding(
-      padding: const EdgeInsets.all(24),
+    PanelContent(
+      header: PanelHeading(title: r.title),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(r.title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 16),
           OutlinedButton(
             onPressed: withFeedback(() {
               Navigator.pop(context);
@@ -135,7 +130,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         ],
       ),
     ),
-    scrollable: true,
   );
   @override
   Widget build(BuildContext c) {
@@ -612,57 +606,44 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       c,
       StatefulBuilder(
         builder: (c, setLocal) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('Savings goal', style: Theme.of(c).textTheme.titleLarge),
-                const SizedBox(height: 20),
-                TextField(
-                  controller: field,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Goal · ${widget.data.currency}',
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: withFeedback(() async {
-                    try {
-                      final amount = parseMoney(
-                        field.text,
-                        widget.data.currency,
-                      );
-                      await ref
-                          .read(databaseProvider)
-                          .pref('savingsGoal:${widget.data.currency}', amount);
-                      if (c.mounted) {
-                        Navigator.pop(c);
-                      }
-                    } catch (e) {
-                      if (c.mounted) {
-                        toast(
-                          c,
-                          e is FormatException
-                              ? e.message
-                              : 'Could not save goal. Try again.',
-                          error: true,
-                        );
-                      }
-                    }
-                  }),
-                  child: const Text('Save goal'),
-                ),
-              ],
+          return PanelContent(
+            header: PanelHeading(title: 'Savings goal'),
+            footer: AppButton(
+              label: 'Save goal',
+              onPressed: () async {
+                try {
+                  final amount = parseMoney(field.text, widget.data.currency);
+                  await ref
+                      .read(databaseProvider)
+                      .pref('savingsGoal:${widget.data.currency}', amount);
+                  if (c.mounted) {
+                    Navigator.pop(c);
+                  }
+                } catch (e) {
+                  if (c.mounted) {
+                    toast(
+                      c,
+                      e is FormatException
+                          ? e.message
+                          : 'Could not save goal. Try again.',
+                      error: true,
+                    );
+                  }
+                }
+              },
+            ),
+            child: TextField(
+              controller: field,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(
+                labelText: 'Goal · ${widget.data.currency}',
+              ),
             ),
           );
         },
       ),
-      scrollable: true,
     );
     field.dispose();
   }

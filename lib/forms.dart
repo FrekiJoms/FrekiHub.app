@@ -124,17 +124,24 @@ class _SessionFormState extends ConsumerState<SessionForm> {
   }
 
   @override
-  Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+  Widget build(BuildContext c) => PanelContent(
+    header: PanelHeading(
+      title: widget.session == null ? 'Add a session' : 'Session details',
+    ),
+    footer: PanelActions(
+      children: [
+        AppButton(label: 'Save session', busy: saving, onPressed: save),
+        AppButton(
+          label: 'Cancel',
+          secondary: true,
+          onPressed: () => Navigator.pop(c),
+        ),
+      ],
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.session == null ? 'Add a session' : 'Session details',
-          style: Theme.of(c).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
         spaced(
           selectField('Session type', kind, [
             'OJT',
@@ -176,27 +183,18 @@ class _SessionFormState extends ConsumerState<SessionForm> {
             maxLines: 4,
           ),
         ),
-        FilledButton(
-          onPressed: withFeedback(saving ? null : save),
-          child: Text(saving ? 'Saving…' : 'Save session'),
-        ),
         if (widget.session != null)
-          TextButton(
-            onPressed: withFeedback(() async {
+          AppButton(
+            label: 'Delete session',
+            quiet: true,
+            destructive: true,
+            onPressed: () async {
               final deleted = await deleteSession(c, ref, widget.session!);
               if (deleted && c.mounted) {
                 Navigator.pop(c);
               }
-            }),
-            child: Text(
-              'Delete session',
-              style: TextStyle(color: Theme.of(c).colorScheme.error),
-            ),
+            },
           ),
-        TextButton(
-          onPressed: withFeedback(() => Navigator.pop(c)),
-          child: const Text('Cancel'),
-        ),
       ],
     ),
   );
@@ -293,17 +291,24 @@ class _EntryFormState extends ConsumerState<EntryForm> {
   }
 
   @override
-  Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+  Widget build(BuildContext c) => PanelContent(
+    header: PanelHeading(
+      title: widget.entry == null ? 'Add $kind' : 'Edit transaction',
+    ),
+    footer: PanelActions(
+      children: [
+        AppButton(label: 'Save transaction', busy: busy, onPressed: save),
+        AppButton(
+          label: 'Cancel',
+          secondary: true,
+          onPressed: () => Navigator.pop(c),
+        ),
+      ],
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.entry == null ? 'Add $kind' : 'Edit transaction',
-          style: Theme.of(c).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
         spaced(
           selectField('Type', kind, [
             'expense',
@@ -362,13 +367,12 @@ class _EntryFormState extends ConsumerState<EntryForm> {
             maxLines: 3,
           ),
         ),
-        FilledButton(
-          onPressed: withFeedback(busy ? null : save),
-          child: Text(busy ? 'Saving…' : 'Save transaction'),
-        ),
         if (widget.entry != null)
-          TextButton(
-            onPressed: withFeedback(() async {
+          AppButton(
+            label: 'Delete transaction',
+            quiet: true,
+            destructive: true,
+            onPressed: () async {
               if (await confirm(
                 c,
                 'Delete transaction?',
@@ -383,16 +387,8 @@ class _EntryFormState extends ConsumerState<EntryForm> {
                   if (c.mounted) Navigator.pop(c);
                 });
               }
-            }),
-            child: Text(
-              'Delete transaction',
-              style: TextStyle(color: Theme.of(c).colorScheme.error),
-            ),
+            },
           ),
-        TextButton(
-          onPressed: withFeedback(() => Navigator.pop(c)),
-          child: const Text('Cancel'),
-        ),
       ],
     ),
   );
@@ -504,17 +500,24 @@ class _RuleFormState extends ConsumerState<RuleForm> {
   }
 
   @override
-  Widget build(BuildContext c) => SingleChildScrollView(
-    padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+  Widget build(BuildContext c) => PanelContent(
+    header: PanelHeading(
+      title: widget.rule == null ? 'Plan a transaction' : 'Edit planner rule',
+    ),
+    footer: PanelActions(
+      children: [
+        AppButton(label: 'Save rule', busy: saving, onPressed: save),
+        AppButton(
+          label: 'Cancel',
+          secondary: true,
+          onPressed: () => Navigator.pop(c),
+        ),
+      ],
+    ),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          widget.rule == null ? 'Plan a transaction' : 'Edit planner rule',
-          style: Theme.of(c).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 16),
         spaced(
           TextField(
             controller: title,
@@ -636,14 +639,6 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             {...widget.data.methods, method}.toList(),
             (v) => method = v,
           ),
-        ),
-        FilledButton(
-          onPressed: withFeedback(saving ? null : save),
-          child: Text(saving ? 'Saving…' : 'Save rule'),
-        ),
-        TextButton(
-          onPressed: withFeedback(() => Navigator.pop(c)),
-          child: const Text('Cancel'),
         ),
       ],
     ),

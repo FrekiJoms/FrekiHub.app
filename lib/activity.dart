@@ -281,52 +281,37 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
       await panel(
         context,
         StatefulBuilder(
-          builder: (c, change) => SizedBox(
-            height: MediaQuery.sizeOf(c).height * .6,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(
-                    'Scan selected payment apps',
-                    style: Theme.of(c).textTheme.titleLarge,
-                  ),
-                ),
-                Expanded(
-                  child: ListView(
-                    children: installed
-                        .map(
-                          (app) => CheckboxListTile(
-                            title: Text(app['name'] as String),
-                            subtitle: Text(app['package'] as String),
-                            value: selected.contains(app['package']),
-                            onChanged: (v) => change(() {
-                              v!
-                                  ? selected.add(app['package'] as String)
-                                  : selected.remove(app['package']);
-                            }),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: FilledButton(
-                    onPressed: withFeedback(() async {
-                      config['apps'] = selected.toList();
-                      await ref
-                          .read(databaseProvider)
-                          .pref('automation', jsonEncode(config));
-                      await AutomationSync.configure(
-                        await ref.read(databaseProvider).readAll(),
-                      );
-                      if (c.mounted) Navigator.pop(c);
-                    }),
-                    child: const Text('Save selected apps'),
-                  ),
-                ),
-              ],
+          builder: (c, change) => PanelContent(
+            header: PanelHeading(title: 'Scan selected payment apps'),
+            footer: AppButton(
+              label: 'Save selected apps',
+              onPressed: () async {
+                config['apps'] = selected.toList();
+                await ref
+                    .read(databaseProvider)
+                    .pref('automation', jsonEncode(config));
+                await AutomationSync.configure(
+                  await ref.read(databaseProvider).readAll(),
+                );
+                if (c.mounted) Navigator.pop(c);
+              },
+            ),
+            scrollable: true,
+            child: ListView(
+              children: installed
+                  .map(
+                    (app) => CheckboxListTile(
+                      title: Text(app['name'] as String),
+                      subtitle: Text(app['package'] as String),
+                      value: selected.contains(app['package']),
+                      onChanged: (v) => change(() {
+                        v!
+                            ? selected.add(app['package'] as String)
+                            : selected.remove(app['package']);
+                      }),
+                    ),
+                  )
+                  .toList(),
             ),
           ),
         ),
@@ -347,9 +332,9 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
         ],
       );
     }
-    return SizedBox(
-      height: MediaQuery.sizeOf(c).height * .82,
-      child: Column(
+    return PanelContent(
+      header: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -390,9 +375,10 @@ class _ActivitySheetState extends ConsumerState<ActivitySheet>
                 ),
             ],
           ),
-          Expanded(child: tab == 0 ? logs(c, data) : builder(c, data)),
         ],
       ),
+      scrollable: true,
+      child: tab == 0 ? logs(c, data) : builder(c, data),
     );
   }
 

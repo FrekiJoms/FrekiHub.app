@@ -2,13 +2,15 @@ import 'dart:math' as math;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
 import 'services.dart';
 part 'flip_clock.dart';
+part 'components.dart';
+part 'sheets.dart';
 
 abstract final class Motion {
   static const curve = Cubic(.22, 1, .36, 1);
@@ -319,59 +321,6 @@ class _Grain extends CustomPainter {
 
   @override
   bool shouldRepaint(_Grain old) => dark != old.dark;
-}
-
-class Surface extends StatelessWidget {
-  final Widget child;
-  final EdgeInsets padding;
-  final BorderRadius borderRadius;
-  const Surface({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(20),
-    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
-  });
-  @override
-  Widget build(BuildContext context) => Container(
-    decoration: BoxDecoration(
-      color: Theme.of(context).colorScheme.surface,
-      borderRadius: borderRadius,
-      border: Border.all(
-        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .035),
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: .018),
-          blurRadius: 20,
-          offset: const Offset(0, 6),
-        ),
-      ],
-    ),
-    child: Material(
-      type: MaterialType.transparency,
-      borderRadius: borderRadius,
-      clipBehavior: Clip.antiAlias,
-      child: Padding(padding: padding, child: child),
-    ),
-  );
-}
-
-class Chrome extends StatelessWidget {
-  final Widget child;
-  final EdgeInsets padding;
-  const Chrome({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(8),
-  });
-  @override
-  Widget build(BuildContext context) => GlassContainer(
-    useOwnLayer: true,
-    shape: const LiquidRoundedSuperellipse(borderRadius: 40),
-    settings: const LiquidGlassSettings(blur: 12, thickness: 24),
-    padding: padding,
-    child: child,
-  );
 }
 
 class Entrance extends StatelessWidget {
@@ -915,186 +864,6 @@ class _PillNavigationState extends State<PillNavigation>
       ),
     );
   }
-}
-
-Future<bool> confirm(
-  BuildContext c,
-  String title,
-  String detail, {
-  String action = 'Delete',
-}) async =>
-    await showDialog<bool>(
-      context: c,
-      builder: (c) => AlertDialog(
-        title: Text(title),
-        content: Text(detail),
-        actions: [
-          TextButton(
-            onPressed: withFeedback(() => Navigator.pop(c, false)),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: withFeedback(() => Navigator.pop(c, true)),
-            child: Text(action),
-          ),
-        ],
-      ),
-    ) ??
-    false;
-Future<T?> panel<T>(BuildContext c, Widget child, {bool scrollable = false}) =>
-    showModalBottomSheet<T>(
-      context: c,
-      isScrollControlled: true,
-      useSafeArea: true,
-      showDragHandle: false,
-      enableDrag: false,
-      backgroundColor: Colors.transparent,
-      constraints: const BoxConstraints(maxWidth: 640),
-      sheetAnimationStyle: AnimationStyle(
-        duration: Motion.duration(c, 250),
-        reverseDuration: Motion.duration(c, 150),
-      ),
-      builder: (c) => _PanelSheet(scrollable: scrollable, child: child),
-    );
-
-class _PanelSheet extends StatefulWidget {
-  final Widget child;
-  final bool scrollable;
-  const _PanelSheet({required this.child, required this.scrollable});
-  @override
-  State<_PanelSheet> createState() => _PanelSheetState();
-}
-
-class _PanelSheetState extends State<_PanelSheet> {
-  static const compact = .56, expanded = .92;
-  final controller = DraggableScrollableController();
-  double keyboard = 0;
-
-  void settle(double extent) {
-    if (!controller.isAttached) return;
-    final duration = Motion.duration(context);
-    if (duration == Duration.zero) {
-      controller.jumpTo(extent);
-    } else {
-      unawaited(
-        controller.animateTo(extent, duration: duration, curve: Motion.curve),
-      );
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final next = MediaQuery.viewInsetsOf(context).bottom;
-    if (next > keyboard) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) settle(expanded);
-      });
-    }
-    keyboard = next;
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext c) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(c).bottom),
-    child: LayoutBuilder(
-      builder: (c, bounds) => DraggableScrollableSheet(
-        controller: controller,
-        initialChildSize: compact,
-        minChildSize: compact,
-        maxChildSize: expanded,
-        expand: false,
-        snap: true,
-        shouldCloseOnMinExtent: false,
-        // Flutter requires a positive snap duration, even with reduced motion.
-        snapAnimationDuration: MediaQuery.disableAnimationsOf(c)
-            ? const Duration(milliseconds: 1)
-            : Motion.duration(c, 150),
-        builder: (c, scroll) => Material(
-          color: Theme.of(c).colorScheme.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              Semantics(
-                label: 'Resize sheet',
-                button: true,
-                onIncrease: () => settle(expanded),
-                onDecrease: () => settle(compact),
-                child: GestureDetector(
-                  key: const ValueKey('panel-drag-handle'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: withFeedback(() {
-                    if (controller.isAttached) {
-                      settle(controller.size < .74 ? expanded : compact);
-                    }
-                  }),
-                  onVerticalDragUpdate: (details) {
-                    if (scroll.hasClients && controller.isAttached) {
-                      controller.jumpTo(
-                        (controller.size - details.delta.dy / bounds.maxHeight)
-                            .clamp(compact, expanded),
-                      );
-                    }
-                  },
-                  onVerticalDragEnd: (details) {
-                    if (!scroll.hasClients) return;
-                    final velocity = details.primaryVelocity ?? 0;
-                    settle(
-                      velocity < -250
-                          ? expanded
-                          : velocity > 250
-                          ? compact
-                          : controller.size < .74
-                          ? compact
-                          : expanded,
-                    );
-                  },
-                  child: SizedBox(
-                    height: 40,
-                    width: double.infinity,
-                    child: Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Theme.of(c).colorScheme.onSurfaceVariant
-                              .withValues(alpha: .35),
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: RepaintBoundary(
-                  child: widget.scrollable
-                      ? SingleChildScrollView(
-                          controller: scroll,
-                          child: widget.child,
-                        )
-                      : PrimaryScrollController(
-                          controller: scroll,
-                          automaticallyInheritForPlatforms: TargetPlatform
-                              .values
-                              .toSet(),
-                          child: widget.child,
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
 }
 
 final _toastDismissals = Expando<VoidCallback>();
