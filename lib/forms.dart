@@ -107,6 +107,11 @@ class _SessionFormState extends ConsumerState<SessionForm> {
             ),
           );
       if (mounted) {
+        dataToast(
+          context,
+          'Session',
+          widget.session == null ? DataAction.saved : DataAction.updated,
+        );
         Navigator.pop(context);
       }
     } catch (e) {
@@ -273,6 +278,11 @@ class _EntryFormState extends ConsumerState<EntryForm> {
             ),
           );
       if (mounted) {
+        dataToast(
+          context,
+          'Transaction',
+          widget.entry == null ? DataAction.saved : DataAction.updated,
+        );
         Navigator.pop(context);
       }
     } catch (e) {
@@ -384,7 +394,10 @@ class _EntryFormState extends ConsumerState<EntryForm> {
                   await (db.delete(
                     db.entries,
                   )..where((e) => e.id.equals(widget.entry!.id))).go();
-                  if (c.mounted) Navigator.pop(c);
+                  if (c.mounted) {
+                    dataToast(c, 'Transaction', DataAction.deleted);
+                    Navigator.pop(c);
+                  }
                 });
               }
             },
@@ -483,6 +496,11 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             ),
           );
       if (mounted) {
+        dataToast(
+          context,
+          'Planner rule',
+          widget.rule == null ? DataAction.saved : DataAction.updated,
+        );
         Navigator.pop(context);
       }
     } catch (e) {

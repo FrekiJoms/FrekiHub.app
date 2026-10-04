@@ -859,7 +859,12 @@ class _PillNavigationState extends State<PillNavigation>
 
 final _toastDismissals = Expando<VoidCallback>();
 
-void toast(BuildContext c, String message, {bool error = false}) {
+void toast(
+  BuildContext c,
+  String message, {
+  bool error = false,
+  IconData? icon,
+}) {
   final overlay = Overlay.of(c, rootOverlay: true);
   _toastDismissals[overlay]?.call();
   late OverlayEntry entry;
@@ -886,7 +891,12 @@ void toast(BuildContext c, String message, {bool error = false}) {
               maxWidth: 560,
               maxHeight: math.max(80, MediaQuery.sizeOf(c).height * .4),
             ),
-            child: _Toast(message: message, error: error, done: dismiss),
+            child: _Toast(
+              message: message,
+              error: error,
+              icon: icon,
+              done: dismiss,
+            ),
           ),
         ),
       ),
@@ -899,10 +909,12 @@ void toast(BuildContext c, String message, {bool error = false}) {
 class _Toast extends StatefulWidget {
   final String message;
   final bool error;
+  final IconData? icon;
   final VoidCallback done;
   const _Toast({
     required this.message,
     required this.error,
+    this.icon,
     required this.done,
   });
   @override
@@ -974,14 +986,16 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.error) ...[
-                  Icon(
-                    LucideIcons.circleAlert,
-                    size: 20,
-                    color: Theme.of(c).colorScheme.error,
-                  ),
-                  const SizedBox(width: 10),
-                ],
+                Icon(
+                  widget.error
+                      ? LucideIcons.circleAlert
+                      : widget.icon ?? LucideIcons.circleCheck,
+                  size: 20,
+                  color: widget.error
+                      ? Theme.of(c).colorScheme.error
+                      : Theme.of(c).colorScheme.onSurface,
+                ),
+                const SizedBox(width: 10),
                 Flexible(
                   child: SingleChildScrollView(child: Text(widget.message)),
                 ),

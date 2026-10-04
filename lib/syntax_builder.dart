@@ -103,19 +103,25 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
 
   Future<void> toggle(String key, bool value) async {
     ActionFeedback.tap();
-    await guarded(context, () async {
-      await ref.read(databaseProvider).pref(key, value);
-      await AutomationSync.configure(
-        await ref.read(databaseProvider).readAll(),
-      );
-      if (key == 'purchaseScanning' && value && mounted) {
-        await PermissionHints.request<bool>(
-          context,
-          'receiptNotificationPermission',
+    await guarded(
+      context,
+      () async {
+        await ref.read(databaseProvider).pref(key, value);
+        await AutomationSync.configure(
+          await ref.read(databaseProvider).readAll(),
         );
-        await refresh();
-      }
-    });
+        if (key == 'purchaseScanning' && value && mounted) {
+          await PermissionHints.request<bool>(
+            context,
+            'receiptNotificationPermission',
+          );
+          await refresh();
+        }
+      },
+      success:
+          '${key == 'purchaseScanning' ? 'Purchase scanning' : 'Location conditions'} ${value ? 'enabled' : 'disabled'}',
+      successIcon: value ? DataAction.enabled.icon : DataAction.disabled.icon,
+    );
   }
 
   Future<void> currentPlace() async {
@@ -257,6 +263,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
               : sourceMode
               ? 'Rule saved · paused'
               : 'Condition saved',
+          icon: run ? DataAction.started.icon : DataAction.saved.icon,
         );
       }
     });
@@ -277,7 +284,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
       );
       if (mounted) {
         setState(() => ruleRunning = false);
-        toast(context, 'Rule stopped');
+        toast(context, 'Rule stopped', icon: LucideIcons.square);
       }
     });
     if (mounted) setState(() => busy = false);
@@ -301,14 +308,19 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
             footer: AppButton(
               label: 'Save selected apps',
               onPressed: () async {
-                config['apps'] = selected.toList();
-                await ref
-                    .read(databaseProvider)
-                    .pref('automation', jsonEncode(config));
-                await AutomationSync.configure(
-                  await ref.read(databaseProvider).readAll(),
-                );
-                if (c.mounted) Navigator.pop(c);
+                await guarded(c, () async {
+                  config['apps'] = selected.toList();
+                  await ref
+                      .read(databaseProvider)
+                      .pref('automation', jsonEncode(config));
+                  await AutomationSync.configure(
+                    await ref.read(databaseProvider).readAll(),
+                  );
+                  if (c.mounted) {
+                    dataToast(c, 'Payment app selection', DataAction.saved);
+                    Navigator.pop(c);
+                  }
+                });
               },
             ),
             scrollable: true,
@@ -498,13 +510,20 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                         !c.mounted) {
                       return;
                     }
-                    rules.removeWhere((r) => r['id'] == rule['id']);
-                    config['rules'] = rules;
-                    await ref
-                        .read(databaseProvider)
-                        .pref('automation', jsonEncode(config));
-                    await AutomationSync.configure(
-                      await ref.read(databaseProvider).readAll(),
+                    await guarded(
+                      c,
+                      () async {
+                        rules.removeWhere((r) => r['id'] == rule['id']);
+                        config['rules'] = rules;
+                        await ref
+                            .read(databaseProvider)
+                            .pref('automation', jsonEncode(config));
+                        await AutomationSync.configure(
+                          await ref.read(databaseProvider).readAll(),
+                        );
+                      },
+                      success: 'Condition deleted',
+                      successIcon: DataAction.deleted.icon,
                     );
                   }),
                 ),

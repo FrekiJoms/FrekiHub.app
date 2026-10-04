@@ -26,30 +26,35 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                     ? null
                     : () async {
                         final db = ref.read(databaseProvider);
-                        await guarded(context, () async {
-                          await db.transaction(() async {
-                            await db
-                                .into(db.entries)
-                                .insert(
-                                  Entry(
-                                    id: newId(),
-                                    day: p.day,
-                                    kind: p.rule.kind,
-                                    amount: p.amount,
-                                    currency: p.rule.currency,
-                                    category: p.rule.category,
-                                    method: p.rule.method,
-                                    note: p.rule.title,
-                                    occurrence: p.key,
-                                  ),
-                                  mode: InsertMode.insertOrIgnore,
-                                );
-                            await db.pref('status:${p.key}', 'planned');
-                          });
-                          if (mounted) {
-                            Navigator.pop(context);
-                          }
-                        }, success: 'Recorded exactly once');
+                        await guarded(
+                          context,
+                          () async {
+                            await db.transaction(() async {
+                              await db
+                                  .into(db.entries)
+                                  .insert(
+                                    Entry(
+                                      id: newId(),
+                                      day: p.day,
+                                      kind: p.rule.kind,
+                                      amount: p.amount,
+                                      currency: p.rule.currency,
+                                      category: p.rule.category,
+                                      method: p.rule.method,
+                                      note: p.rule.title,
+                                      occurrence: p.key,
+                                    ),
+                                    mode: InsertMode.insertOrIgnore,
+                                  );
+                              await db.pref('status:${p.key}', 'planned');
+                            });
+                            if (mounted) {
+                              Navigator.pop(context);
+                            }
+                          },
+                          success: 'Recorded exactly once',
+                          successIcon: DataAction.saved.icon,
+                        );
                       },
               ),
               child: const Text('Mark complete & record'),
@@ -58,10 +63,19 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             ...['skipped', 'cancelled', 'planned'].map(
               (s) => TextButton(
                 onPressed: withFeedback(() async {
-                  await ref.read(databaseProvider).pref('status:${p.key}', s);
-                  if (mounted) {
-                    Navigator.pop(context);
-                  }
+                  await guarded(
+                    context,
+                    () async {
+                      await ref
+                          .read(databaseProvider)
+                          .pref('status:${p.key}', s);
+                      if (mounted) Navigator.pop(context);
+                    },
+                    success: s == 'planned'
+                        ? 'Planner item reset to planned'
+                        : 'Planner item marked $s',
+                    successIcon: DataAction.updated.icon,
+                  );
                 }),
                 child: Text(s == 'planned' ? 'Reset to planned' : 'Mark $s'),
               ),
@@ -92,18 +106,25 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           TextButton(
             onPressed: withFeedback(() async {
               final db = ref.read(databaseProvider);
-              await db
-                  .into(db.rules)
-                  .insert(
-                    r.copyWith(
-                      id: newId(),
-                      title: '${r.title} copy',
-                      position: widget.data.rules.length,
-                    ),
-                  );
-              if (mounted) {
-                Navigator.pop(context);
-              }
+              await guarded(
+                context,
+                () async {
+                  await db
+                      .into(db.rules)
+                      .insert(
+                        r.copyWith(
+                          id: newId(),
+                          title: '${r.title} copy',
+                          position: widget.data.rules.length,
+                        ),
+                      );
+                  if (mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                success: 'Planner rule duplicated',
+                successIcon: DataAction.duplicated.icon,
+              );
             }),
             child: const Text('Duplicate'),
           ),
@@ -116,11 +137,19 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               )) {
                 return;
               }
+              if (!mounted) return;
               final db = ref.read(databaseProvider);
-              await (db.delete(db.rules)..where((t) => t.id.equals(r.id))).go();
-              if (mounted) {
-                Navigator.pop(context);
-              }
+              await guarded(
+                context,
+                () async {
+                  await (db.delete(
+                    db.rules,
+                  )..where((t) => t.id.equals(r.id))).go();
+                  if (mounted) Navigator.pop(context);
+                },
+                success: 'Planner rule deleted',
+                successIcon: DataAction.deleted.icon,
+              );
             }),
             child: Text(
               'Delete rule',
@@ -513,13 +542,20 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                     final reordered = [...rules];
                     reordered.insert(next, reordered.removeAt(old));
                     final db = ref.read(databaseProvider);
-                    await db.transaction(() async {
-                      for (var i = 0; i < reordered.length; i++) {
-                        await (db.update(db.rules)
-                              ..where((r) => r.id.equals(reordered[i].id)))
-                            .write(RulesCompanion(position: Value(i)));
-                      }
-                    });
+                    await guarded(
+                      context,
+                      () async {
+                        await db.transaction(() async {
+                          for (var i = 0; i < reordered.length; i++) {
+                            await (db.update(db.rules)
+                                  ..where((r) => r.id.equals(reordered[i].id)))
+                                .write(RulesCompanion(position: Value(i)));
+                          }
+                        });
+                      },
+                      success: 'Planner rules reordered',
+                      successIcon: DataAction.reordered.icon,
+                    );
                   },
                   itemBuilder: (c, i) {
                     final r = rules[i];
@@ -617,6 +653,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       .read(databaseProvider)
                       .pref('savingsGoal:${widget.data.currency}', amount);
                   if (c.mounted) {
+                    dataToast(c, 'Savings goal', DataAction.saved);
                     Navigator.pop(c);
                   }
                 } catch (e) {

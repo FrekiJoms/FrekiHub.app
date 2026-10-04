@@ -184,6 +184,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         );
         note.clear();
       }
+      if (mounted) {
+        dataToast(
+          context,
+          'Session',
+          running == null ? DataAction.started : DataAction.ended,
+        );
+      }
     } on StateError catch (e) {
       if (mounted) {
         toast(context, e.message.toString(), error: true);

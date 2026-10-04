@@ -58,6 +58,7 @@ flutter analyze
 | Cross-app session confirmation | `test/session_overlay_test.dart` (note/end transaction, acknowledgement order, rollback/replay, legacy/empty notes and narrow permission hints); native compile/install plus manual permission, Back/cancel and other-app input checks |
 | Shared permission hints | `test/permission_hints_test.dart` (eight feature gates, narrow/enlarged text, cancellation/Back, already granted/Manage access, duplicate requests, failure recovery and running-session cache before cancellation); device review for actual Android grants/denials |
 | Home note autosave | `test/home_note_test.dart` (batched writes, cursor changes, IME composition, blur/navigation flush, pending clock-out and ended-session guard) |
+| Committed data-action feedback | `test/data_feedback_test.dart` (in-memory session save/edit/delete, cancellation, notice surviving form dismissal, pending/failed operations never announcing success) |
 | Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
 | Activity storage/backup/native session import | `test/activity_test.dart` |
 | Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |

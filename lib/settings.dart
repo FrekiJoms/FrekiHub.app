@@ -13,10 +13,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Offset themeOrigin = const Offset(160, 230);
   Future<void> changeTheme(String mode) async {
     ActionFeedback.tap(transition: true);
-    await ThemeReveal.change(
+    await guarded(
       context,
-      themeOrigin,
-      () => ref.read(databaseProvider).pref('theme', mode),
+      () => ThemeReveal.change(
+        context,
+        themeOrigin,
+        () => ref.read(databaseProvider).pref('theme', mode),
+      ),
+      success: 'Theme updated',
+      successIcon: DataAction.updated.icon,
     );
   }
 
@@ -68,13 +73,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         return;
       }
       final render = context.findRenderObject() as RenderBox;
-      await SharePlus.instance.share(
+      final result = await SharePlus.instance.share(
         ShareParams(
           files: [XFile(file.path)],
           subject: 'FrekiHub backup',
           sharePositionOrigin: render.localToGlobal(Offset.zero) & render.size,
         ),
       );
+      if (mounted && result.status == ShareResultStatus.success) {
+        dataToast(context, 'Backup', DataAction.exported);
+      } else if (mounted && result.status == ShareResultStatus.unavailable) {
+        toast(context, 'Backup prepared', icon: DataAction.exported.icon);
+      }
     });
     if (mounted) {
       setState(() => busy = false);
@@ -113,31 +123,36 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       busy = true;
       busyAction = 'restore';
     });
-    await guarded(context, () async {
-      final file = picked.single;
-      if ((await file.length() ?? 0) > 20 * 1024 * 1024) {
-        throw const FormatException('Backup exceeds the 20 MB limit.');
-      }
-      final bytes = await file.readAsBytes();
-      if (bytes.length > 20 * 1024 * 1024) {
-        throw const FormatException('Backup exceeds the 20 MB limit.');
-      }
-      await ref.read(databaseProvider).restore(utf8.decode(bytes));
-      await NativeSession.channel.invokeMethod('automationReset');
-      await AutomationSync.configure(
-        await ref.read(databaseProvider).readAll(),
-      );
-      await NativeSession.stop();
-      final running = (await ref.read(databaseProvider).readAll()).running;
-      if (running != null && mounted) {
-        if (!await NativeSession.cache(running) || !mounted) return;
-        await PermissionHints.perform<bool>(
-          context,
-          'start',
-          () => NativeSession.start(running),
+    await guarded(
+      context,
+      () async {
+        final file = picked.single;
+        if ((await file.length() ?? 0) > 20 * 1024 * 1024) {
+          throw const FormatException('Backup exceeds the 20 MB limit.');
+        }
+        final bytes = await file.readAsBytes();
+        if (bytes.length > 20 * 1024 * 1024) {
+          throw const FormatException('Backup exceeds the 20 MB limit.');
+        }
+        await ref.read(databaseProvider).restore(utf8.decode(bytes));
+        await NativeSession.channel.invokeMethod('automationReset');
+        await AutomationSync.configure(
+          await ref.read(databaseProvider).readAll(),
         );
-      }
-    }, success: 'Backup restored');
+        await NativeSession.stop();
+        final running = (await ref.read(databaseProvider).readAll()).running;
+        if (running != null && mounted) {
+          if (!await NativeSession.cache(running) || !mounted) return;
+          await PermissionHints.perform<bool>(
+            context,
+            'start',
+            () => NativeSession.start(running),
+          );
+        }
+      },
+      success: 'Backup restored',
+      successIcon: DataAction.restored.icon,
+    );
     if (mounted) {
       setState(() => busy = false);
     }
@@ -187,11 +202,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     typed.dispose();
     if (approved == true && mounted) {
-      await guarded(context, () async {
-        await ref.read(databaseProvider).clear();
-        await NativeSession.channel.invokeMethod('automationReset');
-        await NativeSession.stop();
-      }, success: 'All data cleared');
+      await guarded(
+        context,
+        () async {
+          await ref.read(databaseProvider).clear();
+          await NativeSession.channel.invokeMethod('automationReset');
+          await NativeSession.stop();
+        },
+        success: 'All data cleared',
+        successIcon: DataAction.deleted.icon,
+      );
     }
   }
 
@@ -314,13 +334,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 d.currency,
                 currencyDigits.keys.toList(),
                 (v) async {
-                  await ref.read(databaseProvider).pref('currency', v);
-                  if (c.mounted) {
-                    toast(
-                      c,
-                      'Showing $v records. Existing amounts retain their currency.',
-                    );
-                  }
+                  await guarded(c, () async {
+                    await ref.read(databaseProvider).pref('currency', v);
+                    if (c.mounted) {
+                      toast(
+                        c,
+                        'Showing $v records. Existing amounts retain their currency.',
+                        icon: DataAction.updated.icon,
+                      );
+                    }
+                  });
                 },
               ),
               const SizedBox(height: 10),
@@ -362,10 +385,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   'Soft clicks, transitions, and timer cues',
                 ),
                 value: d.prefs['sound'] == 'true',
-                onChanged: (v) {
-                  ActionFeedback.soundEnabled = v;
+                onChanged: (v) async {
                   ActionFeedback.tap();
-                  ref.read(databaseProvider).pref('sound', v);
+                  await guarded(
+                    c,
+                    () async {
+                      await ref.read(databaseProvider).pref('sound', v);
+                      ActionFeedback.soundEnabled = v;
+                    },
+                    success: 'Sound effects ${v ? 'enabled' : 'disabled'}',
+                    successIcon: v
+                        ? DataAction.enabled.icon
+                        : DataAction.disabled.icon,
+                  );
                 },
               ),
             ],
@@ -476,6 +508,11 @@ class _ManageListState extends ConsumerState<_ManageList> {
         items = next;
         if (clearName) name.clear();
       });
+      dataToast(
+        context,
+        widget.setting == 'categories' ? 'Category' : 'Payment method',
+        clearName ? DataAction.saved : DataAction.deleted,
+      );
     });
     if (mounted) setState(() => saving = false);
   }

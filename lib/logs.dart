@@ -5,12 +5,17 @@ class LogsSheet extends ConsumerWidget {
 
   Future<void> toggle(BuildContext context, WidgetRef ref, bool value) async {
     ActionFeedback.tap();
-    await guarded(context, () async {
-      await ref.read(databaseProvider).pref('activityLogging', value);
-      await AutomationSync.configure(
-        await ref.read(databaseProvider).readAll(),
-      );
-    });
+    await guarded(
+      context,
+      () async {
+        await ref.read(databaseProvider).pref('activityLogging', value);
+        await AutomationSync.configure(
+          await ref.read(databaseProvider).readAll(),
+        );
+      },
+      success: 'Activity logging ${value ? 'enabled' : 'disabled'}',
+      successIcon: value ? DataAction.enabled.icon : DataAction.disabled.icon,
+    );
   }
 
   @override

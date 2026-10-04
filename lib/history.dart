@@ -123,10 +123,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                     ? const Icon(LucideIcons.check, size: 18)
                     : null,
                 onTap: withFeedback(() async {
-                  await ref.read(databaseProvider).pref('dateFormat', f);
-                  if (c.mounted) {
-                    Navigator.pop(c);
-                  }
+                  await guarded(c, () async {
+                    await ref.read(databaseProvider).pref('dateFormat', f);
+                    if (c.mounted) {
+                      dataToast(c, 'Date format', DataAction.updated);
+                      Navigator.pop(c);
+                    }
+                  });
                 }),
               ),
             const Divider(),
@@ -141,10 +144,15 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       selected: (widget.data.prefs['clockFormat'] ?? '24') == f,
                       onSelected: (_) async {
                         ActionFeedback.tap();
-                        await ref.read(databaseProvider).pref('clockFormat', f);
-                        if (c.mounted) {
-                          Navigator.pop(c);
-                        }
+                        await guarded(c, () async {
+                          await ref
+                              .read(databaseProvider)
+                              .pref('clockFormat', f);
+                          if (c.mounted) {
+                            dataToast(c, 'Clock format', DataAction.updated);
+                            Navigator.pop(c);
+                          }
+                        });
                       },
                     ),
                   )
@@ -191,14 +199,19 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     if (!mounted) {
       return;
     }
-    await guarded(context, () async {
-      final db = ref.read(databaseProvider);
-      await (db.delete(db.sessions)..where((s) => s.id.isIn(selected))).go();
-      setState(() {
-        selected.clear();
-        selection = false;
-      });
-    }, success: 'Selected sessions deleted');
+    await guarded(
+      context,
+      () async {
+        final db = ref.read(databaseProvider);
+        await (db.delete(db.sessions)..where((s) => s.id.isIn(selected))).go();
+        setState(() {
+          selected.clear();
+          selection = false;
+        });
+      },
+      success: 'Selected sessions deleted',
+      successIcon: DataAction.deleted.icon,
+    );
   }
 
   @override

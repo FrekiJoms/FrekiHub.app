@@ -421,3 +421,28 @@ class SkeletonList extends StatelessWidget {
     );
   }
 }
+
+/// Shared committed-action wording and icons for the existing top toast pill.
+enum DataAction {
+  saved('saved', LucideIcons.save),
+  updated('updated', LucideIcons.pencilLine),
+  deleted('deleted', LucideIcons.trash2),
+  started('started', LucideIcons.play),
+  ended('ended and saved', LucideIcons.circleCheck),
+  duplicated('duplicated', LucideIcons.copy),
+  reordered('reordered', LucideIcons.arrowUpDown),
+  exported('exported', LucideIcons.download),
+  restored('restored', LucideIcons.upload),
+  enabled('enabled', LucideIcons.check),
+  disabled('disabled', LucideIcons.pause);
+
+  final String verb;
+  final IconData icon;
+  const DataAction(this.verb, this.icon);
+}
+
+void dataToast(BuildContext context, String resource, DataAction action) {
+  if (context.mounted) {
+    toast(context, '$resource ${action.verb}', icon: action.icon);
+  }
+}

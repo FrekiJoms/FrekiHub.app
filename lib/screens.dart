@@ -53,11 +53,12 @@ Future<void> guarded(
   BuildContext c,
   Future<void> Function() operation, {
   String? success,
+  IconData? successIcon,
 }) async {
   try {
     await operation();
     if (c.mounted && success != null) {
-      toast(c, success);
+      toast(c, success, icon: successIcon);
     }
   } catch (e) {
     if (c.mounted) {
@@ -126,7 +127,12 @@ Future<bool> deleteSession(BuildContext c, WidgetRef ref, Session s) async {
   }
   try {
     final db = ref.read(databaseProvider);
-    await (db.delete(db.sessions)..where((t) => t.id.equals(s.id))).go();
+    final deleted = await (db.delete(
+      db.sessions,
+    )..where((t) => t.id.equals(s.id))).go();
+    if (c.mounted && deleted > 0) {
+      dataToast(c, 'Session', DataAction.deleted);
+    }
     return true;
   } catch (e) {
     if (c.mounted) {
