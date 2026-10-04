@@ -18,7 +18,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
   Timer? timer;
   late final tick = ValueNotifier<DateTime>(widget.clockNow());
   StreamSubscription<List<ConnectivityResult>>? connectivity;
-  bool offline = false, busy = false;
+  bool offline = false, busy = false, confirming = false;
   @override
   void initState() {
     super.initState();
@@ -76,10 +76,24 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
   }
 
   Future<void> clock() async {
-    setState(() => busy = true);
+    if (busy || confirming) return;
+    final running = widget.data.running;
     try {
+      if (running != null) {
+        setState(() => confirming = true);
+        final accepted = await panel<bool>(
+          context,
+          _EndSessionConfirmation(
+            data: widget.data,
+            session: running,
+            tick: tick,
+          ),
+        );
+        if (!mounted || accepted != true) return;
+      }
+      if (!mounted) return;
+      setState(() => busy = true);
       final db = ref.read(databaseProvider);
-      final running = widget.data.running;
       if (running == null) {
         await db.clockIn(note.text.trim());
         HapticFeedback.mediumImpact();
@@ -88,7 +102,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         );
       } else {
         await db.transaction(() async {
-          await (db.update(db.sessions)..where((s) => s.id.equals(running.id)))
+          await (db.update(db.sessions)
+                ..where((s) => s.id.equals(running.id) & s.ended.isNull()))
               .write(SessionsCompanion(note: Value(note.text.trim())));
           await db.clockOut(running.id);
         });
@@ -110,9 +125,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
           error: true,
         );
       }
-    }
-    if (mounted) {
-      setState(() => busy = false);
+    } finally {
+      if (mounted) {
+        setState(() {
+          busy = false;
+          confirming = false;
+        });
+      }
     }
   }
 
@@ -237,7 +256,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: withFeedback(busy ? null : clock),
+                    onPressed: withFeedback(busy || confirming ? null : clock),
                     icon: Icon(
                       running == null ? LucideIcons.play : LucideIcons.square,
                       size: 19,
@@ -293,6 +312,110 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
       ),
     );
   }
+}
+
+class _EndSessionConfirmation extends StatelessWidget {
+  final AppData data;
+  final Session session;
+  final ValueNotifier<DateTime> tick;
+  const _EndSessionConfirmation({
+    required this.data,
+    required this.session,
+    required this.tick,
+  });
+
+  void choose(BuildContext context, bool accepted) {
+    if (ModalRoute.of(context)?.isCurrent == true) {
+      Navigator.of(context).pop(accepted);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(
+          child: ListView(
+            primary: true,
+            padding: EdgeInsets.zero,
+            children: [
+              Row(
+                children: [
+                  const Chrome(
+                    padding: EdgeInsets.all(10),
+                    child: Icon(LucideIcons.timer, size: 20),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(
+                        'End this session?',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Save your time and notes to Sessions.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Session duration'),
+                  const SizedBox(height: 6),
+                  ValueListenableBuilder<DateTime>(
+                    valueListenable: tick,
+                    builder: (context, now, _) => Text(
+                      elapsed(
+                        math.max(
+                          0,
+                          (now.millisecondsSinceEpoch - session.started) ~/
+                              1000,
+                        ),
+                      ),
+                      style: const TextStyle(
+                        fontFamily: 'Geist Mono',
+                        fontSize: 28,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '${session.kind} · Started at ${clockTime(data, session.started)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+        FilledButton.icon(
+          onPressed: withFeedback(() => choose(context, true)),
+          icon: const Icon(LucideIcons.square, size: 18),
+          label: const Text('End session'),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: withFeedback(() => choose(context, false)),
+          child: const Text('Keep running'),
+        ),
+      ],
+    ),
+  );
 }
 
 // The invisible slot reserves the original layout; only one pill is painted

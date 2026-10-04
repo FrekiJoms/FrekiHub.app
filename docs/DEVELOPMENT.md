@@ -50,7 +50,8 @@ flutter analyze
 | Change | Relevant existing checks |
 | --- | --- |
 | Startup/readiness/reactive cache | `test/startup_test.dart` |
-| Today clock/reduced motion/resume/time changes | `test/today_clock_test.dart` (painted hands, second boundaries, date rollover, backward time adjustment and elapsed totals) |
+| Today clock/reduced motion/resume/time changes | `test/today_clock_test.dart` (painted hands, second boundaries, date rollover, backward time adjustment, elapsed time and live-time captions) |
+| Home clock-out confirmation | `test/home_session_confirmation_test.dart` (compact actions, live duration, cancel/Back, confirmation, repeated activation and both motion settings) |
 | Shared layout/custom selectors/two-position drawers | `test/layout_test.dart` (opening frames, both snaps, nested selector/date picker, keyboard and cancellation) |
 | Bottom-bar gestures | `test/navigation_test.dart` |
 | Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
