@@ -157,12 +157,16 @@ void main() {
       expect(liveTime, findsOneWidget);
       expect(tester.widget<Text>(liveTime).style!.fontSize, 11);
       expect(
-        tester.getBottomLeft(find.byType(FlipClock)).dy,
+        tester.getBottomLeft(find.byType(AnalogClock)).dy,
         lessThan(tester.getTopLeft(liveTime).dy),
       );
       expect(
         tester.getBottomLeft(liveTime).dy,
         lessThan(tester.getTopLeft(find.text('YOUR SESSION IS RUNNING')).dy),
+      );
+      expect(
+        tester.getBottomLeft(find.text('YOUR SESSION IS RUNNING')).dy,
+        lessThan(tester.getTopLeft(find.byType(FlipClock)).dy),
       );
       expect(find.textContaining('Today’s total'), findsNothing);
       await tester.pumpWidget(const SizedBox());

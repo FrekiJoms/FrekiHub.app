@@ -198,21 +198,6 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                 const SizedBox(height: 16),
                 ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
-                  builder: (c, now, _) => FlipClock(
-                    running == null
-                        ? DateFormat(
-                            d.prefs['clockFormat'] == '12'
-                                ? 'hh:mm:ss'
-                                : 'HH:mm:ss',
-                          ).format(now)
-                        : elapsed(duration(running, now)),
-                    size: 36,
-                    label: running == null ? 'Current time' : 'Elapsed time',
-                  ),
-                ),
-                const SizedBox(height: 10),
-                ValueListenableBuilder<DateTime>(
-                  valueListenable: tick,
                   builder: (c, now, _) => Text(
                     'Current time · ${DateFormat(d.prefs['clockFormat'] == '12' ? 'hh:mm:ss a' : 'HH:mm:ss').format(now)}',
                     style: TextStyle(
@@ -231,6 +216,21 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                     fontSize: 11,
                     letterSpacing: 2,
                     color: Theme.of(c).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ValueListenableBuilder<DateTime>(
+                  valueListenable: tick,
+                  builder: (c, now, _) => FlipClock(
+                    running == null
+                        ? DateFormat(
+                            d.prefs['clockFormat'] == '12'
+                                ? 'hh:mm:ss'
+                                : 'HH:mm:ss',
+                          ).format(now)
+                        : elapsed(duration(running, now)),
+                    size: 36,
+                    label: running == null ? 'Current time' : 'Elapsed time',
                   ),
                 ),
                 const SizedBox(height: 16),
