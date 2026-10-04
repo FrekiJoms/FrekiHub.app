@@ -339,3 +339,7 @@ Verification: all 16 focused checks passed across data feedback, toast, rule edi
 ## Compact toast pill — 2026-10-04
 
 The shared `_Toast` / `top-toast-pill` now uses 10 px padding on every side and a compact 20 px dismiss control, replacing the default 48 px button footprint. Height follows the larger of the message or icons, with no fixed/minimum pill height. Action icons, labelled dismissal, bounded long diagnostics and reduced motion remain. All four existing toast checks passed, covering narrow 2x text, both motion settings, replacement/expiry/dismissal and form/syntax errors. Phone hot reload succeeded; diff whitespace passed.
+
+## Compact log rows — 2026-10-04
+
+Map `_MapLogSheet` and Settings `LogsSheet` now reuse `LogRow` for every log category: title plus full date/time only. Location, category subtitles, raw details and expansion controls are removed from presentation. Located Map rows retain their tracing selection checkboxes; unlocated rows remain visible. No stored log data or query/filter behavior changes. All seven Map/editor checks passed, including unlocated log visibility, grouped located selection, range controls and separate log/workspace navigation. Static analysis of the owning design/screens libraries found no issues; diff whitespace passed. Phone hot reload succeeded. No phone scrolling or saved-record changes were performed.

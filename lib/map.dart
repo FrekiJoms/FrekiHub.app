@@ -959,82 +959,35 @@ class _MapLogSheetState extends State<_MapLogSheet> {
               itemBuilder: (c, i) {
                 if (i >= widget.records.length) {
                   final row = widget.unlocated[i - widget.records.length];
-                  return ExpansionTile(
-                    leading: const Icon(LucideIcons.mapPinOff),
-                    title: Text(row['title']?.toString() ?? 'Activity'),
-                    subtitle: const Text(
-                      'No usable recorded location. The sample is missing, invalid or too old for this event.',
-                    ),
-                    childrenPadding: const EdgeInsets.all(16),
-                    children: [
-                      SelectableText(
-                        '${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(row['time'] as int))}\n${row['location']}\n${row['details']}',
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: LogRow(
+                      title: row['title']?.toString() ?? 'Activity',
+                      dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(
+                        DateTime.fromMillisecondsSinceEpoch(row['time'] as int),
                       ),
-                    ],
+                    ),
                   );
                 }
                 final record = widget.records[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
-                  child: Surface(
-                    padding: EdgeInsets.zero,
-                    child: ExpansionTile(
-                      leading: Checkbox(
-                        value: selected.contains(record.id),
-                        activeColor: _MapScreenState.colors[record.category],
-                        semanticLabel: 'Select ${record.title}',
-                        onChanged: (_) {
-                          ActionFeedback.tap();
-                          setState(() {
-                            if (!selected.remove(record.id)) {
-                              selected.add(record.id);
-                            }
-                          });
-                        },
-                      ),
-                      title: Text(
-                        record.title,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      subtitle: Text(
-                        '${record.category} · ${record.location}\n${DateFormat('d MMM yyyy, HH:mm:ss').format(record.time)}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: SelectableText(
-                            [
-                              'Coordinates: ${record.lat.toStringAsFixed(6)}, ${record.lng.toStringAsFixed(6)}',
-                              if (record.position['accuracy'] != null)
-                                'Accuracy: ±${record.position['accuracy']} m',
-                              if (record.position['locationTime'] is int)
-                                'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(record.position['locationTime'] as int))}',
-                              if (record.details['amount'] != null &&
-                                  record.details['currency'] is String)
-                                'Amount: ${money(record.details['amount'] is int ? record.details['amount'] as int : parseMoney('${record.details['amount']}', record.details['currency'] as String), record.details['currency'] as String)}',
-                              for (final entry in record.details.entries.where(
-                                (e) => ![
-                                  'position',
-                                  'lat',
-                                  'lng',
-                                  'accuracy',
-                                  'locationTime',
-                                  'id',
-                                  'time',
-                                  'title',
-                                  'location',
-                                  'amount',
-                                  'currency',
-                                ].contains(e.key),
-                              ))
-                                '${entry.key}: ${entry.value}',
-                            ].join('\n'),
-                            style: Theme.of(c).textTheme.bodySmall,
-                          ),
-                        ),
-                      ],
+                  child: LogRow(
+                    title: record.title,
+                    dateTime: DateFormat('d MMM yyyy, HH:mm:ss')
+                        .format(record.time),
+                    leading: Checkbox(
+                      value: selected.contains(record.id),
+                      activeColor: _MapScreenState.colors[record.category],
+                      semanticLabel: 'Select ${record.title}',
+                      onChanged: (_) {
+                        ActionFeedback.tap();
+                        setState(() {
+                          if (!selected.remove(record.id)) {
+                            selected.add(record.id);
+                          }
+                        });
+                      },
                     ),
                   ),
                 );

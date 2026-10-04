@@ -446,3 +446,48 @@ void dataToast(BuildContext context, String resource, DataAction action) {
     toast(context, '$resource ${action.verb}', icon: action.icon);
   }
 }
+
+/// Compact presentation shared by Map timeline and Settings activity logs.
+class LogRow extends StatelessWidget {
+  final String title, dateTime;
+  final Widget? leading;
+  const LogRow({
+    super.key,
+    required this.title,
+    required this.dateTime,
+    this.leading,
+  });
+
+  @override
+  Widget build(BuildContext context) => Surface(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    child: Row(
+      children: [
+        if (leading != null) ...[leading!, const SizedBox(width: 8)],
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                dateTime,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
