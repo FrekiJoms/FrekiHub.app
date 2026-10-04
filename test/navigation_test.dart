@@ -56,7 +56,7 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
-  testWidgets('Keyboard shrinks page content while navigation stays anchored', (
+  testWidgets('Keyboard overlays Home without moving content or navigation', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(360, 800);
@@ -93,27 +93,33 @@ void main() {
           ),
           graphicsProvider.overrideWith((ref) async => false),
         ],
-        child: MaterialApp(theme: Design.theme(false), home: const AppShell()),
+        child: MaterialApp(
+          theme: Design.theme(false),
+          builder: (_, child) => KeyboardOverlay(child: child!),
+          home: const AppShell(),
+        ),
       ),
     );
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(milliseconds: 500));
-    final original = tester.getRect(find.byType(PillNavigation));
     await tester.showKeyboard(find.byType(TextField));
-    tester.view.padding = FakeViewPadding.zero;
-    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
-    await tester.pump(const Duration(milliseconds: 300));
-    await tester.ensureVisible(find.byType(TextField));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getRect(find.byType(PillNavigation)), original);
-    expect(
-      tester.getRect(find.byType(TextField)).bottom,
-      lessThanOrEqualTo(520),
-    );
-    tester.view.resetViewInsets();
-    tester.view.padding = const FakeViewPadding(bottom: 24);
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(tester.getRect(find.byType(PillNavigation)), original);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    final original = tester.getRect(find.byType(PillNavigation));
+    final input = tester.getRect(find.byType(TextField));
+    for (final inset in [80.0, 160.0, 280.0, 160.0, 80.0, 0.0]) {
+      tester.view.padding = inset == 0
+          ? const FakeViewPadding(bottom: 24)
+          : FakeViewPadding.zero;
+      tester.view.viewInsets = FakeViewPadding(bottom: inset);
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(tester.getRect(find.byType(PillNavigation)), original);
+      expect(tester.getRect(find.byType(TextField)), input);
+      expect(
+        MediaQuery.viewInsetsOf(tester.element(find.byType(TextField))),
+        EdgeInsets.zero,
+      );
+    }
     await tester.pumpWidget(const SizedBox());
     await tester.runAsync(
       () async => Future<void>.delayed(const Duration(milliseconds: 50)),

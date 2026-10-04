@@ -1,33 +1,19 @@
 part of 'design.dart';
 
-/// Keeps keyboard metric changes confined to the page viewport.
-class KeyboardViewport extends StatelessWidget {
+/// The IME overlays the app without resizing, reflowing or panning its content.
+/// Applied above the Navigator so pages, sheets and all inputs share the policy.
+class KeyboardOverlay extends StatelessWidget {
   final Widget child;
-  const KeyboardViewport({super.key, required this.child});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-    child: child,
-  );
-}
-
-/// Retains the position of bottom chrome while the keyboard covers it, without
-/// painting its glass effects or ticking its animations behind the keyboard.
-class KeyboardVisibility extends StatelessWidget {
-  final Widget child;
-  const KeyboardVisibility({super.key, required this.child});
+  const KeyboardOverlay({super.key, required this.child});
   @override
   Widget build(BuildContext context) {
-    final visible = MediaQuery.viewInsetsOf(context).bottom == 0;
-    return TickerMode(
-      enabled: visible,
-      child: Visibility(
-        visible: visible,
-        maintainState: true,
-        maintainAnimation: true,
-        maintainSize: true,
-        child: child,
+    final media = MediaQuery.of(context);
+    return MediaQuery(
+      data: media.copyWith(
+        viewInsets: EdgeInsets.zero,
+        padding: media.viewPadding,
       ),
+      child: child,
     );
   }
 }

@@ -54,8 +54,9 @@ class FrekiHubApp extends ConsumerWidget {
       },
       routerConfig: _router,
       themeAnimationDuration: Duration.zero,
-      builder: (context, child) =>
-          RepaintBoundary(key: ThemeReveal.key, child: child!),
+      builder: (context, child) => KeyboardOverlay(
+        child: RepaintBoundary(key: ThemeReveal.key, child: child!),
+      ),
     );
   }
 }
@@ -253,48 +254,46 @@ class _AppShellState extends ConsumerState<AppShell>
                 data: (data) => Stack(
                   children: [
                     Positioned.fill(
-                      child: KeyboardViewport(
-                        child: ClipRect(
-                          child: AnimatedSwitcher(
-                            duration: Motion.duration(c),
-                            reverseDuration: Motion.duration(c, 200),
-                            switchInCurve: Motion.curve,
-                            switchOutCurve: Motion.curve,
-                            transitionBuilder: (child, animation) {
-                              final incoming = child.key == ValueKey(index);
-                              return IgnorePointer(
-                                ignoring: !incoming,
-                                child: TickerMode(
-                                  enabled: incoming,
-                                  child: FadeTransition(
-                                    opacity: animation,
-                                    child: SlideTransition(
-                                      position: Tween<Offset>(
-                                        begin: Offset(
-                                          (incoming ? 1 : -1) *
-                                              slideDirection *
-                                              .12,
-                                          0,
-                                        ),
-                                        end: Offset.zero,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
+                      child: ClipRect(
+                        child: AnimatedSwitcher(
+                          duration: Motion.duration(c),
+                          reverseDuration: Motion.duration(c, 200),
+                          switchInCurve: Motion.curve,
+                          switchOutCurve: Motion.curve,
+                          transitionBuilder: (child, animation) {
+                            final incoming = child.key == ValueKey(index);
+                            return IgnorePointer(
+                              ignoring: !incoming,
+                              child: TickerMode(
+                                enabled: incoming,
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: Offset(
+                                        (incoming ? 1 : -1) *
+                                            slideDirection *
+                                            .12,
+                                        0,
+                                      ),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
                                   ),
                                 ),
-                              );
+                              ),
+                            );
+                          },
+                          child: KeyedSubtree(
+                            key: ValueKey(index),
+                            child: switch (index) {
+                              0 => TodayScreen(data: data),
+                              1 => MapScreen(data: data),
+                              2 => HistoryScreen(data: data),
+                              3 => BudgetScreen(data: data),
+                              5 => CalendarScreen(data: data),
+                              _ => SettingsScreen(data: data),
                             },
-                            child: KeyedSubtree(
-                              key: ValueKey(index),
-                              child: switch (index) {
-                                0 => TodayScreen(data: data),
-                                1 => MapScreen(data: data),
-                                2 => HistoryScreen(data: data),
-                                3 => BudgetScreen(data: data),
-                                5 => CalendarScreen(data: data),
-                                _ => SettingsScreen(data: data),
-                              },
-                            ),
                           ),
                         ),
                       ),
@@ -306,25 +305,23 @@ class _AppShellState extends ConsumerState<AppShell>
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 560),
-                          child: KeyboardVisibility(
-                            child: PillNavigation(
-                              index: index,
-                              onQuickAdd: (kind) => openQuickAdd(
-                                c,
-                                data,
-                                dayKey(DateTime.now()),
-                                kind,
-                              ),
-                              onChanged: (i) {
-                                if (i == index) return;
-                                ActionFeedback.tap(transition: true);
-                                setState(() {
-                                  slideDirection = i > index ? 1 : -1;
-                                  index = i;
-                                  lastTab = i;
-                                });
-                              },
+                          child: PillNavigation(
+                            index: index,
+                            onQuickAdd: (kind) => openQuickAdd(
+                              c,
+                              data,
+                              dayKey(DateTime.now()),
+                              kind,
                             ),
+                            onChanged: (i) {
+                              if (i == index) return;
+                              ActionFeedback.tap(transition: true);
+                              setState(() {
+                                slideDirection = i > index ? 1 : -1;
+                                index = i;
+                                lastTab = i;
+                              });
+                            },
                           ),
                         ),
                       ),

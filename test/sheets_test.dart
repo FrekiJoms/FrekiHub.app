@@ -16,7 +16,7 @@ Future<void> openSheet(
       theme: Design.theme(reduced),
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(disableAnimations: reduced),
-        child: child!,
+        child: KeyboardOverlay(child: child!),
       ),
       home: Builder(
         builder: (context) => Scaffold(
@@ -33,6 +33,44 @@ Future<void> openSheet(
 }
 
 void main() {
+  testWidgets('Keyboard preserves sheet snap, fields and fixed slots', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetViewInsets);
+    await openSheet(
+      tester,
+      const PanelContent(
+        header: Text('Input heading'),
+        footer: Text('Input actions'),
+        child: Column(
+          children: [
+            TextField(),
+            TextField(keyboardType: TextInputType.number),
+          ],
+        ),
+      ),
+    );
+    final sheet = tester
+        .widget<DraggableScrollableSheet>(find.byType(DraggableScrollableSheet))
+        .controller!;
+    for (final field in find.byType(TextField).evaluate().toList()) {
+      await tester.showKeyboard(find.byWidget(field.widget));
+      await tester.pump(const Duration(milliseconds: 300));
+      final extent = sheet.size;
+      final header = tester.getRect(find.text('Input heading'));
+      final footer = tester.getRect(find.text('Input actions'));
+      final input = tester.getRect(find.byWidget(field.widget));
+      for (final inset in [80.0, 160.0, 280.0, 160.0, 80.0, 0.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(sheet.size, extent);
+        expect(tester.getRect(find.text('Input heading')), header);
+        expect(tester.getRect(find.text('Input actions')), footer);
+        expect(tester.getRect(find.byWidget(field.widget)), input);
+      }
+    }
+    expect(tester.takeException(), isNull);
+  });
   for (final reduced in [false, true]) {
     testWidgets('Content fit, expand and dismiss (reduced: $reduced)', (
       tester,
