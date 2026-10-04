@@ -352,13 +352,8 @@ class _AppShellState extends ConsumerState<AppShell>
                       left: 16,
                       child: SizedBox.square(
                         dimension: 48,
-                        child: GlassContainer(
-                          useOwnLayer: true,
-                          shape: const LiquidOval(),
-                          settings: const LiquidGlassSettings(
-                            blur: 12,
-                            thickness: 24,
-                          ),
+                        child: Chrome(
+                          padding: EdgeInsets.zero,
                           child: Semantics(
                             selected: index == 5,
                             child: IconButton(
@@ -386,13 +381,8 @@ class _AppShellState extends ConsumerState<AppShell>
                       right: 16,
                       child: SizedBox.square(
                         dimension: 48,
-                        child: GlassContainer(
-                          useOwnLayer: true,
-                          shape: const LiquidOval(),
-                          settings: const LiquidGlassSettings(
-                            blur: 12,
-                            thickness: 24,
-                          ),
+                        child: Chrome(
+                          padding: EdgeInsets.zero,
                           child: Semantics(
                             selected: index == 4,
                             child: IconButton(

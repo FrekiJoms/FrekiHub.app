@@ -75,7 +75,7 @@ Sessions and entries are indexed by date when their record lists change. The sel
 
 ## Map
 
-Map fills the content area behind fixed glass controls. Pan, pinch and zoom controls change the viewport; Fit centers the selected records or all filtered records. Category chips are a named/icon/color legend: blue Sessions, green Finance, amber Locations and purple Other. Unknown future located actions remain visible in Other.
+Map fills the content area behind a compact 48 px toolbar between Calendar and Settings, at the same 16 px top inset. Its three controls open Timeline, Timeline logs and Map tools. Pan and pinch operate directly on the map; Map tools contains Fit, zoom, trace and category filters. Fit centers the selected records or all filtered records. Category chips are a named/icon/color legend: blue Sessions, green Finance, amber Locations and purple Other. Unknown future located actions remain visible in Other. A small lower caption shows the date range and located/unlocated counts; the former large floating panels are removed.
 
 Timeline modes are day, Monday-start week, month, year and custom inclusive date range. Queries use local calendar boundaries with an exclusive end and do not apply the Logs sheet's 1,000-row cap. Custom selection uses existing wheel pickers. Changing the range clears the selection; view date/period/trace preferences persist.
 
@@ -85,7 +85,7 @@ Markers group positions rounded to five decimal places. A dot opens located reco
 
 On-demand OpenStreetMap tiles use app identification, visible attribution and a 128 MiB cache configuration. Tile failure leaves saved dots available and displays a connection/retry message. Retry resets the tile layer and evicts failed images without disposing its network provider or changing selected records; a saved-record query failure retries that query separately. No saved coordinates in a timeline is an empty state, not a GPS permission error. Map never requests current GPS location.
 
-Controls use compact 18 px icons/12 px labels with 48 px button touch targets. The action cluster is a two-by-two grid on tall screens and a horizontal strip on short screens, where timeline/log selectors use labeled tooltips. Category chips retain their named/icon/color legend; large grouped dots display `99+` while accessibility labels and their detail drawer retain the full count. Viewport context publishes after 500 ms of inactivity; identical raw query rows skip repeated JSON parsing and marker rebuilds. Current shortcomings and long-history limits are listed in [Application audit](APPLICATION_AUDIT.md).
+Controls use compact 18 px icons with labeled tooltips and 48 px touch targets. Shared Chrome now has a 94% themed surface backing inside its glass edge, including navigation and fixed Calendar/Settings buttons, so map tiles do not compete with text/icons. Timeline logs also lists records with missing/invalid/stale coordinates, explaining why they cannot be selected or plotted. Late-arriving first locations fit the camera after an empty initial result. Cancelled range queries cannot overwrite the current view; successful record updates clear earlier query errors. Category chips retain their named/icon/color legend; large grouped dots display `99+` while accessibility labels and their detail drawer retain the full count. Viewport context publishes after 500 ms of inactivity; identical raw query rows skip repeated JSON parsing and marker rebuilds. `map.total_count` and `map.unlocated_count` expose timeline coverage separately from category-filtered `map.visible_count`. Current shortcomings and long-history limits are listed in [Application audit](APPLICATION_AUDIT.md).
 
 ## Settings and bottom sheets
 
@@ -176,6 +176,8 @@ Submitted-action failures use the shared `toast(context, message, error: true)` 
 Keep bundled Geist/Geist Mono, Lucide icons, neutral light/dark surfaces, opaque data cards and liquid glass for fixed chrome. `Surface`, `Chrome`, `PageBody`, `panel`, `toast`, `selectField` and wheel pickers are shared contracts. Standard page headers reserve 80 px for fixed top shortcuts; Today's compact header starts at 16 px with horizontal shortcut clearance. Content leaves bottom navigation clearance and uses bounded readable width.
 
 Motion uses `Motion.duration` and shared curves. Preserve reduced motion, tooltips/semantics, enlarged text, keyboard/inset behavior, minimum touch controls and sound preference. `withFeedback`/`ActionFeedback` provide throttled interaction effects; elapsed ticks do not play sounds. OS permission/share/file/channel dialogs remain OS-owned.
+
+All shared date/time wheel sheets include an icon-only Jump to today/current time action. It uses the bundled Lucide rotate-ccw SVG through flutter_svg, with a tooltip, accessible button label and theme tint. Three public CupertinoPicker controllers scroll together over 450 ms using shared motion; reduced motion jumps directly. Confirm waits for the wheels to settle. The draft stays local until Confirm; Cancel discards it. Today clamps to the permitted date range, month/year changes clamp invalid days including leap dates, and time jumps retain the picker's anchor date while updating hour/minute/AM-PM.
 
 ## Extending a feature
 

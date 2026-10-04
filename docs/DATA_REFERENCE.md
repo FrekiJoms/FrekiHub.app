@@ -84,6 +84,8 @@ The exact saved keys are visible in `pref` call sites. These are the important f
 
 `mapContext` is runtime observation state, not automation source/program configuration. Keep it separate and avoid recursive snapshot/config storage. See [Rule syntax](../RULE_SYNTAX.md) for the public field semantics.
 
+Map context includes `map.total_count` for all logs in its selected timeline and `map.unlocated_count` for logs lacking usable coordinates. They are numeric catalog fields with completion hints and zero defaults before viewing Map. `map.visible_count` retains its narrower meaning: located records passing both timeline and category filters. Unlocated logs remain readable in Timeline logs but cannot be selected or traced; no coordinates are invented or stale samples rehabilitated.
+
 ## Native event contract and reconciliation
 
 An event has `id`, `time`, `action`, human-readable `title`, optional `location` and action-specific metadata. Android persists a JSON array in automation SharedPreferences until Flutter acknowledges IDs. New events must be replay-safe; native emission can precede a Flutter commit by hours or days.

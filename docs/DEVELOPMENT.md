@@ -53,6 +53,7 @@ flutter analyze
 | Today clock/reduced motion/resume/time changes | `test/today_clock_test.dart` (painted hands, second boundaries, date rollover, backward time adjustment, elapsed time and live-time captions) |
 | Home clock-out confirmation | `test/home_session_confirmation_test.dart` (compact actions, live duration, note prefill/editing, cancel/Back discarding edits, confirmation, repeated activation and both motion settings) |
 | Shared adaptive drawers/components | `test/sheets_test.dart` (content fit, 70% expansion, dismissal, fixed slots, lazy lists and content changes); `test/layout_test.dart` (opening frames, nested selector/date picker, keyboard and cancellation) |
+| Date/time wheel current-value action | `test/pickers_test.dart` (animated/reduced-motion jumps, selected wheel positions, Confirm gating, date bounds, leap-day correction and cancellation) |
 | Bottom-bar gestures/keyboard position | `test/navigation_test.dart` (quick add, stable safe-inset position, keyboard opening/closing with unchanged page/input geometry and cached height-only layout with width/theme refresh) |
 | Cross-app session confirmation | `test/session_overlay_test.dart` (note/end transaction, acknowledgement order, rollback/replay, legacy/empty notes and narrow permission hints); native compile/install plus manual permission, Back/cancel and other-app input checks |
 | Shared permission hints | `test/permission_hints_test.dart` (eight feature gates, narrow/enlarged text, cancellation/Back, already granted/Manage access, duplicate requests, failure recovery and running-session cache before cancellation); device review for actual Android grants/denials |
@@ -63,7 +64,7 @@ flutter analyze
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |
 | Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, completion and saved enabled flags) |
 | Position freshness/full-range query/map catalog | `test/map_records_test.dart` |
-| Narrow map layout/record selection/trace | `test/map_screen_test.dart` |
+| Compact map toolbar/record selection/trace/recovery | `test/map_screen_test.dart` (late location camera fitting, unlocated logs, top alignment, narrow/enlarged text, landscape, zoom, selection/trace and tile retry) |
 | Native local reminder clock calculation | `android/app/src/test/java/com/frekihub/freki_hub/RuleNotificationScheduleCheck.java` |
 
 Example targeted run:

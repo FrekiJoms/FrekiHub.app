@@ -108,6 +108,8 @@ Map fields have completion hints and type checks:
 | `map.trace_enabled` | Boolean: chronological trace enabled |
 | `map.visible_count` | Number: located logs matching timeline and category filters |
 | `map.selected_count` | Number: selected logs within those filters |
+| `map.total_count` | Number: all saved logs in the selected timeline, before category filters |
+| `map.unlocated_count` | Number: timeline logs lacking usable recorded coordinates; these appear in Timeline logs but cannot be selected or traced |
 | `map.center_lat`, `map.center_lng`, `map.zoom` | Numbers: current viewport, refreshed after interaction settles |
 
 ```javascript

@@ -108,15 +108,28 @@ void main() {
         ),
         throwsFormatException,
       );
+      RuleCompiler.compile(
+        'target == map_page { if (map.unlocated_count > 0 && map.total_count > 1) { log("Missing locations"); } }',
+      );
+      expect(
+        () => RuleCompiler.compile(
+          'target == map_page { if (map.unlocated_count == "none") { log("Invalid"); } }',
+        ),
+        throwsFormatException,
+      );
       final snapshot = RuleCatalog.snapshot(
         AppData([], [], [], {
           'mapContext': jsonEncode({
             'map.visible_count': 4,
+            'map.total_count': 7,
+            'map.unlocated_count': 3,
             'map.trace_enabled': true,
           }),
         }),
       );
       expect(snapshot['map.visible_count'], 4);
+      expect(snapshot['map.total_count'], 7);
+      expect(snapshot['map.unlocated_count'], 3);
       expect(snapshot['map.trace_enabled'], true);
     },
   );

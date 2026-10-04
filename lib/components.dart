@@ -206,7 +206,14 @@ class Chrome extends StatelessWidget {
     useOwnLayer: true,
     shape: const LiquidRoundedSuperellipse(borderRadius: 40),
     settings: const LiquidGlassSettings(blur: 12, thickness: 24),
-    padding: padding,
-    child: child,
+    padding: EdgeInsets.zero,
+    child: Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
+        borderRadius: BorderRadius.circular(40),
+      ),
+      child: child,
+    ),
   );
 }

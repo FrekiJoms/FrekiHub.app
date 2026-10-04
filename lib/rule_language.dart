@@ -82,6 +82,9 @@ abstract final class RuleCatalog {
     'map.visible_count':
         'Located records matching map category and timeline filters',
     'map.selected_count': 'Selected records within the visible map filters',
+    'map.total_count':
+        'All saved logs in the map timeline, before category filters',
+    'map.unlocated_count': 'Timeline logs without usable recorded coordinates',
     'map.center_lat': 'Map viewport latitude',
     'map.center_lng': 'Map viewport longitude',
     'map.zoom': 'Map viewport zoom level',
@@ -180,6 +183,8 @@ abstract final class RuleCatalog {
       'map.trace_enabled': mapContext['map.trace_enabled'] ?? false,
       'map.visible_count': mapContext['map.visible_count'] ?? 0,
       'map.selected_count': mapContext['map.selected_count'] ?? 0,
+      'map.total_count': mapContext['map.total_count'] ?? 0,
+      'map.unlocated_count': mapContext['map.unlocated_count'] ?? 0,
       'map.center_lat': mapContext['map.center_lat'] ?? 0,
       'map.center_lng': mapContext['map.center_lng'] ?? 0,
       'map.zoom': mapContext['map.zoom'] ?? 2,

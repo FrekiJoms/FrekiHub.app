@@ -28,7 +28,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   final categories = <String>{'Sessions', 'Finance', 'Locations', 'Other'};
   Set<String> selected = {};
   List<MapRecord> records = [];
+  List<Map<String, dynamic>> unlocated = [];
   List<Map<String, dynamic>> previousRows = [];
+  int queryGeneration = 0;
   bool ready = false, loading = true, tileError = false;
   String? loadError;
   String lastContext = '';
@@ -70,6 +72,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void watch() {
+    final generation = ++queryGeneration;
     subscription?.cancel();
     loading = true;
     loadError = null;
@@ -79,10 +82,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         .watchMapLogs(range.from, range.until)
         .listen(
           (rows) {
-            if (!mounted) return;
+            if (!mounted || generation != queryGeneration) return;
             // Preferences also wake the raw-table stream. Panning updates map
             // context, but must not reparse every log or rebuild all markers.
             if (!loading &&
+                loadError == null &&
                 rows.length == previousRows.length &&
                 Iterable<int>.generate(rows.length).every(
                   (i) => const [
@@ -97,21 +101,29 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               return;
             }
             previousRows = rows;
-            final next = rows
-                .map(MapRecord.parse)
-                .whereType<MapRecord>()
-                .toList();
-            final firstLoad = loading;
+            final next = <MapRecord>[];
+            final without = <Map<String, dynamic>>[];
+            for (final row in rows) {
+              final record = MapRecord.parse(row);
+              if (record == null) {
+                without.add(row);
+              } else {
+                next.add(record);
+              }
+            }
+            final firstLoad = loading || records.isEmpty;
             setState(() {
               records = next;
+              unlocated = without;
               selected.removeWhere((id) => !records.any((r) => r.id == id));
               loading = false;
+              loadError = null;
             });
             publishContext();
             if (firstLoad && ready && visible.isNotEmpty) fit();
           },
           onError: (Object _) {
-            if (mounted) {
+            if (mounted && generation == queryGeneration) {
               setState(() {
                 loading = false;
                 loadError = 'Could not load location records';
@@ -133,6 +145,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         'map.until': dayKey(range.until),
         'map.trace_enabled': trace,
         'map.visible_count': visible.length,
+        'map.total_count': previousRows.length,
+        'map.unlocated_count': unlocated.length,
         'map.selected_count': traced
             .where((r) => selected.contains(r.id))
             .length,
@@ -189,15 +203,17 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     publishContext();
   }
 
-  Future<void> choosePeriod() async {
-    final value = await panel<String>(
-      context,
-      _ChoiceSheet(
-        title: 'Timeline',
-        selected: period,
-        values: const ['day', 'week', 'month', 'year', 'custom'],
-      ),
-    );
+  Future<void> choosePeriod([String? chosen]) async {
+    final value =
+        chosen ??
+        await panel<String>(
+          context,
+          _ChoiceSheet(
+            title: 'Timeline',
+            selected: period,
+            values: const ['day', 'week', 'month', 'year', 'custom'],
+          ),
+        );
     if (!mounted || value == null) return;
     if (value == 'custom') {
       final from = await showWheelDatePicker(
@@ -294,13 +310,149 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final items = (group ?? visible).reversed.toList();
     final result = await panel<Set<String>>(
       context,
-      _MapLogSheet(records: items, selected: selected),
+      _MapLogSheet(
+        records: items,
+        selected: selected,
+        unlocated: group == null ? unlocated : const [],
+      ),
     );
     if (!mounted || result == null) return;
     setState(() => selected = result);
     publishContext();
     if (selected.isNotEmpty) fit();
   }
+
+  Future<void> showTimeline(String label) async {
+    final choice = await panel<String>(
+      context,
+      PanelContent(
+        header: PanelHeading(title: label),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                control(
+                  'Previous timeline',
+                  LucideIcons.chevronLeft,
+                  () => Navigator.pop(context, 'previous'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context, 'date'),
+                  child: const Text('Choose date'),
+                ),
+                control(
+                  'Next timeline',
+                  LucideIcons.chevronRight,
+                  () => Navigator.pop(context, 'next'),
+                ),
+              ],
+            ),
+            for (final value in const [
+              'day',
+              'week',
+              'month',
+              'year',
+              'custom',
+            ])
+              ListTile(
+                title: Text('${value[0].toUpperCase()}${value.substring(1)}'),
+                trailing: value == period
+                    ? const Icon(LucideIcons.check)
+                    : null,
+                onTap: withFeedback(() => Navigator.pop(context, value)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'previous' || choice == 'next') {
+      shift(choice == 'previous' ? -1 : 1);
+    } else if (choice == 'date') {
+      await selectDate();
+    } else {
+      await choosePeriod(choice);
+    }
+  }
+
+  List<Widget> mapActions(VoidCallback refreshSheet) => [
+    control(
+      'Fit recorded locations',
+      LucideIcons.scan,
+      fit,
+      enabled: ready && traced.isNotEmpty,
+    ),
+    control(
+      trace ? 'Hide chronological trace' : 'Trace selected logs, or all logs',
+      LucideIcons.route,
+      () {
+        setState(() => trace = !trace);
+        refreshSheet();
+        unawaited(guarded(context, saveView));
+      },
+      active: trace,
+    ),
+    control('Zoom in', LucideIcons.plus, () {
+      controller.move(
+        controller.camera.center,
+        math.min(19, controller.camera.zoom + 1),
+      );
+    }, enabled: ready),
+    control('Zoom out', LucideIcons.minus, () {
+      controller.move(
+        controller.camera.center,
+        math.max(2, controller.camera.zoom - 1),
+      );
+    }, enabled: ready),
+  ];
+  Future<void> showTools() => panel(
+    context,
+    StatefulBuilder(
+      builder: (c, update) => PanelContent(
+        header: const PanelHeading(title: 'Map tools'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(children: mapActions(() => update(() {}))),
+            const SizedBox(height: 12),
+            const Text('Show recorded categories'),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: colors.entries
+                  .map(
+                    (entry) => FilterChip(
+                      label: Text(entry.key),
+                      avatar: Icon(
+                        icons[entry.key],
+                        size: 16,
+                        color: entry.value,
+                      ),
+                      selected: categories.contains(entry.key),
+                      onSelected: (_) {
+                        ActionFeedback.tap();
+                        setState(() {
+                          if (!categories.remove(entry.key)) {
+                            categories.add(entry.key);
+                          }
+                        });
+                        update(() {});
+                        publishContext();
+                      },
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Dots are saved samples. Traces connect those samples with straight lines, not travelled roads.',
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget control(
     String label,
@@ -348,51 +500,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         : period == 'year'
         ? '${range.from.year}'
         : '${DateFormat('d MMM').format(range.from)} – ${DateFormat('d MMM yyyy').format(range.until.subtract(const Duration(days: 1)))}';
-    final buttonStyle = TextButton.styleFrom(
-      minimumSize: const Size(48, 48),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-    );
     final status = loading
         ? 'Loading recorded locations…'
         : loadError ??
               (shown.isEmpty
-                  ? 'No saved locations in this timeline'
+                  ? records.isNotEmpty
+                        ? 'Categories hidden · open Map tools'
+                        : '${previousRows.length} logs · no usable locations'
                   : trace
                   ? '${route.length} samples · straight-line trace'
-                  : '${selected.length} selected · tap a dot for details');
-    final actions = [
-      control(
-        'Fit recorded locations',
-        LucideIcons.scan,
-        fit,
-        enabled: ready && route.isNotEmpty,
-      ),
-      control(
-        trace ? 'Hide chronological trace' : 'Trace selected logs, or all logs',
-        LucideIcons.route,
-        () {
-          setState(() => trace = !trace);
-          unawaited(guarded(c, saveView));
-        },
-        active: trace,
-      ),
-      control('Zoom in', LucideIcons.plus, () {
-        controller.move(
-          controller.camera.center,
-          math.min(19, controller.camera.zoom + 1),
-        );
-      }, enabled: ready),
-      control('Zoom out', LucideIcons.minus, () {
-        controller.move(
-          controller.camera.center,
-          math.max(2, controller.camera.zoom - 1),
-        );
-      }, enabled: ready),
-    ];
+                  : '${shown.length} located · ${previousRows.length - records.length} without location');
     return LayoutBuilder(
       builder: (c, bounds) {
-        final short = bounds.maxHeight < 560;
         return Stack(
           children: [
             Positioned.fill(
@@ -513,217 +632,77 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             Positioned(
-              top: short ? 64 : 72,
-              left: 12,
-              right: 12,
+              top: 16,
+              left: 72,
+              right: 72,
               child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Chrome(
-                    padding: const EdgeInsets.all(4),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            control(
-                              'Previous timeline',
-                              LucideIcons.chevronLeft,
-                              () => shift(-1),
-                            ),
-                            Expanded(
-                              child: TextButton(
-                                style: buttonStyle,
-                                onPressed: withFeedback(selectDate),
-                                child: Text(
-                                  dateLabel,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                            control(
-                              'Next timeline',
-                              LucideIcons.chevronRight,
-                              () => shift(1),
-                            ),
-                            if (short) ...[
-                              control(
-                                'Choose timeline',
-                                LucideIcons.slidersHorizontal,
-                                choosePeriod,
-                              ),
-                              control(
-                                'Choose located logs',
-                                LucideIcons.listFilter,
-                                () => showRecords(),
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (!short)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextButton.icon(
-                                  style: buttonStyle,
-                                  onPressed: withFeedback(choosePeriod),
-                                  icon: const Icon(
-                                    LucideIcons.slidersHorizontal,
-                                    size: 16,
-                                  ),
-                                  label: Text(
-                                    '${period[0].toUpperCase()}${period.substring(1)}',
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: TextButton.icon(
-                                  style: buttonStyle,
-                                  onPressed: withFeedback(() => showRecords()),
-                                  icon: const Icon(
-                                    LucideIcons.listFilter,
-                                    size: 16,
-                                  ),
-                                  label: Text('${shown.length} logs'),
-                                ),
-                              ),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: 12,
-              left: short ? 12 : null,
-              top: short ? 120 : null,
-              bottom: short ? null : 230 + bottom,
-              child: Align(
-                alignment: short ? Alignment.center : Alignment.centerRight,
                 child: Chrome(
                   padding: EdgeInsets.zero,
-                  child: short
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ...actions,
-                            if (tileError || loadError != null)
-                              control(
-                                'Retry map loading',
-                                LucideIcons.refreshCw,
-                                retry,
-                              ),
-                          ],
-                        )
-                      : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions.take(2).toList(),
-                            ),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: actions.skip(2).toList(),
-                            ),
-                          ],
-                        ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      control(
+                        'Choose timeline',
+                        LucideIcons.calendarRange,
+                        () => showTimeline(dateLabel),
+                      ),
+                      control(
+                        'Choose located logs',
+                        LucideIcons.listFilter,
+                        () => showRecords(),
+                      ),
+                      control(
+                        'Map tools',
+                        LucideIcons.slidersHorizontal,
+                        showTools,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
             Positioned(
               left: 16,
               right: 16,
-              bottom: (short ? 92 : 104) + bottom,
+              bottom: 112 + bottom,
               child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 560),
-                  child: Chrome(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: colors.entries
-                                .map(
-                                  (entry) => Padding(
-                                    padding: const EdgeInsets.only(right: 4),
-                                    child: FilterChip(
-                                      label: Text(
-                                        entry.key,
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                      ),
-                                      labelPadding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      avatar: Icon(
-                                        icons[entry.key],
-                                        size: 16,
-                                        color: entry.value,
-                                      ),
-                                      selected: categories.contains(entry.key),
-                                      onSelected: (_) {
-                                        ActionFeedback.tap();
-                                        setState(() {
-                                          if (!categories.remove(entry.key)) {
-                                            categories.add(entry.key);
-                                          }
-                                        });
-                                        publishContext();
-                                      },
-                                    ),
-                                  ),
-                                )
-                                .toList(),
-                          ),
-                        ),
-                        Tooltip(
-                          message: tileError
-                              ? 'Map tiles unavailable. Check your connection and retry; saved dots remain visible.'
-                              : status,
-                          child: Text(
-                            short && tileError
-                                ? 'Tiles unavailable · use Retry above'
-                                : status,
-                            maxLines: short ? 1 : 2,
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(c).textTheme.bodySmall,
-                          ),
-                        ),
-                        if (!short && (tileError || loadError != null))
-                          Row(
+                child: Chrome(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: InkWell(
+                          onTap: withFeedback(() => showRecords()),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  tileError
-                                      ? 'Map tiles unavailable. Check your connection and retry.'
-                                      : 'Saved records could not load. Try again.',
-                                  style: Theme.of(c).textTheme.bodySmall,
-                                ),
+                              Text(
+                                dateLabel,
+                                style: const TextStyle(fontSize: 10),
                               ),
-                              control(
-                                'Retry map loading',
-                                LucideIcons.refreshCw,
-                                retry,
+                              Text(
+                                tileError
+                                    ? 'Basemap unavailable · saved dots remain'
+                                    : status,
+                                maxLines: 2,
+                                textAlign: TextAlign.center,
+                                style: Theme.of(c).textTheme.bodySmall,
                               ),
                             ],
                           ),
-                      ],
-                    ),
+                        ),
+                      ),
+                      if (tileError || loadError != null)
+                        control(
+                          'Retry map loading',
+                          LucideIcons.refreshCw,
+                          retry,
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -758,8 +737,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
 class _MapLogSheet extends StatefulWidget {
   final List<MapRecord> records;
+  final List<Map<String, dynamic>> unlocated;
   final Set<String> selected;
-  const _MapLogSheet({required this.records, required this.selected});
+  const _MapLogSheet({
+    required this.records,
+    required this.selected,
+    this.unlocated = const [],
+  });
   @override
   State<_MapLogSheet> createState() => _MapLogSheetState();
 }
@@ -786,7 +770,7 @@ class _MapLogSheetState extends State<_MapLogSheet> {
               children: [
                 const Expanded(
                   child: Text(
-                    'Located logs',
+                    'Timeline logs',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -825,7 +809,7 @@ class _MapLogSheetState extends State<_MapLogSheet> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Text(
-              'No selection traces all filtered logs. Expand a record for its stored details.',
+              'Only located logs can be selected or traced. Other saved logs remain listed below.',
               style: TextStyle(fontSize: 12),
             ),
           ),
@@ -833,7 +817,7 @@ class _MapLogSheetState extends State<_MapLogSheet> {
         ],
       ),
       scrollable: true,
-      child: widget.records.isEmpty
+      child: widget.records.isEmpty && widget.unlocated.isEmpty
           ? ListView(
               children: const [
                 Center(child: Text('No records with a usable location')),
@@ -841,8 +825,24 @@ class _MapLogSheetState extends State<_MapLogSheet> {
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              itemCount: widget.records.length,
+              itemCount: widget.records.length + widget.unlocated.length,
               itemBuilder: (c, i) {
+                if (i >= widget.records.length) {
+                  final row = widget.unlocated[i - widget.records.length];
+                  return ExpansionTile(
+                    leading: const Icon(LucideIcons.mapPinOff),
+                    title: Text(row['title']?.toString() ?? 'Activity'),
+                    subtitle: const Text(
+                      'No usable recorded location. The sample is missing, invalid or too old for this event.',
+                    ),
+                    childrenPadding: const EdgeInsets.all(16),
+                    children: [
+                      SelectableText(
+                        '${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(row['time'] as int))}\n${row['location']}\n${row['details']}',
+                      ),
+                    ],
+                  );
+                }
                 final record = widget.records[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),

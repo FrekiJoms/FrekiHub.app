@@ -13,7 +13,7 @@ import 'package:freki_hub/screens.dart';
 class _TestTiles extends TileProvider {
   int requests = 0;
   final bytes = base64Decode(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP48OHDfwAJdAPQXHvArAAAAABJRU5ErkJggg==',
   );
   @override
   ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
@@ -23,6 +23,80 @@ class _TestTiles extends TileProvider {
 }
 
 void main() {
+  testWidgets(
+    'Late locations fit the camera and unlocated logs stay readable',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final data = (await tester.runAsync(db.readAll))!;
+      final tiles = _TestTiles();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(
+              body: MapScreen(data: data, tileProvider: tiles),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      final camera = tester
+          .widget<FlutterMap>(find.byType(FlutterMap))
+          .mapController!;
+      expect(camera.camera.center.latitude, 0);
+      final time = DateTime.now().millisecondsSinceEpoch;
+      final writes = (() async {
+        await db.addActivity({
+          'id': 'late',
+          'time': time,
+          'action': 'location',
+          'title': 'Late recorded sample',
+          'location': 'Place',
+          'lat': 14.5,
+          'lng': 121,
+          'locationTime': time,
+        });
+        await db.addActivity({
+          'id': 'missing',
+          'time': time,
+          'action': 'clock_in',
+          'title': 'Saved without GPS',
+          'location': 'Location unavailable',
+        });
+        await db.addActivity({
+          'id': 'stale',
+          'time': time,
+          'action': 'location',
+          'title': 'Old cached sample',
+          'location': 'Place',
+          'lat': 15,
+          'lng': 120,
+          'locationTime': time - 120001,
+        });
+      })();
+      for (var i = 0; i < 50; i++) {
+        await tester.pump(const Duration(milliseconds: 20));
+      }
+      await writes;
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(camera.camera.center.latitude, 14.5);
+      expect(camera.camera.center.longitude, 121);
+      expect(find.text('1 located · 2 without location'), findsOneWidget);
+      await tester.tap(find.byTooltip('Choose located logs'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
+      await tester.pumpAndSettle();
+      expect(find.text('Saved without GPS'), findsOneWidget);
+      expect(find.text('Old cached sample'), findsOneWidget);
+      expect(find.byType(Checkbox), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+      addTearDown(db.close);
+    },
+  );
+
   testWidgets(
     'Map keeps filters usable on narrow screens and selects grouped located logs',
     (tester) async {
@@ -78,15 +152,21 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
-      expect(find.text('2 logs'), findsOneWidget);
+      expect(find.text('2 located · 0 without location'), findsOneWidget);
+      expect(tester.getRect(find.byTooltip('Choose timeline')).top, 16);
+      expect(tester.getRect(find.byTooltip('Map tools')).height, 48);
       final camera = tester
           .widget<FlutterMap>(find.byType(FlutterMap))
           .mapController!;
       final zoom = camera.camera.zoom;
+      await tester.tap(find.byTooltip('Map tools'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Zoom in'));
       await tester.pump();
       expect(camera.camera.zoom, zoom + 1);
-      await tester.tap(find.text('2 logs'));
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
       await tester.pumpAndSettle();
@@ -96,7 +176,10 @@ void main() {
       await tester.pump();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Map tools'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
+      await tester.binding.handlePopRoute();
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('1 samples · straight-line trace'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -128,17 +211,10 @@ void main() {
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(
-        tester.getRect(find.byTooltip('Previous timeline')).bottom,
-        lessThan(tester.getRect(find.byTooltip('Fit recorded locations')).top),
-      );
-      expect(
-        tester.getRect(find.byTooltip('Fit recorded locations')).bottom,
-        lessThan(tester.getRect(find.text('Sessions')).top),
-      );
+      expect(tester.getRect(find.byTooltip('Choose timeline')).top, 16);
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
-      expect(find.text('Located logs'), findsOneWidget);
+      expect(find.text('Timeline logs'), findsOneWidget);
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
