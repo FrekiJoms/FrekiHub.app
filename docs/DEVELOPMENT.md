@@ -153,7 +153,7 @@ $mapDefines = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("GEOAPIFY
 .\android\gradlew.bat -p android "-Pdart-defines=$mapDefines" :app:installDebug
 ```
 
-Changing a compiled Dart define requires recompilation; attaching/hot restarting an existing binary cannot add a missing key. Once the configured debug binary is installed, ordinary map UI changes retain the hot reload workflow. Build-time injection keeps the key out of Git but does not make a client API key secret from someone inspecting the app binary. Missing configuration skips tile requests and leaves recorded markers/log controls available. Geoapify receives tile requests for the visible viewport; saved log details are not uploaded or geocoded. Tests use fake keys and in-memory tiles.
+Changing a compiled Dart define requires recompilation; attaching/hot restarting an existing binary cannot add a missing key. Once the configured debug binary is installed, attach with `flutter attach -d DEVICE_ID --dart-define-from-file=config/geoapify.local.json` so recompilation during hot reload retains the same key. Ordinary map UI changes retain the hot reload workflow. Build-time injection keeps the key out of Git but does not make a client API key secret from someone inspecting the app binary. Missing configuration skips tile requests and leaves recorded markers/log controls available. Geoapify receives tile requests for the visible viewport; saved log details are not uploaded or geocoded. Tests use fake keys and in-memory tiles.
 
 ## Troubleshooting
 

@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Resume physical-phone design review — 2026-10-04
+
+The compatible Xiaomi 25080RABDG (Android 16/API 36) reconnected. The incremental Gradle `:app:installDebug` completed successfully with the locally configured Geoapify Dart define; app data was preserved. Flutter attached with the same define file and advertised its VM service and reload controls. An inspected screenshot of the user's current Sessions page confirmed the uppercase title and stronger shortcut/navigation shadows. Map tile rendering and native picker appearance are ready for user review but were not established by that screenshot. No phone scrolling, record edits, session ending or permission changes were performed. Updated attachment instructions retain the define file for subsequent hot reloads.
+
 ## Floating overlay depth — 2026-10-04
 
 Shared `FloatingDepth` strengthens static ambient/contact shadows around Chrome and floating toast surfaces, with theme-aware opacity. This applies across pages to navigation, Calendar/Settings shortcuts, Home balance, Map toolbar/legends/tools/captions and toast overlays. Quick-add menus, Flutter dialogs and the shared drawer use matching 16 dp Material elevation and shadow tint. Content cards retain their existing subtle shadow. The effect adds no layout padding, animations, extra blur filters or gesture changes. All twelve existing navigation, toast and shared-drawer checks passed, covering quick-add selection/cancellation, keyboard geometry, toast replacement/dismissal, content-fit/expanded sheets and reduced motion. Flutter analysis, documentation links and diff whitespace checks passed. Phone appearance/profile timings remain unverified while a compatible device is unavailable.
