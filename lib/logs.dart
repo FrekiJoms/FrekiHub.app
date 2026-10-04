@@ -59,6 +59,8 @@ class LogsSheet extends ConsumerWidget {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: LogRow(
+                    key: ValueKey('activity-log-${event['id']}'),
+                    details: logDetails(event),
                     title: event['title'] as String,
                     dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(time),
                   ),

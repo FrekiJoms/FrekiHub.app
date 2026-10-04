@@ -91,3 +91,33 @@ class MapRecord {
     );
   }
 }
+
+/// A foreground Map fix, independent of saved log coordinates.
+class MapUserLocation {
+  final double lat, lng, accuracy;
+  final int sampled;
+  const MapUserLocation(this.lat, this.lng, this.accuracy, this.sampled);
+  static MapUserLocation? parse(dynamic value, DateTime now) {
+    final data = MapRecord.decode(value);
+    final lat = num.tryParse('${data['lat']}')?.toDouble();
+    final lng = num.tryParse('${data['lng']}')?.toDouble();
+    final accuracy = num.tryParse('${data['accuracy']}')?.toDouble();
+    final sampled = int.tryParse('${data['locationTime']}');
+    if (lat == null ||
+        lng == null ||
+        accuracy == null ||
+        sampled == null ||
+        !lat.isFinite ||
+        !lng.isFinite ||
+        !accuracy.isFinite ||
+        lat.abs() > 90 ||
+        lng.abs() > 180 ||
+        accuracy < 0 ||
+        accuracy > 100 ||
+        now.millisecondsSinceEpoch - sampled > 120000 ||
+        sampled - now.millisecondsSinceEpoch > 1000) {
+      return null;
+    }
+    return MapUserLocation(lat, lng, accuracy, sampled);
+  }
+}

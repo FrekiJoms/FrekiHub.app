@@ -109,6 +109,70 @@ String sessionDate(AppData d, Session s) {
   return DateFormat(format).format(date);
 }
 
+/// Decode display metadata once per row without assuming optional fields exist.
+String logDetails(Map<String, dynamic> event) {
+  final extra = MapRecord.decode(event['details']);
+  final position = MapRecord.decode(extra['position'] ?? extra);
+  final lines = <String>[
+    'Action: ${event['action'] ?? 'Activity'}',
+    'Location: ${event['location'] ?? 'Not recorded'}',
+  ];
+  if (extra['amount'] != null) {
+    final currency = extra['currency'];
+    lines.add(
+      'Amount: ${extra['amount'] is int && currency is String && currencyDigits.containsKey(currency) ? money(extra['amount'] as int, currency) : '${extra['amount']} ${currency ?? ''}'}',
+    );
+  }
+  for (final field in {
+    'kind': 'Session type',
+    'merchant': 'Merchant',
+    'method': 'Payment method',
+    'source': 'Source',
+    'reference': 'Reference',
+    'note': 'Note',
+  }.entries) {
+    final value = extra[field.key];
+    if (value != null && value.toString().isNotEmpty) {
+      lines.add('${field.value}: $value');
+    }
+  }
+  if (position['lat'] != null && position['lng'] != null) {
+    lines.add('Coordinates: ${position['lat']}, ${position['lng']}');
+  }
+  if (position['accuracy'] != null) {
+    lines.add('Accuracy: ±${position['accuracy']} m');
+  }
+  if (position['locationTime'] is int) {
+    lines.add(
+      'Sampled: ${DateFormat('d MMM yyyy, HH:mm:ss').format(DateTime.fromMillisecondsSinceEpoch(position['locationTime'] as int))}',
+    );
+  }
+  const shown = {
+    'position',
+    'lat',
+    'lng',
+    'accuracy',
+    'locationTime',
+    'amount',
+    'currency',
+    'kind',
+    'merchant',
+    'method',
+    'source',
+    'reference',
+    'note',
+    'id',
+    'title',
+    'time',
+    'location',
+    'action',
+  };
+  for (final field in extra.entries.where((e) => !shown.contains(e.key))) {
+    lines.add('${field.key}: ${field.value}');
+  }
+  return lines.join('\n');
+}
+
 String clockTime(AppData d, int ms) =>
     DateFormat(d.prefs['clockFormat'] == '12' ? 'h:mm a' : 'HH:mm')
         .format(DateTime.fromMillisecondsSinceEpoch(ms));

@@ -112,6 +112,8 @@ Map fields have completion hints and type checks:
 | `map.total_count` | Number: all saved logs in the selected timeline, before category filters |
 | `map.unlocated_count` | Number: timeline logs lacking usable recorded coordinates; these appear in Timeline logs but cannot be selected or traced |
 | `map.center_lat`, `map.center_lng`, `map.zoom` | Numbers: current viewport, refreshed after interaction settles |
+| `map.current_location_visible` | Boolean: fresh foreground You marker was visible in the last Map snapshot; expired samples yield false on snapshot refresh |
+| `map.current_location_sample_epoch` | Number: one-shot user fix epoch milliseconds; zero when absent. Marker expires after two minutes; snapshots are observed state, not continuous native GPS |
 
 ```javascript
 target == map_page {
@@ -121,7 +123,7 @@ target == map_page {
 }
 ```
 
-Map is a read-only view of located records; existing common `log(...)` and `app.toast(...)` actions work under `map_page`. Session/finance mutations still require their own targets. Map context is stored separately from automation source/programs and is the last viewed state when Map is closed. Saved view preferences remain accessible using `data.get("settings.mapPeriod")`, `settings.mapDate`, `settings.mapFrom`, `settings.mapUntil`, and `settings.mapTrace` (preference values are strings).
+Map is a read-only view of located records with an opt-in one-shot foreground You marker; existing common `log(...)` and `app.toast(...)` actions work under `map_page`. Session/finance mutations still require their own targets. Map context is stored separately from automation source/programs and is the last viewed state when Map is closed. Saved view preferences remain accessible using `data.get("settings.mapPeriod")`, `settings.mapDate`, `settings.mapFrom`, `settings.mapUntil`, and `settings.mapTrace` (preference values are strings).
 
 Location rule radii use **metres**, currently 100–1,000 m in 50 m increments. Map includes sessions, finance, locations and other actions only when recorded coordinates are valid and their sample is fresh relative to the action (at most two minutes old). Category filters also act as the named/color legend. Day/month/year filters use local calendar boundaries; weeks start Monday. Custom dates include the entire final day. Select records in the logs sheet or from a marker; no selection traces all filtered records. Overlapping coordinates group their records in a selectable marker. Dashed traces join chronological samples with straight lines, not road routes or continuous GPS tracking. The map queries the entire selected interval rather than the activity sheet's 1,000-record limit. Basemap tiles need internet; loading Map does not enable background logging, request GPS, or send log titles, financial details or record payloads to the tile provider. Visible attribution and on-demand cached tiles follow OpenStreetMap's tile usage policy.
 

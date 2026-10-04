@@ -7,6 +7,31 @@ import 'package:freki_hub/map_records.dart';
 import 'package:freki_hub/rule_language.dart';
 
 void main() {
+  test(
+    'Foreground user fix rejects stale, coarse, future and invalid positions',
+    () {
+      final now = DateTime(2026, 10, 4, 12);
+      final fix = {
+        'lat': 14.5,
+        'lng': 121.0,
+        'accuracy': 12.0,
+        'locationTime': now.millisecondsSinceEpoch,
+      };
+      expect(MapUserLocation.parse(fix, now)?.lat, 14.5);
+      for (final invalid in [
+        {...fix, 'lat': 91},
+        {...fix, 'lng': double.nan},
+        {...fix, 'accuracy': 101},
+        {...fix, 'accuracy': -1},
+        {...fix, 'locationTime': now.millisecondsSinceEpoch - 120001},
+        {...fix, 'locationTime': now.millisecondsSinceEpoch + 1001},
+        {'lat': 14.5, 'lng': 121.0},
+      ]) {
+        expect(MapUserLocation.parse(invalid, now), isNull);
+      }
+    },
+  );
+
   test('Location records preserve nested finance/session positions and reject stale or invalid coordinates', () {
     final time = DateTime(2026, 10, 2, 8).millisecondsSinceEpoch;
     Map<String, dynamic> row(dynamic position, {String action = 'purchase'}) =>

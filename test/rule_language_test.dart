@@ -3,6 +3,36 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Foreground Map location fields have typed completion and snapshots', () {
+    expect(RuleCatalog.fields, contains('map.current_location_visible'));
+    expect(
+      RuleCatalog.numericField('map.current_location_sample_epoch'),
+      isTrue,
+    );
+    RuleCompiler.compile(
+      'target == map_page { if (data.get("map.current_location_visible") == true && data.get("map.current_location_sample_epoch") > 0) { app.toast("You are here"); } }',
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == map_page { if (data.get("map.current_location_visible") == "yes") { app.toast("Invalid"); } }',
+      ),
+      throwsFormatException,
+    );
+    final now = DateTime.now().millisecondsSinceEpoch;
+    AppData data(int time) => AppData([], [], [], {
+      'mapContext':
+          '{"map.current_location_visible":true,"map.current_location_sample_epoch":$time}',
+    });
+    expect(
+      RuleCatalog.snapshot(data(now))['map.current_location_visible'],
+      isTrue,
+    );
+    expect(
+      RuleCatalog.snapshot(data(now - 120001))['map.current_location_visible'],
+      isFalse,
+    );
+  });
+
   test('Overlay permission is a discoverable boolean native field', () {
     expect(RuleCatalog.fields, contains('device.overlay_allowed'));
     expect(RuleCatalog.booleanFields, contains('device.overlay_allowed'));

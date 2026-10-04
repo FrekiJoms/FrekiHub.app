@@ -17,6 +17,7 @@ abstract final class RuleCatalog {
     'device.overlay_allowed',
     'app.foreground',
     'map.trace_enabled',
+    'map.current_location_visible',
   };
   static bool numericField(String field) =>
       !field.startsWith('settings.') &&
@@ -41,6 +42,7 @@ abstract final class RuleCatalog {
             'map.zoom',
             'map.from_epoch',
             'map.until_epoch',
+            'map.current_location_sample_epoch',
           ].contains(field));
   static const targets = [
     'session_page',
@@ -92,6 +94,8 @@ abstract final class RuleCatalog {
     'map.center_lat': 'Map viewport latitude',
     'map.center_lng': 'Map viewport longitude',
     'map.zoom': 'Map viewport zoom level',
+    'map.current_location_visible': 'Fresh foreground user-location marker is visible in the last Map snapshot',
+    'map.current_location_sample_epoch': 'User-location fix epoch milliseconds; zero when absent, expires after two minutes',
     'settings.theme': 'light, dark or system',
     'settings.sound': 'Sound effects enabled',
     'activity_logs.enabled': 'Activity logging enabled',
@@ -132,6 +136,10 @@ abstract final class RuleCatalog {
         jsonDecode(data.prefs['mapContext'] ?? '{}') as Map,
       );
     } catch (_) {}
+    final userSample = mapContext['map.current_location_sample_epoch'] is int
+        ? mapContext['map.current_location_sample_epoch'] as int
+        : 0;
+    final userSampleAge = now.millisecondsSinceEpoch - userSample;
     Entry? last;
     for (final entry in data.entries) {
       if (last == null || entry.day.compareTo(last.day) >= 0) last = entry;
@@ -202,6 +210,12 @@ abstract final class RuleCatalog {
       'map.center_lat': mapContext['map.center_lat'] ?? 0,
       'map.center_lng': mapContext['map.center_lng'] ?? 0,
       'map.zoom': mapContext['map.zoom'] ?? 2,
+      'map.current_location_visible':
+          mapContext['map.current_location_visible'] == true &&
+          userSample > 0 &&
+          userSampleAge >= -1000 &&
+          userSampleAge <= 120000,
+      'map.current_location_sample_epoch': userSample,
       'settings.theme': data.prefs['theme'] ?? 'system',
       'settings.sound': data.prefs['sound'] == 'true',
       'activity_logs.enabled': data.prefs['activityLogging'] == 'true',

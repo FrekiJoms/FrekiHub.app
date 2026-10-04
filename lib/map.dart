@@ -14,7 +14,8 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with SingleTickerProviderStateMixin {
   final controller = MapController();
   final tileReset = StreamController<void>.broadcast();
   late final tileProvider =
@@ -26,6 +27,105 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       );
   StreamSubscription<List<Map<String, dynamic>>>? subscription;
   Timer? contextTimer;
+  Timer? locationExpiry;
+  MapUserLocation? userLocation;
+  bool locating = false, showUserLocation = true;
+  static const userColor = Color(0xFF008CBA);
+  late final cameraMotion = AnimationController(vsync: this);
+  static const locationHint = PermissionHintSpec(
+    title: 'Find yourself on the map',
+    intro: 'Show your current location and center the map on it.',
+    benefit: 'A clear point of reference',
+    detail:
+        'A pulsing circle marks a fresh, accurate location from your phone.',
+    control: 'This requests one location fix. It does not enable background tracking or add a saved log.',
+    next: 'Choose Precise location and allow access while using the app.',
+    action: 'Allow precise location',
+    icon: LucideIcons.locateFixed,
+  );
+
+  Future<void> locateUser() async {
+    if (locating || !ready) return;
+    setState(() => locating = true);
+    await guarded(context, () async {
+      final allowed = await PermissionHints.request<bool>(
+        context,
+        'locationPermission',
+        hint: locationHint,
+      );
+      if (!mounted || allowed == null) return;
+      if (!allowed)
+        throw StateError('Allow precise location to find yourself on the map.');
+      String? raw;
+      try {
+        raw = await NativeSession.channel
+            .invokeMethod<String>('currentLocation')
+            .timeout(const Duration(seconds: 25));
+      } on PlatformException catch (error) {
+        throw StateError(
+          error.message ?? 'Could not find your location. Enable precise location and try again.',
+        );
+      }
+      if (!mounted) return;
+      final fix = MapUserLocation.parse(raw, DateTime.now());
+      if (fix == null)
+        throw StateError(
+          'No fresh, accurate location available. Enable precise location and try again.',
+        );
+      locationExpiry?.cancel();
+      setState(() {
+        userLocation = fix;
+        showUserLocation = true;
+      });
+      locationExpiry = Timer(
+        Duration(
+          milliseconds: math.max(
+            1,
+            fix.sampled + 120000 - DateTime.now().millisecondsSinceEpoch,
+          ),
+        ),
+        () {
+          if (!mounted) return;
+          setState(() => userLocation = null);
+          publishContext();
+        },
+      );
+      panToUser(fix);
+      publishContext();
+    });
+    if (mounted) setState(() => locating = false);
+  }
+
+  void panToUser(MapUserLocation fix) {
+    cameraMotion.stop();
+    final from = controller.camera.center;
+    final zoom = controller.camera.zoom;
+    final toZoom = math.max(15.0, zoom);
+    if (MediaQuery.disableAnimationsOf(context)) {
+      controller.move(LatLng(fix.lat, fix.lng), toZoom);
+      return;
+    }
+    cameraMotion.duration = Motion.duration(context, 350);
+    final deltaLng = (fix.lng - from.longitude + 540) % 360 - 180;
+    void tick() {
+      final t = Motion.curve.transform(cameraMotion.value);
+      controller.move(
+        LatLng(
+          from.latitude + (fix.lat - from.latitude) * t,
+          (from.longitude + deltaLng * t + 540) % 360 - 180,
+        ),
+        zoom + (toZoom - zoom) * t,
+      );
+    }
+
+    cameraMotion.addListener(tick);
+    cameraMotion
+        .forward(from: 0)
+        .orCancel
+        .then((_) {}, onError: (Object _) {})
+        .whenComplete(() => cameraMotion.removeListener(tick));
+  }
+
   late String period = widget.data.prefs['mapPeriod'] ?? 'day';
   late DateTime date =
       DateTime.tryParse(widget.data.prefs['mapDate'] ?? '') ?? DateTime.now();
@@ -126,7 +226,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               loadError = null;
             });
             publishContext();
-            if (firstLoad && ready && visible.isNotEmpty) fit();
+            if (firstLoad &&
+                ready &&
+                visible.isNotEmpty &&
+                userLocation == null)
+              fit();
           },
           onError: (Object _) {
             if (mounted && generation == queryGeneration) {
@@ -146,6 +250,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       if (!mounted) return;
       final camera = ready ? controller.camera : null;
       final payload = jsonEncode({
+        'map.current_location_visible':
+            userLocation != null && showUserLocation,
+        'map.current_location_sample_epoch': userLocation?.sampled ?? 0,
         'map.period': period,
         'map.from': dayKey(range.from),
         'map.until': dayKey(range.until),
@@ -186,6 +293,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   void fit() {
+    cameraMotion.stop();
     final points = traced;
     if (!ready || points.isEmpty) return;
     final coordinates = points.map((r) => LatLng(r.lat, r.lng)).toList();
@@ -291,6 +399,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (tileError || loadError != null)
       control('Retry map loading', LucideIcons.refreshCw, retry),
     control(
+      'Center on current location',
+      LucideIcons.locateFixed,
+      () => locateUser(),
+      enabled: ready && !locating,
+      busy: locating,
+    ),
+    control(
       'Fit recorded locations',
       LucideIcons.scan,
       fit,
@@ -306,12 +421,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       active: trace,
     ),
     control('Zoom in', LucideIcons.plus, () {
+      cameraMotion.stop();
       controller.move(
         controller.camera.center,
         math.min(19, controller.camera.zoom + 1),
       );
     }, enabled: ready),
     control('Zoom out', LucideIcons.minus, () {
+      cameraMotion.stop();
       controller.move(
         controller.camera.center,
         math.max(2, controller.camera.zoom - 1),
@@ -324,6 +441,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     VoidCallback action, {
     bool? active,
     bool enabled = true,
+    bool busy = false,
   }) => IconButton(
     tooltip: label,
     isSelected: active,
@@ -348,7 +466,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ? Theme.of(context).colorScheme.onSurface.withValues(alpha: .12)
             : Colors.transparent,
       ),
-      child: Icon(icon, size: 18),
+      child: SkeletonValue(
+        loading: busy,
+        semanticsLabel: 'Finding current location',
+        child: Icon(icon, size: 18),
+      ),
     ),
   );
 
@@ -418,7 +540,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     if (shown.isNotEmpty) fit();
                     publishContext();
                   },
-                  onPositionChanged: (_, _) => publishContext(),
+                  onPositionChanged: (_, gesture) {
+                    if (gesture) cameraMotion.stop();
+                    publishContext();
+                  },
                 ),
                 children: [
                   if (widget.apiKey.trim().isNotEmpty)
@@ -511,6 +636,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       );
                     }).toList(),
                   ),
+                  if (userLocation != null && showUserLocation)
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(userLocation!.lat, userLocation!.lng),
+                          width: 48,
+                          height: 48,
+                          child: Semantics(
+                            label: 'Your current location',
+                            child: const IgnorePointer(
+                              child: LocationPulse(
+                                key: ValueKey('map-user-location'),
+                                color: userColor,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
             ),
@@ -736,61 +880,114 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
-                        children: colors.entries
-                            .map(
-                              (entry) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 2,
-                                ),
-                                child: AnimatedOpacity(
-                                  opacity: categories.contains(entry.key)
-                                      ? 1
-                                      : .4,
-                                  duration: Motion.duration(c, 150),
-                                  child: FilterChip(
-                                    backgroundColor: Colors.transparent,
-                                    selectedColor: Colors.transparent,
-                                    side: BorderSide.none,
-                                    label: Text(
-                                      entry.key,
-                                      maxLines: 1,
-                                      softWrap: false,
-                                    ),
-                                    labelStyle: TextStyle(
-                                      color: Theme.of(c).colorScheme.onSurface,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    labelPadding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                    ),
-                                    visualDensity: VisualDensity.compact,
-                                    materialTapTargetSize:
-                                        MaterialTapTargetSize.shrinkWrap,
-                                    showCheckmark: false,
-                                    avatar: Icon(
-                                      icons[entry.key],
-                                      size: 13,
-                                      color: entry.value,
-                                    ),
-                                    selected: categories.contains(entry.key),
-                                    onSelected: (_) {
-                                      ActionFeedback.tap();
-                                      setState(() {
-                                        if (!categories.remove(entry.key)) {
-                                          categories.add(entry.key);
-                                        }
-                                      });
-                                      publishContext();
-                                    },
-                                  ),
+                        children: [
+                          AnimatedOpacity(
+                            opacity: userLocation != null && showUserLocation
+                                ? 1
+                                : .4,
+                            duration: Motion.duration(c, 150),
+                            child: FilterChip(
+                              label: const Text(
+                                'You',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
                                 ),
                               ),
-                            )
-                            .toList(),
+                              avatar: const Icon(
+                                LucideIcons.locateFixed,
+                                size: 13,
+                                color: userColor,
+                              ),
+                              backgroundColor: Colors.transparent,
+                              selectedColor: Colors.transparent,
+                              side: BorderSide.none,
+                              showCheckmark: false,
+                              labelPadding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              selected:
+                                  userLocation != null && showUserLocation,
+                              onSelected: locating
+                                  ? null
+                                  : (_) {
+                                      ActionFeedback.tap();
+                                      if (userLocation == null) {
+                                        locateUser();
+                                      } else {
+                                        setState(
+                                          () => showUserLocation =
+                                              !showUserLocation,
+                                        );
+                                        publishContext();
+                                      }
+                                    },
+                            ),
+                          ),
+                          ...colors.entries
+                              .map(
+                                (entry) => Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                  ),
+                                  child: AnimatedOpacity(
+                                    opacity: categories.contains(entry.key)
+                                        ? 1
+                                        : .4,
+                                    duration: Motion.duration(c, 150),
+                                    child: FilterChip(
+                                      backgroundColor: Colors.transparent,
+                                      selectedColor: Colors.transparent,
+                                      side: BorderSide.none,
+                                      label: Text(
+                                        entry.key,
+                                        maxLines: 1,
+                                        softWrap: false,
+                                      ),
+                                      labelStyle: TextStyle(
+                                        color: Theme.of(c)
+                                            .colorScheme
+                                            .onSurface,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      labelPadding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 4,
+                                      ),
+                                      visualDensity: VisualDensity.compact,
+                                      materialTapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                      showCheckmark: false,
+                                      avatar: Icon(
+                                        icons[entry.key],
+                                        size: 13,
+                                        color: entry.value,
+                                      ),
+                                      selected: categories.contains(entry.key),
+                                      onSelected: (_) {
+                                        ActionFeedback.tap();
+                                        setState(() {
+                                          if (!categories.remove(entry.key)) {
+                                            categories.add(entry.key);
+                                          }
+                                        });
+                                        publishContext();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ],
                       ),
                     ),
                   ),
@@ -859,6 +1056,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void dispose() {
     subscription?.cancel();
     contextTimer?.cancel();
+    locationExpiry?.cancel();
+    cameraMotion.dispose();
     tileReset.close();
     controller.dispose();
     super.dispose();
@@ -962,6 +1161,8 @@ class _MapLogSheetState extends State<_MapLogSheet> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: LogRow(
+                      key: ValueKey('map-log-${row['id']}'),
+                      details: logDetails(row),
                       title: row['title']?.toString() ?? 'Activity',
                       dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(
                         DateTime.fromMillisecondsSinceEpoch(row['time'] as int),
@@ -973,6 +1174,8 @@ class _MapLogSheetState extends State<_MapLogSheet> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: LogRow(
+                    key: ValueKey('map-log-${record.id}'),
+                    details: logDetails(record.row),
                     title: record.title,
                     dateTime: DateFormat('d MMM yyyy, HH:mm:ss')
                         .format(record.time),

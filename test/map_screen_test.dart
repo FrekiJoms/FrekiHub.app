@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:freki_hub/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +25,162 @@ class _TestTiles extends TileProvider {
 }
 
 void main() {
+  for (final reduced in [false, true]) {
+    testWidgets(
+      'User location is opt-in, centers, toggles and expires (reduced: $reduced)',
+      (tester) async {
+        final db = AppDatabase.forTesting(NativeDatabase.memory());
+        addTearDown(db.close);
+        final data = (await tester.runAsync(db.readAll))!;
+        final calls = <MethodCall>[];
+        final messenger =
+            TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+        messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+          calls.add(call);
+          if (call.method == 'permissionStatus') {
+            return {'locationPermission': true};
+          }
+          if (call.method == 'locationPermission') return true;
+          if (call.method == 'currentLocation') {
+            return jsonEncode({
+              'lat': 14.5,
+              'lng': 121,
+              'accuracy': 10,
+              'locationTime': DateTime.now().millisecondsSinceEpoch,
+            });
+          }
+          return null;
+        });
+        addTearDown(
+          () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+        );
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [databaseProvider.overrideWithValue(db)],
+            child: MaterialApp(
+              theme: Design.theme(false),
+              builder: (context, child) => MediaQuery(
+                data: MediaQuery.of(context)
+                    .copyWith(disableAnimations: reduced),
+                child: child!,
+              ),
+              home: Scaffold(
+                body: MapScreen(
+                  data: data,
+                  tileProvider: _TestTiles(),
+                  apiKey: 'test-key',
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 600));
+        expect(calls.where((c) => c.method == 'currentLocation'), isEmpty);
+        expect(find.text('You'), findsOneWidget);
+        await tester.tap(find.byTooltip('Center on current location'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 450));
+        await tester.pump();
+        final camera = tester
+            .widget<FlutterMap>(find.byType(FlutterMap))
+            .mapController!
+            .camera;
+        expect(camera.center.latitude, closeTo(14.5, .001));
+        expect(camera.center.longitude, closeTo(121, .001));
+        expect(camera.zoom, 15);
+        expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
+        await tester.tap(
+          find.ancestor(
+            of: find.text('You'),
+            matching: find.byType(FilterChip),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.byKey(const ValueKey('map-user-location')), findsNothing);
+        await tester.tap(
+          find.ancestor(
+            of: find.text('You'),
+            matching: find.byType(FilterChip),
+          ),
+        );
+        await tester.pump(const Duration(milliseconds: 200));
+        expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
+        expect(calls.where((c) => c.method == 'currentLocation'), hasLength(1));
+        await tester.pump(const Duration(minutes: 2, seconds: 1));
+        await tester.pump();
+        expect(find.byKey(const ValueKey('map-user-location')), findsNothing);
+        expect(
+          (await tester.runAsync(db.readAll))!.prefs['locationEnabled'],
+          isNull,
+        );
+        expect(
+          await tester.runAsync(
+            () => db.customSelect('SELECT * FROM activity_logs').get(),
+          ),
+          isEmpty,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox());
+        await tester.pump(const Duration(seconds: 1));
+      },
+    );
+  }
+  testWidgets('Map location hint cancellation never requests GPS', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final data = (await tester.runAsync(db.readAll))!;
+    final calls = <MethodCall>[];
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+      calls.add(call);
+      if (call.method == 'permissionStatus') {
+        return {'locationPermission': false};
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: MapScreen(
+              data: data,
+              tileProvider: _TestTiles(),
+              apiKey: 'test-key',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.tap(find.byTooltip('Center on current location'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Find yourself on the map'), findsOneWidget);
+    await tester.tap(find.text('Not now'));
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(PermissionHint), findsNothing);
+    expect(
+      calls.where(
+        (c) => ['locationPermission', 'currentLocation'].contains(c.method),
+      ),
+      isEmpty,
+    );
+    expect(find.byKey(const ValueKey('map-user-location')), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets(
     'Inline timeline modes navigate directly and custom disables arrows',
     (tester) async {

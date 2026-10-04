@@ -449,45 +449,113 @@ void dataToast(BuildContext context, String resource, DataAction action) {
 
 /// Compact presentation shared by Map timeline and Settings activity logs.
 class LogRow extends StatelessWidget {
-  final String title, dateTime;
+  final String title, dateTime, details;
   final Widget? leading;
   const LogRow({
     super.key,
     required this.title,
     required this.dateTime,
+    required this.details,
     this.leading,
   });
-
   @override
   Widget build(BuildContext context) => Surface(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    child: Row(
+    padding: EdgeInsets.zero,
+    child: ExpansionTile(
+      minTileHeight: 0,
+      dense: true,
+      visualDensity: VisualDensity.compact,
+      tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      shape: const Border(),
+      collapsedShape: const Border(),
+      expansionAnimationStyle: AnimationStyle(
+        duration: Motion.duration(context, 200),
+        reverseDuration: Motion.duration(context, 200),
+        curve: Motion.curve,
+      ),
+      leading: leading,
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+      ),
+      subtitle: Text(
+        dateTime,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
       children: [
-        if (leading != null) ...[leading!, const SizedBox(width: 8)],
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                dateTime,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SelectableText(
+            details,
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
       ],
     ),
   );
+}
+
+/// Paint-only pulse: never rebuilds the map or its saved markers per frame.
+class LocationPulse extends StatefulWidget {
+  final Color color;
+  const LocationPulse({super.key, required this.color});
+  @override
+  State<LocationPulse> createState() => _LocationPulseState();
+}
+
+class _LocationPulseState extends State<LocationPulse>
+    with SingleTickerProviderStateMixin {
+  late final animation = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1800),
+  );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      animation.stop();
+      animation.value = .35;
+    } else {
+      animation.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    animation.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => RepaintBoundary(
+    child: CustomPaint(
+      painter: _LocationPulsePainter(animation, widget.color),
+      size: const Size(48, 48),
+    ),
+  );
+}
+
+class _LocationPulsePainter extends CustomPainter {
+  final Animation<double> animation;
+  final Color color;
+  _LocationPulsePainter(this.animation, this.color) : super(repaint: animation);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    canvas.drawCircle(
+      center,
+      10 + animation.value * 13,
+      Paint()..color = color.withValues(alpha: .25 * (1 - animation.value)),
+    );
+    canvas.drawCircle(center, 9, Paint()..color = Colors.white);
+    canvas.drawCircle(center, 6, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_LocationPulsePainter old) =>
+      old.color != color || old.animation != animation;
 }

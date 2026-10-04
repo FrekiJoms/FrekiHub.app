@@ -105,6 +105,7 @@ abstract final class PermissionHints {
     BuildContext context,
     String method, {
     bool manage = false,
+    PermissionHintSpec? hint,
   }) => perform<T>(
     context,
     method,
@@ -112,6 +113,7 @@ abstract final class PermissionHints {
         ? NativeSession.channel.invokeMethod<T>('permissionSettings', method)
         : NativeSession.channel.invokeMethod<T>(method),
     manage: manage,
+    hint: hint,
   );
 
   static Future<T?> perform<T>(
@@ -119,6 +121,7 @@ abstract final class PermissionHints {
     String method,
     Future<T?> Function() action, {
     bool manage = false,
+    PermissionHintSpec? hint,
   }) async {
     final spec = specs[method];
     if (spec == null) {
@@ -134,7 +137,7 @@ abstract final class PermissionHints {
       if (!allowed || manage) {
         final accepted = await panel<bool>(
           context,
-          PermissionHint(spec: spec, allowed: allowed),
+          PermissionHint(spec: hint ?? spec, allowed: allowed),
         );
         if (accepted != true || !context.mounted) return null;
       }
