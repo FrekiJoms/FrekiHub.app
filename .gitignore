@@ -51,3 +51,6 @@ app.*.map.json
 
 # Screenshots attached through Codex
 .codex-remote-attachments/
+
+# Local map API credentials
+/config/geoapify.local.json

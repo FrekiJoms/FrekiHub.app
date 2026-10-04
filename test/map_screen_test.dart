@@ -23,6 +23,36 @@ class _TestTiles extends TileProvider {
 }
 
 void main() {
+  testWidgets('Missing map key preserves records without requesting tiles', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final data = (await tester.runAsync(db.readAll))!;
+    final tiles = _TestTiles();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: MapScreen(data: data, tileProvider: tiles, apiKey: '  '),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byType(TileLayer), findsNothing);
+    expect(tiles.requests, 0);
+    expect(
+      find.text('Basemap not configured · saved dots remain'),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Choose located logs'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
   testWidgets(
     'Late locations fit the camera and unlocated logs stay readable',
     (tester) async {
@@ -35,12 +65,26 @@ void main() {
           child: MaterialApp(
             theme: Design.theme(false),
             home: Scaffold(
-              body: MapScreen(data: data, tileProvider: tiles),
+              body: MapScreen(
+                data: data,
+                tileProvider: tiles,
+                apiKey: 'test-key',
+              ),
             ),
           ),
         ),
       );
       await tester.pump(const Duration(milliseconds: 600));
+      final layer = tester.widget<TileLayer>(find.byType(TileLayer));
+      expect(
+        layer.urlTemplate,
+        startsWith('https://maps.geoapify.com/v1/tile/osm-carto/'),
+      );
+      expect(layer.urlTemplate, endsWith('?apiKey=test-key'));
+      expect(
+        find.text('Powered by Geoapify · © OpenStreetMap contributors'),
+        findsOneWidget,
+      );
       final camera = tester
           .widget<FlutterMap>(find.byType(FlutterMap))
           .mapController!;
@@ -143,7 +187,11 @@ void main() {
                 disableAnimations: true,
               ),
               child: Scaffold(
-                body: MapScreen(data: data, tileProvider: tiles),
+                body: MapScreen(
+                  data: data,
+                  tileProvider: tiles,
+                  apiKey: 'test-key',
+                ),
               ),
             ),
           ),

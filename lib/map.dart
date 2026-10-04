@@ -3,7 +3,13 @@ part of 'screens.dart';
 class MapScreen extends ConsumerStatefulWidget {
   final AppData data;
   final TileProvider? tileProvider;
-  const MapScreen({super.key, required this.data, this.tileProvider});
+  final String apiKey;
+  const MapScreen({
+    super.key,
+    required this.data,
+    this.tileProvider,
+    this.apiKey = const String.fromEnvironment('GEOAPIFY_API_KEY'),
+  });
   @override
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
@@ -491,24 +497,25 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   onPositionChanged: (_, _) => publishContext(),
                 ),
                 children: [
-                  TileLayer(
-                    reset: tileReset.stream,
-                    evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
-                    tileProvider: tileProvider,
-                    urlTemplate:
-                        'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                    userAgentPackageName: 'com.frekihub.freki_hub',
-                    tileDisplay: TileDisplay.instantaneous(),
-                    errorTileCallback: (_, _, _) {
-                      if (!tileError && mounted) {
-                        WidgetsBinding.instance.addPostFrameCallback((_) {
-                          if (mounted && !tileError) {
-                            setState(() => tileError = true);
-                          }
-                        });
-                      }
-                    },
-                  ),
+                  if (widget.apiKey.trim().isNotEmpty)
+                    TileLayer(
+                      reset: tileReset.stream,
+                      evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+                      tileProvider: tileProvider,
+                      urlTemplate:
+                          'https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${Uri.encodeQueryComponent(widget.apiKey.trim())}',
+                      userAgentPackageName: 'com.frekihub.freki_hub',
+                      tileDisplay: TileDisplay.instantaneous(),
+                      errorTileCallback: (_, _, _) {
+                        if (!tileError && mounted) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && !tileError) {
+                              setState(() => tileError = true);
+                            }
+                          });
+                        }
+                      },
+                    ),
                   if (trace && route.length > 1)
                     PolylineLayer(
                       polylines: [
@@ -692,7 +699,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 style: const TextStyle(fontSize: 10),
                               ),
                               Text(
-                                tileError
+                                widget.apiKey.trim().isEmpty
+                                    ? 'Basemap not configured · saved dots remain'
+                                    : tileError
                                     ? 'Basemap unavailable · saved dots remain'
                                     : status,
                                 maxLines: 2,
@@ -716,12 +725,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             ),
             Positioned(
               left: 16,
+              right: 16,
               bottom: 88 + bottom,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 color: Theme.of(c).colorScheme.surface,
                 child: const Text(
-                  '© OpenStreetMap contributors',
+                  'Powered by Geoapify · © OpenStreetMap contributors',
                   style: TextStyle(fontSize: 10),
                 ),
               ),

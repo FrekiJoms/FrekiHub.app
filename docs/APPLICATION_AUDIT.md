@@ -1,5 +1,13 @@
 # FrekiHub application audit
 
+## Geoapify basemap provider — 2026-10-04
+
+Map replaces public OpenStreetMap tile requests with Geoapify's documented `osm-carto` XYZ PNG endpoint. The user-provided geocoding search URL returns address coordinates and cannot render this tile layer. The existing map UI, markers, traces, saved-log parsing, opt-in location collection, 128 MiB caching and retry behavior remain unchanged. Visible attribution credits Geoapify and OpenStreetMap. No address lookup or inference of missing recorded positions was added.
+
+The supplied key is configured in Git-ignored `config/geoapify.local.json`, passed as `GEOAPIFY_API_KEY` at compilation. An example file and Flutter/Gradle configuration commands are documented. The key never enters preferences, backups, rule snapshots or committed source. A build with no key skips tile requests and explains the missing basemap while retaining log controls and recorded overlays. Client build configuration is not a claim that a binary's key is inaccessible.
+
+Verification: all three focused Map widget tests passed, including provider URL/attribution, missing-key behavior, late location fitting, horizontal legends, right tool rail, narrow/enlarged text, landscape, zoom, selection/trace and failed-tile retry. Flutter analysis reported no issues. One live world-tile request with the supplied key returned HTTP 200, image/png and a valid PNG signature (5,682 bytes). This verifies this request and key, not sustained availability or phone rendering. Compatible-device rendering/offline recovery and profile timings remain unverified; no APK install or phone gestures were performed.
+
 ## Restore original picker design and reposition Map controls — 2026-10-04
 
 The current-value action had replaced CupertinoDatePicker with independent wheels and moved Cancel/Confirm into a footer. That exceeded the requested addition of one SVG button. The original native picker is restored, including wheel magnification, localized labels, selection overlay and header actions. Only the SVG current-value action is added below the centered title. The existing picker owns its controllers; the jump reads the public controllers exposed by descendant CupertinoPicker widgets. Date bounds, native leap-day correction, reduced motion and local Confirm/Cancel behavior remain covered.

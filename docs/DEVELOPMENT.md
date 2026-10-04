@@ -75,7 +75,7 @@ flutter test test/rule_language_test.dart test/rule_editor_test.dart
 
 The Java reminder check is a standalone main method with ten clock assertions, not a standard JUnit suite automatically executed by `flutter test`. It needs compiled Kotlin production classes and the matching Kotlin/JVM classpath; do not claim it ran unless explicitly compiled/executed. Temporary native-check artifacts from earlier sessions are disposable and are not a reproducible checked-in build script.
 
-Widget tests use in-memory Drift and fake native channel responses. Map tests inject memory tiles; they do not verify live OpenStreetMap availability. Use `tester.runAsync` for real asynchronous setup when necessary and `addTearDown(db.close)` for database cleanup outside the widget fake clock. A hanging test cleanup does not prove the app startup is hung.
+Widget tests use in-memory Drift and fake native channel responses. Map tests inject memory tiles; they do not verify live Geoapify availability. Use `tester.runAsync` for real asynchronous setup when necessary and `addTearDown(db.close)` for database cleanup outside the widget fake clock. A hanging test cleanup does not prove the app startup is hung.
 
 ## Generated database code
 
@@ -136,6 +136,24 @@ Use the actual connected device ID. Confirm the tool reports a successful attach
 Flutter's [hot reload guide](https://docs.flutter.dev/tools/hot-reload) describes reload limits; the [performance guide](https://docs.flutter.dev/perf/ui-performance) explains physical-device/profile-mode measurement. Prefer this loop over reinstalling for every UI edit. Keep normal feature documentation and commit/push delivery; avoid repeated broad tests without new evidence.
 
 The focused device checklist covers cold open/reopen/Retry, light/dark and enlarged text, reduced motion, selector/wheel cancel/confirm, long-press quick add, active-service clock-out, HyperIsland fallback, notification permission denial/retry, sound settings, location-off behavior, enter/exit radius, periodic samples, daily/weekday reminders, purchase listener formats, map network failure and backup/reset. Force-stop must be tested separately from normal closing; it intentionally suspends background execution until reopening.
+
+### Geoapify map configuration
+
+Map uses Geoapify's [osm-carto raster tile endpoint](https://apidocs.geoapify.com/docs/maps/). Copy `config/geoapify.example.json` to `config/geoapify.local.json` and replace the placeholder locally. The local file is Git-ignored; never commit its key. This workspace already has the user-supplied key configured. Supply it when starting Flutter:
+
+```powershell
+flutter run -d DEVICE_ID --dart-define-from-file=config/geoapify.local.json
+```
+
+For an authorized incremental Gradle debug install, pass the same Dart define:
+
+```powershell
+$mapConfig = Get-Content config/geoapify.local.json -Raw | ConvertFrom-Json
+$mapDefines = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("GEOAPIFY_API_KEY=$($mapConfig.GEOAPIFY_API_KEY)"))
+.\android\gradlew.bat -p android "-Pdart-defines=$mapDefines" :app:installDebug
+```
+
+Changing a compiled Dart define requires recompilation; attaching/hot restarting an existing binary cannot add a missing key. Once the configured debug binary is installed, ordinary map UI changes retain the hot reload workflow. Build-time injection keeps the key out of Git but does not make a client API key secret from someone inspecting the app binary. Missing configuration skips tile requests and leaves recorded markers/log controls available. Geoapify receives tile requests for the visible viewport; saved log details are not uploaded or geocoded. Tests use fake keys and in-memory tiles.
 
 ## Troubleshooting
 
