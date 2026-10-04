@@ -50,6 +50,7 @@ flutter analyze
 | Change | Relevant existing checks |
 | --- | --- |
 | Startup/readiness/reactive cache | `test/startup_test.dart` |
+| Today clock/reduced motion/resume/time changes | `test/today_clock_test.dart` (painted hands, second boundaries, date rollover, backward time adjustment and elapsed totals) |
 | Shared layout/custom selectors/two-position drawers | `test/layout_test.dart` (opening frames, both snaps, nested selector/date picker, keyboard and cancellation) |
 | Bottom-bar gestures | `test/navigation_test.dart` |
 | Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
@@ -99,14 +100,14 @@ For the observed Java loopback/temp failure, set `JAVA_HOME` to the installed JD
 
 Only build/install when the user asks or connects a device for that purpose. Check actual connection with `flutter devices`/`adb devices`; USB-debugging intent alone is not proof of a connected authorized phone. Do not install an emulator or work on iOS unless requested.
 
-When authorized:
+For an authorized development reinstall, use `installDebug` from the Gradle wrapper. It builds the necessary local debug APK and installs it on the connected phone; it does not publish or upload the app. Reuse incremental outputs and preserve app data. Avoid separate release/store packaging, clean builds or uninstalling unless explicitly requested.
 
 ```powershell
-flutter devices
-flutter run -d DEVICE_ID
+adb devices
+./android/gradlew.bat -p android :app:installDebug
 ```
 
-Use the real `DEVICE_ID` from the device listing. For a profile performance run, use `flutter run --profile -d DEVICE_ID` with device-testing authorization. Do not claim frame time improvements from debug widget tests. Android builds currently use debug signing even for release; they are not production-store signed.
+The command above is for this Windows workspace; from `android` on a Unix host, use `./gradlew installDebug`. Confirm the intended device before installing. Retain the documented Java/temp/output-directory workaround where necessary. Use `flutter run -d DEVICE_ID` when an attached development session/hot reload is wanted; use the real `DEVICE_ID` from the listing. For a profile performance run, use `flutter run --profile -d DEVICE_ID` with device-testing authorization. Do not claim frame time improvements from debug widget tests. Android builds currently use debug signing even for release; they are not production-store signed.
 
 The focused device checklist covers cold open/reopen/Retry, light/dark and enlarged text, reduced motion, selector/wheel cancel/confirm, long-press quick add, active-service clock-out, HyperIsland fallback, notification permission denial/retry, sound settings, location-off behavior, enter/exit radius, periodic samples, daily/weekday reminders, purchase listener formats, map network failure and backup/reset. Force-stop must be tested separately from normal closing; it intentionally suspends background execution until reopening.
 
