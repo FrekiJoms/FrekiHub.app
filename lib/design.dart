@@ -241,7 +241,8 @@ abstract final class Design {
       dialogTheme: DialogThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
-        elevation: 0,
+        elevation: FloatingDepth.elevation,
+        shadowColor: Colors.black.withValues(alpha: dark ? .48 : .28),
         insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
         titleTextStyle: TextStyle(
           fontFamily: 'Geist',
@@ -669,7 +670,8 @@ class _PillNavigationState extends State<PillNavigation>
         width: width,
         child: Material(
           color: Theme.of(c).colorScheme.surfaceContainerHigh,
-          elevation: 12,
+          elevation: FloatingDepth.elevation,
+          shadowColor: FloatingDepth.color(c),
           borderRadius: BorderRadius.circular(24),
           clipBehavior: Clip.antiAlias,
           child: Padding(
@@ -964,6 +966,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
         color: Colors.transparent,
         child: Surface(
           key: const ValueKey('top-toast-pill'),
+          floating: true,
           borderRadius: BorderRadius.circular(40),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
           child: Semantics(

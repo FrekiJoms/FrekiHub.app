@@ -176,15 +176,40 @@ class PanelActions extends StatelessWidget {
   }
 }
 
+/// Shared depth for app overlays, separate from ordinary content cards.
+abstract final class FloatingDepth {
+  static const elevation = 16.0;
+  static Color color(BuildContext context) => Colors.black.withValues(
+    alpha: Theme.of(context).brightness == Brightness.dark ? .48 : .28,
+  );
+  static List<BoxShadow> shadows(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: dark ? .38 : .18),
+        blurRadius: 28,
+        offset: const Offset(0, 10),
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: dark ? .24 : .12),
+        blurRadius: 8,
+        offset: const Offset(0, 3),
+      ),
+    ];
+  }
+}
+
 class Surface extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
   final BorderRadius borderRadius;
+  final bool floating;
   const Surface({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
     this.borderRadius = const BorderRadius.all(Radius.circular(24)),
+    this.floating = false,
   });
   @override
   Widget build(BuildContext context) => Container(
@@ -194,13 +219,15 @@ class Surface extends StatelessWidget {
       border: Border.all(
         color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .035),
       ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: .018),
-          blurRadius: 20,
-          offset: const Offset(0, 6),
-        ),
-      ],
+      boxShadow: floating
+          ? FloatingDepth.shadows(context)
+          : [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .018),
+                blurRadius: 20,
+                offset: const Offset(0, 6),
+              ),
+            ],
     ),
     child: Material(
       type: MaterialType.transparency,
@@ -220,18 +247,24 @@ class Chrome extends StatelessWidget {
     this.padding = const EdgeInsets.all(8),
   });
   @override
-  Widget build(BuildContext context) => GlassContainer(
-    useOwnLayer: true,
-    shape: const LiquidRoundedSuperellipse(borderRadius: 40),
-    settings: const LiquidGlassSettings(blur: 12, thickness: 24),
-    padding: EdgeInsets.zero,
-    child: Container(
-      padding: padding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
-        borderRadius: BorderRadius.circular(40),
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(40),
+      boxShadow: FloatingDepth.shadows(context),
+    ),
+    child: GlassContainer(
+      useOwnLayer: true,
+      shape: const LiquidRoundedSuperellipse(borderRadius: 40),
+      settings: const LiquidGlassSettings(blur: 12, thickness: 24),
+      padding: EdgeInsets.zero,
+      child: Container(
+        padding: padding,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
+          borderRadius: BorderRadius.circular(40),
+        ),
+        child: child,
       ),
-      child: child,
     ),
   );
 }

@@ -210,6 +210,8 @@ class _PanelSheetState extends State<_PanelSheet> {
           return Opacity(
             opacity: measured ? 1 : 0,
             child: Material(
+              elevation: FloatingDepth.elevation,
+              shadowColor: FloatingDepth.color(context),
               color: Theme.of(context).colorScheme.surface,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(32),

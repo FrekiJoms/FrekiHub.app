@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Floating overlay depth — 2026-10-04
+
+Shared `FloatingDepth` strengthens static ambient/contact shadows around Chrome and floating toast surfaces, with theme-aware opacity. This applies across pages to navigation, Calendar/Settings shortcuts, Home balance, Map toolbar/legends/tools/captions and toast overlays. Quick-add menus, Flutter dialogs and the shared drawer use matching 16 dp Material elevation and shadow tint. Content cards retain their existing subtle shadow. The effect adds no layout padding, animations, extra blur filters or gesture changes. All twelve existing navigation, toast and shared-drawer checks passed, covering quick-add selection/cancellation, keyboard geometry, toast replacement/dismissal, content-fit/expanded sheets and reduced motion. Flutter analysis, documentation links and diff whitespace checks passed. Phone appearance/profile timings remain unverified while a compatible device is unavailable.
+
 ## Consistent primary page titles — 2026-10-04
 
 All six page surfaces share `PageTitle` for uppercase headings without trailing periods, using HOME's 28 px bold style and 1.2 px spacing. PageBody uses the component for compact and standard headers. Map gains a glass-backed MAP title beside its scrolling legends without moving controls; Calendar labels its page and retains the selected year/month as a smaller caption. Finance compatibility names and destinations are unchanged. All eight focused page-layout/Map checks passed, including narrow screens, enlarged text, Home docking, legend scrolling, landscape and map controls; Map checks passed again after integrating its title into the legend strip. Flutter analysis and diff whitespace checks passed. Device review remains pending a compatible Android phone.
