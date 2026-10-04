@@ -95,11 +95,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: Row(
               children: [
                 Expanded(
-                  child: Text(
-                    mode == 0
-                        ? '${selected.year}'
-                        : '${selected.year} / ${selected.month.toString().padLeft(2, '0')}',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w500),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const PageTitle('CALENDAR'),
+                      Text(
+                        mode == 0
+                            ? '${selected.year}'
+                            : '${selected.year} / ${selected.month.toString().padLeft(2, '0')}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 IconButton(

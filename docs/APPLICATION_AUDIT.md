@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Consistent primary page titles — 2026-10-04
+
+All six page surfaces share `PageTitle` for uppercase headings without trailing periods, using HOME's 28 px bold style and 1.2 px spacing. PageBody uses the component for compact and standard headers. Map gains a glass-backed MAP title beside its scrolling legends without moving controls; Calendar labels its page and retains the selected year/month as a smaller caption. Finance compatibility names and destinations are unchanged. All eight focused page-layout/Map checks passed, including narrow screens, enlarged text, Home docking, legend scrolling, landscape and map controls; Map checks passed again after integrating its title into the legend strip. Flutter analysis and diff whitespace checks passed. Device review remains pending a compatible Android phone.
+
 ## Home title emphasis — 2026-10-04
 
 Home's fixed heading now reads `HOME` without the period, using 28 px bold type and 1.2 px letter spacing in the shared compact header. Home is its only current caller. Date, shortcut clearance, scrolling and balance behavior are preserved. All five existing layout checks passed, including narrow screens, enlarged text and Home balance docking. Heading lookups use the new label. Device review remains pending a compatible Android phone.

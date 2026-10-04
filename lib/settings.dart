@@ -190,7 +190,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final d = widget.data;
     final theme = d.prefs['theme'] ?? 'system';
     return PageBody(
-      title: 'Settings.',
+      title: 'SETTINGS',
       subtitle: 'Preferences & storage',
       children: [
         Surface(

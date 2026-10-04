@@ -621,35 +621,43 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               child: Chrome(
                 key: const ValueKey('map-legends'),
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: colors.entries
-                        .map(
-                          (entry) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              label: Text(entry.key),
-                              avatar: Icon(
-                                icons[entry.key],
-                                size: 16,
-                                color: entry.value,
-                              ),
-                              selected: categories.contains(entry.key),
-                              onSelected: (_) {
-                                ActionFeedback.tap();
-                                setState(() {
-                                  if (!categories.remove(entry.key)) {
-                                    categories.add(entry.key);
-                                  }
-                                });
-                                publishContext();
-                              },
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
+                child: Row(
+                  children: [
+                    const PageTitle('MAP'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: colors.entries
+                              .map(
+                                (entry) => Padding(
+                                  padding: const EdgeInsets.only(right: 8),
+                                  child: FilterChip(
+                                    label: Text(entry.key),
+                                    avatar: Icon(
+                                      icons[entry.key],
+                                      size: 16,
+                                      color: entry.value,
+                                    ),
+                                    selected: categories.contains(entry.key),
+                                    onSelected: (_) {
+                                      ActionFeedback.tap();
+                                      setState(() {
+                                        if (!categories.remove(entry.key)) {
+                                          categories.add(entry.key);
+                                        }
+                                      });
+                                      publishContext();
+                                    },
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

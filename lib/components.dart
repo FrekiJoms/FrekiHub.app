@@ -1,5 +1,23 @@
 part of 'design.dart';
 
+/// Shared typography for primary page titles.
+class PageTitle extends StatelessWidget {
+  final String title;
+  const PageTitle(this.title, {super.key});
+  @override
+  Widget build(BuildContext context) => Semantics(
+    header: true,
+    child: Text(
+      title.replaceFirst(RegExp(r'\.+$'), '').toUpperCase(),
+      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
+      ),
+    ),
+  );
+}
+
 /// The IME overlays the app without resizing, reflowing or panning its content.
 /// Applied above the Navigator so pages, sheets and all inputs share the policy.
 class KeyboardOverlay extends StatelessWidget {

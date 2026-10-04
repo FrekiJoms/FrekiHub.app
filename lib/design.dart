@@ -392,17 +392,7 @@ class PageBody extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 56),
                 child: Column(
                   children: [
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        title,
-                        style: Theme.of(c).textTheme.headlineSmall?.copyWith(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ),
+                    PageTitle(title),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
@@ -438,13 +428,7 @@ class PageBody extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Semantics(
-                    header: true,
-                    child: Text(
-                      title,
-                      style: Theme.of(c).textTheme.headlineLarge,
-                    ),
-                  ),
+                  PageTitle(title),
                 ],
               ),
       );

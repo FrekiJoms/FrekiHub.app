@@ -221,7 +221,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }.toList();
     final list = rows;
     return PageBody(
-      title: 'Sessions.',
+      title: 'SESSIONS',
       subtitle: 'Session history',
       children: [
         if ((AutomationSync.config(widget.data)['rules'] as List? ?? [])
