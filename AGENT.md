@@ -13,7 +13,7 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 ## Product facts to retain
 
 - Android-first Flutter app; local SQLite storage; no login, backend, remote sync or AI purchase parser.
-- Six main page surfaces: Home, Map, Sessions, Finance, Calendar and Settings. Four bottom tabs; Calendar top-left and Settings top-right. Logs and automation are Settings bottom sheets.
+- Six main page surfaces: Home, Map, Sessions, Finance, Calendar and Settings. Four bottom tabs; Calendar top-left and Settings top-right. Logs use their own Settings drawer; Syntax builder is a separate full-screen workspace.
 - Quick add is a center-bottom long-press/drag gesture with accessible actions, not a visible plus tab.
 - Record editing and Settings sheets use the shared content-fit/70% bottom drawer. Follow the drawer contract in [App documentation](docs/APP_DOCUMENTATION.md) and the canonical instructions before introducing a new modal.
 - Finance retains `BudgetScreen`, `budget.dart`, `budget_page`, `budget.*` and native receipt destination `budget` for compatibility.
@@ -33,9 +33,9 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 | Finance math/planner | Data reference | `budget.dart`, `data.dart`, `forms.dart` |
 | Calendar | App documentation | `calendar.dart`, `screens.dart`, `data.dart` |
 | Map/located records | App documentation + data reference | `map.dart`, `map_records.dart`, `watchMapLogs` in `data.dart` |
-| Rule syntax/completion | Rule syntax + Android runtime | `rule_language.dart`, `rule_editor.dart`, `activity.dart`, `RuleProgram.kt` |
+| Rule syntax/completion | Rule syntax + Android runtime | `rule_language.dart`, `rule_editor.dart`, `syntax_builder.dart`, `RuleProgram.kt` |
 | Scheduled/conditional reminders | Rule syntax + Android runtime | `RuleNotifications.kt`, `RuleProgram.kt`, `MainActivity.kt`, manifest |
-| Location or purchase capture | Android runtime + data reference | `Automation.kt`, `automation_sync.dart`, `activity.dart` |
+| Location or purchase capture | Android runtime + data reference | `Automation.kt`, `automation_sync.dart`, `syntax_builder.dart`; `logs.dart` for recorded activity |
 | Backup/reset | Data reference + Android runtime | `settings.dart`, `data.dart`, `automation_sync.dart` |
 | Startup/loading | Development + audit | `startup.dart`, `main.dart`, `watchAll` in `data.dart` |
 

@@ -1,6 +1,6 @@
 # FrekiHub rule language
 
-Open Settings → Conditions & automation, select a saved rule or enable Structured syntax, name the rule, then edit its source. Use the check icon to validate, the play icon to run, and the square icon to stop. Saving structured source leaves it paused. Running saves and enables it. Stopping pauses automation without ending an existing session. The plus icon starts a new rule; other running rules stay enabled.
+Open Settings → Syntax builder to enter its full-screen workspace, select a saved rule or enable Structured syntax, name the rule, then edit its source. Activity logs open separately. Use the check icon to validate, the play icon to run, and the square icon to stop. Saving structured source leaves it paused. Running saves and enables it. Stopping pauses automation without ending an existing session. The plus icon starts a new rule; other running rules stay enabled.
 
 The compiler produces a bounded JSON program. Android interprets this program; source is never executed as JavaScript.
 

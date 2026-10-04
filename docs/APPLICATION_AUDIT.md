@@ -1,5 +1,11 @@
 # FrekiHub application audit
 
+## Separate Logs and Syntax builder — 2026-10-04
+
+Settings now gives Activity logs and Syntax builder separate Surface containers. Logs opens `LogsSheet`, a dedicated shared drawer owned by `logs.dart`, without a builder tab or editor state. Syntax builder opens `SyntaxBuilderScreen` as a full-screen Navigator workspace owned by `syntax_builder.dart`, with fixed glass Back control/header, bounded scrolling content and reduced-motion-aware fade transitions. Sessions rule shortcuts and Condition set links use the same workspace, including existing selected-rule lookup. Supporting selectors and permission hints retain the shared drawer. The existing builder body, compiler, saved rules, Run/Stop semantics and native runtime are preserved; no data/schema/rule language change was introduced.
+
+Verification: all seven focused editor/navigation and toast checks passed. The new narrow 320×720, 1.3× text check opens the separate Logs drawer, returns, opens the full-height syntax workspace without PanelContent, and uses Back to restore Settings. Existing completion, enabled-flag persistence and validation checks passed. Flutter analysis found no issues; local documentation links and whitespace checks passed. Phone hot reload succeeded (two libraries reloaded). No APK reinstall, phone scrolling, real rule activation or saved-record change was performed by the agent. Physical workspace appearance remains for user review.
+
 ## Shared permission hints — 2026-10-04
 
 Source-confirmed: all Flutter permission entry points use one `PermissionHints` gate and `PermissionHint` panel with feature-specific purpose, benefit, user control and Android instructions. Coverage includes session notifications, transaction receipt notifications, reminder notifications, precise/background location, purchase notification-listener access, exact alarms and overlays. Actions remain fixed around the shared scrolling body. Cancellation does not invoke an OS request; existing grants skip the hint unless managing access. A busy guard prevents stacked requests and resets after native failures. The native cross-app overlay card remains shared with its confirmation renderer.

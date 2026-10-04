@@ -61,7 +61,7 @@ flutter analyze
 | Activity storage/backup/native session import | `test/activity_test.dart` |
 | Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |
-| Completion/editor Run/Stop | `test/rule_editor_test.dart` |
+| Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, completion and saved enabled flags) |
 | Position freshness/full-range query/map catalog | `test/map_records_test.dart` |
 | Narrow map layout/record selection/trace | `test/map_screen_test.dart` |
 | Native local reminder clock calculation | `android/app/src/test/java/com/frekihub/freki_hub/RuleNotificationScheduleCheck.java` |

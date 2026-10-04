@@ -203,18 +203,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Activity logs'),
                 subtitle: const Text('Time, location and recorded actions'),
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                onTap: withFeedback(() => panel(c, const ActivitySheet())),
+                onTap: withFeedback(() => panel(c, const LogsSheet())),
               ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(LucideIcons.workflow),
-                title: const Text('Conditions & automation'),
-                subtitle: const Text('If a condition matches, run an action'),
-                trailing: const Icon(LucideIcons.chevronRight, size: 18),
-                onTap: withFeedback(
-                  () => panel(c, const ActivitySheet(initialTab: 1)),
-                ),
-              ),
+            ],
+          ),
+        ),
+        Surface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(LucideIcons.workflow),
+            title: const Text('Syntax builder'),
+            subtitle: const Text('Conditions, rules & automation'),
+            trailing: const Icon(LucideIcons.arrowUpRight, size: 18),
+            onTap: withFeedback(() => openSyntaxBuilder(c)),
+          ),
+        ),
+        Surface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Column(
+            children: [
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(LucideIcons.bell),

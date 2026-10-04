@@ -42,7 +42,8 @@ part 'budget.dart';
 part 'settings.dart';
 part 'forms.dart';
 part 'pickers.dart';
-part 'activity.dart';
+part 'logs.dart';
+part 'syntax_builder.dart';
 part 'controls.dart';
 part 'rule_editor.dart';
 
@@ -159,12 +160,9 @@ Widget sessionTile(
         if (s.note.startsWith('Automatic · '))
           TextButton.icon(
             onPressed: withFeedback(
-              () => panel(
+              () => openSyntaxBuilder(
                 c,
-                ActivitySheet(
-                  initialTab: 1,
-                  conditionName: s.note.substring('Automatic · '.length),
-                ),
+                conditionName: s.note.substring('Automatic · '.length),
               ),
             ),
             icon: const Icon(LucideIcons.workflow, size: 14),
@@ -178,12 +176,9 @@ Widget sessionTile(
     ),
     onLongPress: s.note.startsWith('Automatic · ')
         ? withFeedback(
-            () => panel(
+            () => openSyntaxBuilder(
               c,
-              ActivitySheet(
-                initialTab: 1,
-                conditionName: s.note.substring('Automatic · '.length),
-              ),
+              conditionName: s.note.substring('Automatic · '.length),
             ),
           )
         : null,

@@ -11,6 +11,67 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/services.dart';
 
 void main() {
+  testWidgets('Logs stay separate and syntax opens as a full workspace', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 720);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final data = await db.readAll();
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+      if (call.method == 'automationStatus') return {'background': false};
+      if (call.method == 'automationEvents') return '[]';
+      if (call.method == 'receiptNotificationsAllowed') return true;
+      return null;
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          dataProvider.overrideWithValue(AsyncData(data)),
+        ],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              disableAnimations: true,
+              textScaler: const TextScaler.linear(1.3),
+            ),
+            child: KeyboardOverlay(child: child!),
+          ),
+          home: Scaffold(body: SettingsScreen(data: data)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Activity logs'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LogsSheet), findsOneWidget);
+    expect(find.byType(SyntaxBuilderScreen), findsNothing);
+    expect(find.text('Activity logging'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Syntax builder'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SyntaxBuilderScreen), findsOneWidget);
+    expect(tester.getSize(find.byType(SyntaxBuilderScreen)).height, 720);
+    expect(find.byType(PanelContent), findsNothing);
+    expect(find.byType(LogsSheet), findsNothing);
+    expect(find.text('Activity logging'), findsNothing);
+    expect(find.text('Conditions & automation'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SyntaxBuilderScreen), findsNothing);
+    expect(find.byType(SettingsScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    messenger.setMockMethodCallHandler(NativeSession.channel, null);
+    await db.close();
+  });
+
   testWidgets(
     'Notification completion inserts valid schedules and repeat commands',
     (tester) async {
@@ -141,7 +202,7 @@ void main() {
           child: MaterialApp(
             theme: Design.theme(true),
             home: Scaffold(
-              body: ActivitySheet(initialTab: 1, conditionName: 'Budget limit'),
+              body: SyntaxBuilderScreen(conditionName: 'Budget limit'),
             ),
           ),
         ),

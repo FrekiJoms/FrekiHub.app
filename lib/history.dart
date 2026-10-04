@@ -233,12 +233,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               leading: const Icon(LucideIcons.workflow, size: 20),
               title: const Text('Automation rules saved'),
               subtitle: const Text(
-                'Open Settings to review rules and Run/Stop status',
+                'Review rules and Run/Stop status in Syntax builder',
               ),
               trailing: const Icon(LucideIcons.chevronRight, size: 18),
-              onTap: withFeedback(
-                () => panel(c, const ActivitySheet(initialTab: 1)),
-              ),
+              onTap: withFeedback(() => openSyntaxBuilder(c)),
             ),
           ),
         TextField(

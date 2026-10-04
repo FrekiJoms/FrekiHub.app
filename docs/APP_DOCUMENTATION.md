@@ -97,7 +97,7 @@ Headers, search/filter controls and primary actions stay outside body scrolling.
 
 Settings contains Activity logs, Conditions & automation, saved-transaction posting access, notification sounds, appearance, display currency, category/payment-method management, in-app sound effects, export, restore and clear-data controls.
 
-Activity logs and Conditions & automation share `ActivitySheet`, selected by `initialTab`. Logging, location collection and notification scanning default off. Logs show the newest 1,000 records with expandable action/time/location metadata. Full stored history remains available to Map and export. Central triggers log inserts and the initial clock-out, not every edit/delete or every app interaction.
+Activity logs and Syntax builder have separate Settings containers and destinations. `LogsSheet` in `logs.dart` uses the shared drawer solely for logging controls and recorded activity. `SyntaxBuilderScreen` in `syntax_builder.dart` opens as an independent full-screen workspace with a fixed Back/header area, bounded scrolling content and no Logs tab or drawer handle. Back returns to the caller. Session Condition set links open this same workspace with the relevant rule selected. Permission hints, selectors and supporting forms still reuse shared panels. Logging, location collection and notification scanning default off. Logs show the newest 1,000 records with expandable action/time/location metadata. Full stored history remains available to Map and export. Central triggers log inserts and the initial clock-out, not every edit/delete or every app interaction.
 
 Conditions support a beginner visual named-location token/radius builder and a structured source editor. Radius units are metres, default 150 m, range 100–1,000 m in 50 m steps. A rule may keep a session running or clock out on leaving. One rule has one configured place; arbitrary map polygons or multiple place arguments are not supported by the current grammar.
 
@@ -143,7 +143,8 @@ The native queue and pending receipts are transport state, not rule source. Flut
 | `lib/history.dart`, `lib/calendar.dart`, `lib/budget.dart` | Sessions, calendar and Finance pages |
 | `lib/map.dart`, `lib/map_records.dart` | Map UI, filters, selection, freshness and range parsing |
 | `lib/settings.dart`, `lib/forms.dart` | Settings, list management, backup/reset, session/entry/planner forms |
-| `lib/activity.dart`, `lib/rule_editor.dart` | Logs, visual/structured conditions, completion and Run/Stop UI |
+| `lib/logs.dart` | Dedicated activity log drawer and expandable record metadata |
+| `lib/syntax_builder.dart`, `lib/rule_editor.dart` | Independent visual/structured automation workspace, completion and Run/Stop UI |
 | `lib/rule_language.dart` | Catalog, typed snapshots, bounded lexer/parser/compiler |
 | `lib/data.dart`, `lib/data.g.dart` | Schema, triggers, reactive data, money/recurrence, generated Drift code |
 | `lib/services.dart`, `lib/theme_reveal.dart` | Method-channel wrapper, feedback and theme reveal |
