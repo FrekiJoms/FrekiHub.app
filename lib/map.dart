@@ -415,17 +415,34 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     String label,
     IconData icon,
     VoidCallback action, {
-    bool active = false,
+    bool? active,
     bool enabled = true,
   }) => IconButton(
     tooltip: label,
+    isSelected: active,
     onPressed: withFeedback(enabled ? action : null),
     style: IconButton.styleFrom(
       minimumSize: const Size(48, 48),
-      padding: const EdgeInsets.all(4),
-      foregroundColor: active ? Theme.of(context).colorScheme.primary : null,
+      padding: EdgeInsets.zero,
+      shape: const CircleBorder(),
+      backgroundColor: Colors.transparent,
+      foregroundColor: active == true
+          ? Theme.of(context).colorScheme.onSurface
+          : null,
     ),
-    icon: Icon(icon, size: 18),
+    icon: Container(
+      key: active == null ? null : const ValueKey('map-toggle-indicator'),
+      width: 43,
+      height: 43,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: active == true
+            ? Theme.of(context).colorScheme.onSurface.withValues(alpha: .12)
+            : Colors.transparent,
+      ),
+      child: Icon(icon, size: 18),
+    ),
   );
 
   void retry() {

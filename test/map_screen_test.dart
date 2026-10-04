@@ -270,6 +270,20 @@ void main() {
       await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('1 samples · straight-line trace'), findsOneWidget);
+      final traceButton = tester.widget<IconButton>(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is IconButton &&
+              widget.tooltip == 'Hide chronological trace',
+        ),
+      );
+      expect(traceButton.isSelected, isTrue);
+      expect(traceButton.style!.shape!.resolve({}), isA<CircleBorder>());
+      final indicator = find.byKey(const ValueKey('map-toggle-indicator'));
+      expect(tester.getSize(indicator), const Size(43, 43));
+      final indicatorDecoration =
+          tester.widget<Container>(indicator).decoration! as BoxDecoration;
+      expect(indicatorDecoration.color!.a, closeTo(.12, .001));
       expect(tester.takeException(), isNull);
       final tile = TileImage(
         vsync: tester,

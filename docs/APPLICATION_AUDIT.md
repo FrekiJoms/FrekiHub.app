@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Map tool active indicator — 2026-10-04
+
+The shared Map control renderer now gives toggle tools a selected state and a gray circular background when active. Trace uses a 43 px indicator circle (reduced by the requested 5 px) inside the unchanged 48 px touch target, and returns to a transparent background when off. Action controls remain ordinary buttons, with retained tooltips, feedback and 48 px targets. No trace data, selection or persistence behavior changes. All three focused Map checks passed with the final 43 px circle and retained 48 px controls. Selected state, circular shape and gray opacity were checked. The initial indicator passed focused analysis; final sizing hot-reloaded successfully on the attached phone. Documentation links and diff whitespace checks passed.
+
 ## Legend pill symmetry and edge fades — 2026-10-04
 
 The latest requested spacing adds 5 px top/bottom padding around the compact Map legend row. Selection is now conveyed by opacity instead of a colored background: selected categories are fully opaque; unselected categories use a 40% ghost treatment. A shared-motion 150 ms fade respects reduced motion. A static horizontal alpha mask softens both scroll-strip ends; it does not intercept gestures or introduce an animation controller or extra backdrop blur. Labels remain single-line with retained category semantics, feedback and horizontal scrolling. All three focused Map checks passed, including the final padding, fade-mask presence, deselection/reselection opacity and existing map behaviors. The update hot-reloaded successfully to the attached Xiaomi phone. Documentation links and diff whitespace checks passed.
