@@ -518,12 +518,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               left: 72,
               right: 72,
               child: Chrome(
-                padding: EdgeInsets.zero,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     SizedBox(
-                      height: 32,
+                      height: 28,
                       child: Row(
                         children: [
                           IconButton(
@@ -534,11 +534,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ? null
                                 : withFeedback(() => shift(-1)),
                             constraints: const BoxConstraints.tightFor(
-                              width: 28,
-                              height: 32,
+                              width: 24,
+                              height: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            icon: const Icon(LucideIcons.chevronLeft, size: 16),
+                            icon: const Icon(LucideIcons.chevronLeft, size: 14),
                           ),
                           Expanded(
                             child: InkWell(
@@ -586,7 +586,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -601,20 +601,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                                 ? null
                                 : withFeedback(() => shift(1)),
                             constraints: const BoxConstraints.tightFor(
-                              width: 28,
-                              height: 32,
+                              width: 24,
+                              height: 28,
                             ),
                             padding: EdgeInsets.zero,
                             icon: const Icon(
                               LucideIcons.chevronRight,
-                              size: 16,
+                              size: 14,
                             ),
                           ),
                         ],
                       ),
                     ),
                     SizedBox(
-                      height: 24,
+                      height: 16,
                       child: PopupMenuButton<String>(
                         tooltip: 'Timeline mode',
                         elevation: FloatingDepth.elevation,
@@ -644,10 +644,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                           children: [
                             Text(
                               period == 'day' ? 'By date' : 'By $period',
-                              style: const TextStyle(fontSize: 11),
+                              style: const TextStyle(fontSize: 9),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(LucideIcons.chevronDown, size: 12),
+                            const Icon(LucideIcons.chevronDown, size: 10),
                           ],
                         ),
                       ),

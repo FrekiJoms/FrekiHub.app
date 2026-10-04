@@ -288,7 +288,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
       expect(find.text('2 located · 0 without location'), findsOneWidget);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 16);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 18);
       expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
       final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
       expect(rail.center.dy, 389);
@@ -400,7 +400,7 @@ void main() {
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 16);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 18);
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       expect(find.text('Timeline logs'), findsOneWidget);

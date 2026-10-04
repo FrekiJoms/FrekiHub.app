@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Compact inline date pill — 2026-10-04
+
+The inline Map controller now fits a 48 px-high shared glass pill: 28 px date/arrow row, 16 px mode row and 2 px top/bottom padding. Its date label is 13 px, mode selector 9 px and arrows 14 px. Existing Day/Week/Month/Year navigation, advanced Custom range and ghosted Custom arrows are preserved. All four focused Map widget checks passed; documentation links and diff whitespace checks passed. After USB reconnection, VM discovery required an incremental :app:installDebug fallback with the local Geoapify define; installation succeeded without clearing data. Flutter attachment and hot reload then succeeded. A phone screenshot confirmed the compact top pill, disabled Custom arrows and rendered map; the open mode popup obscured its smaller selector, so that selector remains for user visual review. No phone scrolling or record edits were performed; profile timings remain unmeasured.
+
 ## Inline Map timeline and advanced custom range — 2026-10-04
 
 Timeline navigation now sits directly between Calendar and Settings, with a mode dropdown for Day, Week, Month, Year and Custom. Arrows move by the selected calendar unit; only the compact label receives a 200 ms direction-aware slide/fade, with reduced motion preserved. Custom arrows are ghosted and disabled. Timeline logs moves to a separate button above the vertical right-side tools. No whole-map transforms, new tracking or inferred coordinates were added.
