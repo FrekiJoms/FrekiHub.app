@@ -88,14 +88,11 @@ void main() {
       expect(find.text('Year'), findsOneWidget);
       await tester.tap(find.text('Year'));
       await tester.pumpAndSettle();
-      expect(find.text('2026'), findsNWidgets(2));
-      expect(
-        tester.getSize(find.byKey(const ValueKey('map-date-pill'))).width,
-        lessThan(pillWidth),
-      );
+      expect(find.text('2026'), findsOneWidget);
+
       await tester.tap(find.byTooltip('Next timeline'));
       await tester.pumpAndSettle();
-      expect(find.text('2027'), findsNWidgets(2));
+      expect(find.text('2027'), findsOneWidget);
       for (final mode in ['Week', 'Day']) {
         await tester.longPress(find.byTooltip('Timeline mode'));
         await tester.pumpAndSettle();
@@ -316,7 +313,27 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
       expect(find.text('2 located · 0 without location'), findsOneWidget);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 26);
+      final counts = find.byKey(const ValueKey('map-record-counts'));
+      final datePill = find.byKey(const ValueKey('map-date-pill'));
+      expect(find.descendant(of: datePill, matching: counts), findsOneWidget);
+      expect(
+        tester.getRect(counts).top,
+        greaterThan(tester.getRect(find.byTooltip('Timeline mode')).bottom),
+      );
+      expect(
+        tester.getRect(counts).bottom,
+        lessThan(tester.getRect(datePill).bottom),
+      );
+      expect(
+        tester
+            .widget<Opacity>(
+              find.ancestor(of: counts, matching: find.byType(Opacity)).first,
+            )
+            .opacity,
+        .55,
+      );
+
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 20);
       expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
       final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
       expect(rail.center.dy, 389);
@@ -326,7 +343,10 @@ void main() {
         lessThanOrEqualTo(tester.getRect(find.byTooltip('Zoom in')).top),
       );
       final legends = find.byKey(const ValueKey('map-legends'));
-      expect(tester.getRect(legends).top, 76);
+      expect(
+        tester.getRect(legends).top,
+        greaterThanOrEqualTo(tester.getRect(datePill).bottom + 11),
+      );
       expect(find.text('MAP'), findsNothing);
       expect(tester.getRect(legends).height, lessThanOrEqualTo(48));
       expect(
@@ -384,7 +404,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
       await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('1 samples · straight-line trace'), findsOneWidget);
+      expect(find.text('2 located · 0 without location'), findsOneWidget);
       final traceButton = tester.widget<IconButton>(
         find.byWidgetPredicate(
           (widget) =>
@@ -424,11 +444,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(tiles.requests, greaterThan(requests));
       expect(find.byTooltip('Retry map loading'), findsNothing);
-      expect(find.text('1 samples · straight-line trace'), findsOneWidget);
+      expect(find.text('2 located · 0 without location'), findsOneWidget);
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 26);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 20);
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       expect(find.text('Timeline logs'), findsOneWidget);

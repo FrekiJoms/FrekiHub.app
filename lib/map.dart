@@ -288,6 +288,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   List<Widget> mapActions() => [
+    if (tileError || loadError != null)
+      control('Retry map loading', LucideIcons.refreshCw, retry),
     control(
       'Fit recorded locations',
       LucideIcons.scan,
@@ -381,16 +383,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         : period == 'custom'
         ? '${DateFormat('d MMM yyyy, HH:mm').format(range.from)} – ${DateFormat('d MMM yyyy, HH:mm').format(range.until.subtract(const Duration(minutes: 1)))}'
         : '${DateFormat('d MMM').format(range.from)} – ${DateFormat('d MMM yyyy').format(range.until.subtract(const Duration(days: 1)))}';
-    final status = loading
+    final counts =
+        '${shown.length} located · ${unlocated.length} without location';
+    final notice = widget.apiKey.trim().isEmpty
+        ? 'Basemap not configured · saved dots remain'
+        : tileError
+        ? 'Basemap unavailable · saved dots remain'
+        : loading
         ? 'Loading recorded locations…'
-        : loadError ??
-              (shown.isEmpty
-                  ? records.isNotEmpty
-                        ? 'Categories hidden · select a legend'
-                        : '${previousRows.length} logs · no usable locations'
-                  : trace
-                  ? '${route.length} samples · straight-line trace'
-                  : '${shown.length} located · ${previousRows.length - records.length} without location');
+        : loadError;
     return LayoutBuilder(
       builder: (c, bounds) {
         return Stack(
@@ -521,6 +522,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                 alignment: Alignment.topCenter,
                 child: Builder(
                   builder: (anchor) => Semantics(
+                    label: dateLabel,
                     hint: 'Long press to change timeline mode',
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -544,116 +546,169 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                         key: const ValueKey('map-date-pill'),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
-                          vertical: 10,
+                          vertical: 4,
                         ),
-                        child: SizedBox(
-                          height: 28,
-                          child: Row(
+                        child: IntrinsicWidth(
+                          child: Column(
                             mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              IconButton(
-                                tooltip: 'Previous timeline',
-                                style: IconButton.styleFrom(
-                                  minimumSize: const Size(24, 28),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                disabledColor: Theme.of(c).colorScheme.onSurface
-                                    .withValues(alpha: .3),
-                                onPressed: period == 'custom'
-                                    ? null
-                                    : withFeedback(() => shift(-1)),
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 24,
-                                  height: 28,
-                                ),
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(
-                                  LucideIcons.chevronLeft,
-                                  size: 14,
-                                ),
-                              ),
-                              Flexible(
-                                child: Tooltip(
-                                  message: 'Timeline mode',
-                                  triggerMode: TooltipTriggerMode.manual,
-                                  child: InkWell(
-                                    onTap: withFeedback(selectDate),
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: AnimatedSwitcher(
-                                      duration: Motion.duration(c, 200),
-                                      transitionBuilder: (child, animation) =>
-                                          FadeTransition(
-                                            opacity: animation,
-                                            child: SlideTransition(
-                                              position:
-                                                  Tween<Offset>(
-                                                    begin: Offset(
-                                                      child.key ==
-                                                              ValueKey(
-                                                                '$period:${range.from}',
-                                                              )
-                                                          ? shiftDirection * .15
-                                                          : -shiftDirection *
-                                                                .15,
-                                                      0,
-                                                    ),
-                                                    end: Offset.zero,
-                                                  ).animate(
-                                                    CurvedAnimation(
-                                                      parent: animation,
-                                                      curve: Motion.curve,
-                                                    ),
+                              SizedBox(
+                                height: 28,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Previous timeline',
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size(24, 28),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      disabledColor: Theme.of(c)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: .3),
+                                      onPressed: period == 'custom'
+                                          ? null
+                                          : withFeedback(() => shift(-1)),
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 24,
+                                            height: 28,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(
+                                        LucideIcons.chevronLeft,
+                                        size: 14,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: Tooltip(
+                                        message: 'Timeline mode',
+                                        triggerMode: TooltipTriggerMode.manual,
+                                        child: InkWell(
+                                          onTap: withFeedback(selectDate),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                          child: AnimatedSwitcher(
+                                            duration: Motion.duration(c, 200),
+                                            transitionBuilder:
+                                                (
+                                                  child,
+                                                  animation,
+                                                ) => FadeTransition(
+                                                  opacity: animation,
+                                                  child: SlideTransition(
+                                                    position:
+                                                        Tween<Offset>(
+                                                          begin: Offset(
+                                                            child.key ==
+                                                                    ValueKey(
+                                                                      '$period:${range.from}',
+                                                                    )
+                                                                ? shiftDirection *
+                                                                      .15
+                                                                : -shiftDirection *
+                                                                      .15,
+                                                            0,
+                                                          ),
+                                                          end: Offset.zero,
+                                                        ).animate(
+                                                          CurvedAnimation(
+                                                            parent: animation,
+                                                            curve: Motion.curve,
+                                                          ),
+                                                        ),
+                                                    child: child,
                                                   ),
-                                              child: child,
+                                                ),
+                                            child: Text(
+                                              period == 'year'
+                                                  ? '${date.year}'
+                                                  : period == 'day'
+                                                  ? DateFormat('d MMM')
+                                                        .format(date)
+                                                  : period == 'week'
+                                                  ? DateFormat('d MMM')
+                                                        .format(range.from)
+                                                  : period == 'custom'
+                                                  ? 'Custom range'
+                                                  : DateFormat.MMMM().format(
+                                                      date,
+                                                    ),
+                                              key: ValueKey(
+                                                '$period:${range.from}',
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
-                                      child: Text(
-                                        period == 'year'
-                                            ? '${date.year}'
-                                            : period == 'day'
-                                            ? DateFormat('d MMM').format(date)
-                                            : period == 'week'
-                                            ? DateFormat('d MMM')
-                                                  .format(range.from)
-                                            : period == 'custom'
-                                            ? 'Custom range'
-                                            : DateFormat.MMMM().format(date),
-                                        key: ValueKey('$period:${range.from}'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
                                         ),
                                       ),
                                     ),
+                                    IconButton(
+                                      tooltip: 'Next timeline',
+                                      style: IconButton.styleFrom(
+                                        minimumSize: const Size(24, 28),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      disabledColor: Theme.of(c)
+                                          .colorScheme
+                                          .onSurface
+                                          .withValues(alpha: .3),
+                                      onPressed: period == 'custom'
+                                          ? null
+                                          : withFeedback(() => shift(1)),
+                                      constraints:
+                                          const BoxConstraints.tightFor(
+                                            width: 24,
+                                            height: 28,
+                                          ),
+                                      padding: EdgeInsets.zero,
+                                      icon: const Icon(
+                                        LucideIcons.chevronRight,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Opacity(
+                                opacity: .55,
+                                child: Text(
+                                  counts,
+                                  key: const ValueKey('map-record-counts'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    height: 1.3,
                                   ),
                                 ),
                               ),
-                              IconButton(
-                                tooltip: 'Next timeline',
-                                style: IconButton.styleFrom(
-                                  minimumSize: const Size(24, 28),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
+                              if (notice != null)
+                                Text(
+                                  notice,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    height: 1.3,
+                                    color: Theme.of(c)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
                                 ),
-                                disabledColor: Theme.of(c).colorScheme.onSurface
-                                    .withValues(alpha: .3),
-                                onPressed: period == 'custom'
-                                    ? null
-                                    : withFeedback(() => shift(1)),
-                                constraints: const BoxConstraints.tightFor(
-                                  width: 24,
-                                  height: 28,
-                                ),
-                                padding: EdgeInsets.zero,
-                                icon: const Icon(
-                                  LucideIcons.chevronRight,
-                                  size: 14,
-                                ),
-                              ),
                             ],
                           ),
                         ),
@@ -664,7 +719,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               ),
             ),
             Positioned(
-              top: 76,
+              top: math.max(
+                76,
+                64 +
+                    MediaQuery.textScalerOf(c).scale(9) *
+                        1.3 *
+                        (notice == null ? 1 : 2),
+              ),
               left: 16,
               right: 16,
               child: Align(
@@ -787,54 +848,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       ),
                     ),
                   ],
-                ),
-              ),
-            ),
-            Positioned(
-              left: 16,
-              right: 80,
-              bottom: 112 + bottom,
-              child: Center(
-                child: Chrome(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: InkWell(
-                          onTap: withFeedback(() => showRecords()),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                dateLabel,
-                                style: const TextStyle(fontSize: 10),
-                              ),
-                              Text(
-                                widget.apiKey.trim().isEmpty
-                                    ? 'Basemap not configured · saved dots remain'
-                                    : tileError
-                                    ? 'Basemap unavailable · saved dots remain'
-                                    : status,
-                                maxLines: 2,
-                                textAlign: TextAlign.center,
-                                style: Theme.of(c).textTheme.bodySmall,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (tileError || loadError != null)
-                        control(
-                          'Retry map loading',
-                          LucideIcons.refreshCw,
-                          retry,
-                        ),
-                    ],
-                  ),
                 ),
               ),
             ),
