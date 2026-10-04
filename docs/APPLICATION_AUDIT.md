@@ -28,6 +28,16 @@ Passing automated tests shows their covered cases pass; it does not establish th
 
 ## Findings and current status
 
+### Today clock synchronization follow-up — 2026-10-04
+
+Status: **resolved in source and automated checks**; installed-phone verification remains pending.
+
+Source-confirmed: reduced motion stopped the analog clock's only scheduled repaint source, while the independent digital timer continued updating. The digital timer also started relative to page creation rather than second boundaries, and Today had no immediate resume refresh. The analog accessibility label refreshed only with ancestor builds.
+
+The implementation now shares sampled device time across the analog accessibility/stepped display, digital time, elapsed duration, date and daily total. Timer wakeups realign to wall-clock seconds; resume immediately samples the current time and updates the date. Reduced motion preserves one-second hand updates without smooth animation; normal motion retains smooth hands. No saved settings, records or native timing contracts change.
+
+Verification: all three focused clock regressions and all four existing layout checks passed; Flutter static analysis reported no issues. The clock regressions cover actual painted-hand changes with both motion settings, second-boundary updates, paused/resumed midnight rollover, backward device-time adjustment and active-session totals. Documentation structure and `git diff --check` were checked. Installed-phone behavior remains unverified; no APK build/install was performed.
+
 These findings originated in the initial documentation audit. They remain unresolved unless explicitly marked resolved below. Recheck their source and add focused regression coverage when implementing a change; follow-up evidence appears at the end of this document.
 
 ### F01 — Release signing is not production-ready

@@ -2,28 +2,29 @@ part of 'screens.dart';
 
 class TodayScreen extends ConsumerStatefulWidget {
   final AppData data;
-  const TodayScreen({super.key, required this.data});
+  final DateTime Function() clockNow;
+  const TodayScreen({
+    super.key,
+    required this.data,
+    this.clockNow = DateTime.now,
+  });
   @override
   ConsumerState<TodayScreen> createState() => _TodayScreenState();
 }
 
-class _TodayScreenState extends ConsumerState<TodayScreen> {
+class _TodayScreenState extends ConsumerState<TodayScreen>
+    with WidgetsBindingObserver {
   final note = TextEditingController();
   Timer? timer;
-  final tick = ValueNotifier<DateTime>(DateTime.now());
+  late final tick = ValueNotifier<DateTime>(widget.clockNow());
   StreamSubscription<List<ConnectivityResult>>? connectivity;
   bool offline = false, busy = false;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     note.text = widget.data.running?.note ?? '';
-    timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) {
-        final previous = tick.value;
-        tick.value = DateTime.now();
-        if (dayKey(previous) != dayKey(tick.value)) setState(() {});
-      }
-    });
+    refreshTime();
     connectivity = Connectivity().onConnectivityChanged.listen(
       updateConnection,
       onError: (Object _) {},
@@ -32,6 +33,30 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
         .checkConnectivity()
         .then(updateConnection)
         .catchError((Object _) {});
+  }
+
+  void refreshTime() {
+    timer?.cancel();
+    final previous = tick.value;
+    final now = widget.clockNow();
+    tick.value = now;
+    if (dayKey(previous) != dayKey(now)) setState(() {});
+    // Re-align after every sample, including resume and device clock changes.
+    timer = Timer(
+      Duration(
+        microseconds: 1000000 - now.microsecond - now.millisecond * 1000,
+      ),
+      refreshTime,
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      refreshTime();
+    } else {
+      timer?.cancel();
+    }
   }
 
   void updateConnection(List<ConnectivityResult> values) {
@@ -43,6 +68,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   @override
   void dispose() {
     timer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     tick.dispose();
     connectivity?.cancel();
     note.dispose();
@@ -94,14 +120,19 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
   Widget build(BuildContext c) {
     final d = widget.data;
     final running = d.running;
-    final today = dayKey(DateTime.now());
+    final today = dayKey(tick.value);
     final todaySessions = d.sessions.where((s) => s.day == today).toList();
-    int total() => todaySessions.fold(0, (sum, s) => sum + durationOf(s));
+    int duration(Session s, DateTime now) => math.max(
+      0,
+      ((s.ended ?? now.millisecondsSinceEpoch) - s.started) ~/ 1000,
+    );
+    int total(DateTime now) =>
+        todaySessions.fold(0, (sum, s) => sum + duration(s, now));
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
     return PageBody(
       title: 'Today.',
-      subtitle: DateFormat('EEEE, d MMMM').format(DateTime.now()),
+      subtitle: DateFormat('EEEE, d MMMM').format(tick.value),
       compactHeader: true,
       children: [
         Center(
@@ -163,7 +194,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
           child: Column(
             children: [
               const SizedBox(height: 8),
-              const RepaintBoundary(child: AnalogClock()),
+              RepaintBoundary(
+                child: ValueListenableBuilder<DateTime>(
+                  valueListenable: tick,
+                  builder: (c, now, _) =>
+                      AnalogClock(now: now, clockNow: widget.clockNow),
+                ),
+              ),
               const SizedBox(height: 16),
               Text(
                 running == null
@@ -185,7 +222,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                               ? 'hh:mm:ss'
                               : 'HH:mm:ss',
                         ).format(now)
-                      : elapsed(durationOf(running)),
+                      : elapsed(duration(running, now)),
                   size: 36,
                   label: running == null ? 'Current time' : 'Elapsed time',
                 ),
@@ -244,8 +281,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
                 padding: const EdgeInsets.only(top: 20),
                 child: ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
-                  builder: (c, _, _) => Text(
-                    'Today’s total  ${elapsed(total())}',
+                  builder: (c, now, _) => Text(
+                    'Today’s total  ${elapsed(total(now))}',
                     style: const TextStyle(
                       fontFamily: 'Geist Mono',
                       fontSize: 12,
@@ -279,7 +316,13 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
 }
 
 class AnalogClock extends StatefulWidget {
-  const AnalogClock({super.key});
+  final DateTime now;
+  final DateTime Function() clockNow;
+  const AnalogClock({
+    super.key,
+    required this.now,
+    this.clockNow = DateTime.now,
+  });
   @override
   State<AnalogClock> createState() => _AnalogClockState();
 }
@@ -308,7 +351,7 @@ class _AnalogClockState extends State<AnalogClock>
 
   @override
   Widget build(BuildContext c) => Semantics(
-    label: 'Current time ${DateFormat('HH:mm').format(DateTime.now())}',
+    label: 'Current time ${DateFormat('HH:mm').format(widget.now)}',
     child: SizedBox(
       width: 164,
       height: 164,
@@ -317,6 +360,8 @@ class _AnalogClockState extends State<AnalogClock>
           controller,
           Theme.of(c).colorScheme.onSurface,
           Theme.of(c).colorScheme.surfaceContainerHighest,
+          widget.now,
+          MediaQuery.disableAnimationsOf(c) ? null : widget.clockNow,
         ),
       ),
     ),
@@ -325,8 +370,15 @@ class _AnalogClockState extends State<AnalogClock>
 
 class _ClockPainter extends CustomPainter {
   final Color ink, muted;
-  _ClockPainter(Listenable animation, this.ink, this.muted)
-    : super(repaint: animation);
+  final DateTime sampledTime;
+  final DateTime Function()? clockNow;
+  _ClockPainter(
+    Listenable animation,
+    this.ink,
+    this.muted,
+    this.sampledTime,
+    this.clockNow,
+  ) : super(repaint: animation);
   @override
   void paint(Canvas c, Size s) {
     final center = s.center(Offset.zero), radius = s.width / 2;
@@ -348,7 +400,7 @@ class _ClockPainter extends CustomPainter {
           ..strokeCap = StrokeCap.round,
       );
     }
-    final now = DateTime.now();
+    final now = clockNow?.call() ?? sampledTime;
     final seconds = now.second + now.millisecond / 1000;
     void hand(
       double value,
@@ -369,12 +421,22 @@ class _ClockPainter extends CustomPainter {
       );
     }
 
-    hand(now.hour % 12 + now.minute / 60, 12, radius * .46, 5, ink);
+    hand(
+      now.hour % 12 + (now.minute + seconds / 60) / 60,
+      12,
+      radius * .46,
+      5,
+      ink,
+    );
     hand(now.minute + seconds / 60, 60, radius * .67, 3, ink);
     hand(seconds, 60, radius * .77, 1.2, ink.withValues(alpha: .5));
     c.drawCircle(center, 4, Paint()..color = ink);
   }
 
   @override
-  bool shouldRepaint(_ClockPainter old) => ink != old.ink || muted != old.muted;
+  bool shouldRepaint(_ClockPainter old) =>
+      ink != old.ink ||
+      muted != old.muted ||
+      sampledTime != old.sampledTime ||
+      clockNow != old.clockNow;
 }
