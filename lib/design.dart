@@ -980,7 +980,7 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
           key: const ValueKey('top-toast-pill'),
           floating: true,
           borderRadius: BorderRadius.circular(40),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          padding: const EdgeInsets.all(10),
           child: Semantics(
             liveRegion: true,
             child: Row(
@@ -999,10 +999,18 @@ class _ToastState extends State<_Toast> with SingleTickerProviderStateMixin {
                 Flexible(
                   child: SingleChildScrollView(child: Text(widget.message)),
                 ),
+                const SizedBox(width: 10),
                 IconButton(
                   tooltip: 'Dismiss message',
                   onPressed: withFeedback(widget.done),
-                  icon: const Icon(LucideIcons.x, size: 18),
+                  style: IconButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(20, 20),
+                    maximumSize: const Size(20, 20),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.standard,
+                  ),
+                  icon: const Icon(LucideIcons.x, size: 20),
                 ),
               ],
             ),
