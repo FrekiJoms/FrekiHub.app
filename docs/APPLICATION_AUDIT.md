@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Home title emphasis — 2026-10-04
+
+Home's fixed heading now reads `HOME` without the period, using 28 px bold type and 1.2 px letter spacing in the shared compact header. Home is its only current caller. Date, shortcut clearance, scrolling and balance behavior are preserved. All five existing layout checks passed, including narrow screens, enlarged text and Home balance docking. Heading lookups use the new label. Device review remains pending a compatible Android phone.
+
 ## Geoapify basemap provider — 2026-10-04
 
 Map replaces public OpenStreetMap tile requests with Geoapify's documented `osm-carto` XYZ PNG endpoint. The user-provided geocoding search URL returns address coordinates and cannot render this tile layer. The existing map UI, markers, traces, saved-log parsing, opt-in location collection, 128 MiB caching and retry behavior remain unchanged. Visible attribution credits Geoapify and OpenStreetMap. No address lookup or inference of missing recorded positions was added.

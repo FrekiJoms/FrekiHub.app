@@ -205,7 +205,7 @@ void main() {
         );
         final originalBalance = tester.getRect(balance);
         expect(find.textContaining('Current time · '), findsOneWidget);
-        final headingPosition = tester.getTopLeft(find.text('Home.'));
+        final headingPosition = tester.getTopLeft(find.text('HOME'));
         final date = find.textContaining(
           RegExp(
             r'^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d+ \w+$',
@@ -216,7 +216,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 100));
         expect(tester.getRect(balance).top, closeTo(73, .01));
         expect(tester.getRect(balance).right, closeTo(320 - 16, .01));
-        expect(tester.getTopLeft(find.text('Home.')), headingPosition);
+        expect(tester.getTopLeft(find.text('HOME')), headingPosition);
         expect(tester.getTopLeft(date), datePosition);
         expect(
           find.byWidgetPredicate(

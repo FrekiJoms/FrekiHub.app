@@ -396,7 +396,11 @@ class PageBody extends StatelessWidget {
                       header: true,
                       child: Text(
                         title,
-                        style: Theme.of(c).textTheme.headlineSmall,
+                        style: Theme.of(c).textTheme.headlineSmall?.copyWith(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),

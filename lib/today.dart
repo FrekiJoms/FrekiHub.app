@@ -259,7 +259,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
       builder: (scrollController, balanceSlot) => PageBody(
         scrollController: scrollController,
         leading: balanceSlot,
-        title: 'Home.',
+        title: 'HOME',
         subtitle: DateFormat('EEEE, d MMMM').format(tick.value),
         compactHeader: true,
         children: [
