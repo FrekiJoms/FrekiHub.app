@@ -208,7 +208,7 @@ void main() {
           findsOneWidget,
         );
         final originalBalance = tester.getRect(balance);
-        expect(find.text('Current time'), findsOneWidget);
+        expect(find.textContaining('Current time · '), findsOneWidget);
         final headingPosition = tester.getTopLeft(find.text('Home.'));
         final date = find.textContaining(
           RegExp(

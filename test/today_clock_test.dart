@@ -65,6 +65,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 300));
         await tester.pump(const Duration(milliseconds: 300));
         expect(digits(), '10:20:30');
+        expect(find.text('Current time · 10:20:30'), findsOneWidget);
         final initialPixels = await pixels();
         now = now.add(const Duration(milliseconds: 749));
         await tester.pump(const Duration(milliseconds: 149));
@@ -72,6 +73,7 @@ void main() {
         now = now.add(const Duration(milliseconds: 1));
         await tester.pump(const Duration(milliseconds: 1));
         expect(digits(), '10:20:31');
+        expect(find.text('Current time · 10:20:31'), findsOneWidget);
         expect(await pixels(), isNot(orderedEquals(initialPixels)));
 
         tester.binding.handleAppLifecycleStateChanged(
@@ -91,6 +93,7 @@ void main() {
         );
         await tester.pump();
         expect(digits(), '00:01:00');
+        expect(find.text('Current time · 00:01:00'), findsOneWidget);
         expect(find.text('Monday, 5 October'), findsOneWidget);
         expect(
           find.byWidgetPredicate(
@@ -112,7 +115,7 @@ void main() {
   }
 
   testWidgets(
-    'Running elapsed time and daily total refresh from the same sample',
+    'Running elapsed time and small live time refresh from the same sample',
     (tester) async {
       var now = DateTime(2026, 10, 4, 13);
       final session = Session(
@@ -143,13 +146,25 @@ void main() {
       final display = tester.widget<FlipClock>(find.byType(FlipClock));
       expect(display.label, 'Elapsed time');
       expect(display.value, '00:01:00');
+      expect(find.text('Current time · 01:00:00 PM'), findsOneWidget);
       now = now.add(const Duration(seconds: 1));
       await tester.pump(const Duration(seconds: 1));
       expect(
         tester.widget<FlipClock>(find.byType(FlipClock)).value,
         '00:01:01',
       );
-      expect(find.text('Today’s total  00:01:01'), findsOneWidget);
+      final liveTime = find.text('Current time · 01:00:01 PM');
+      expect(liveTime, findsOneWidget);
+      expect(tester.widget<Text>(liveTime).style!.fontSize, 11);
+      expect(
+        tester.getBottomLeft(find.byType(FlipClock)).dy,
+        lessThan(tester.getTopLeft(liveTime).dy),
+      );
+      expect(
+        tester.getBottomLeft(liveTime).dy,
+        lessThan(tester.getTopLeft(find.text('YOUR SESSION IS RUNNING')).dy),
+      );
+      expect(find.textContaining('Today’s total'), findsNothing);
       await tester.pumpWidget(const SizedBox());
     },
   );

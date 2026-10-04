@@ -120,14 +120,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
   Widget build(BuildContext c) {
     final d = widget.data;
     final running = d.running;
-    final today = dayKey(tick.value);
-    final todaySessions = d.sessions.where((s) => s.day == today).toList();
     int duration(Session s, DateTime now) => math.max(
       0,
       ((s.ended ?? now.millisecondsSinceEpoch) - s.started) ~/ 1000,
     );
-    int total(DateTime now) =>
-        todaySessions.fold(0, (sum, s) => sum + duration(s, now));
     final recent = [...d.sessions]
       ..sort((a, b) => b.started.compareTo(a.started));
     return _HomeBalanceDock(
@@ -200,17 +196,6 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  running == null
-                      ? 'READY WHEN YOU ARE'
-                      : 'YOUR SESSION IS RUNNING',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 2,
-                    color: Theme.of(c).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
                   builder: (c, now, _) => FlipClock(
@@ -229,14 +214,23 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                 ValueListenableBuilder<DateTime>(
                   valueListenable: tick,
                   builder: (c, now, _) => Text(
-                    running == null
-                        ? d.prefs['clockFormat'] == '12'
-                              ? 'Current time · ${DateFormat('a').format(now)}'
-                              : 'Current time'
-                        : 'Clocked in at ${clockTime(d, running.started)}',
+                    'Current time · ${DateFormat(d.prefs['clockFormat'] == '12' ? 'hh:mm:ss a' : 'HH:mm:ss').format(now)}',
                     style: TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 11,
                       color: Theme.of(c).colorScheme.onSurfaceVariant,
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  running == null
+                      ? 'READY WHEN YOU ARE'
+                      : 'YOUR SESSION IS RUNNING',
+                  style: TextStyle(
+                    fontSize: 11,
+                    letterSpacing: 2,
+                    color: Theme.of(c).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -274,19 +268,6 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                       );
                     }
                   },
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(top: 20),
-                  child: ValueListenableBuilder<DateTime>(
-                    valueListenable: tick,
-                    builder: (c, now, _) => Text(
-                      'Today’s total  ${elapsed(total(now))}',
-                      style: const TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
                 ),
               ],
             ),
