@@ -213,7 +213,18 @@ void main() {
       final legends = find.byKey(const ValueKey('map-legends'));
       expect(tester.getRect(legends).top, 76);
       expect(find.text('MAP'), findsNothing);
-      expect(tester.getRect(legends).height, lessThanOrEqualTo(44));
+      expect(tester.getRect(legends).height, lessThanOrEqualTo(48));
+      expect(
+        find.descendant(of: legends, matching: find.byType(ShaderMask)),
+        findsOneWidget,
+      );
+      final legendChip = find
+          .descendant(of: legends, matching: find.byType(FilterChip))
+          .first;
+      expect(
+        tester.getRect(legendChip).height + 10,
+        tester.getRect(legends).height,
+      );
       await tester.drag(
         find.descendant(
           of: legends,
@@ -223,6 +234,22 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Other').hitTestable(), findsOneWidget);
+      final otherFade = find.ancestor(
+        of: find.text('Other'),
+        matching: find.byType(AnimatedOpacity),
+      );
+      expect(tester.widget<AnimatedOpacity>(otherFade).opacity, 1);
+      await tester.tap(find.text('Other'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<AnimatedOpacity>(otherFade).opacity, .4);
+      final otherChip = tester.widget<FilterChip>(
+        find.widgetWithText(FilterChip, 'Other'),
+      );
+      expect(otherChip.selected, isFalse);
+      expect(otherChip.selectedColor, Colors.transparent);
+      await tester.tap(find.text('Other'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<AnimatedOpacity>(otherFade).opacity, 1);
       final camera = tester
           .widget<FlutterMap>(find.byType(FlutterMap))
           .mapController!;

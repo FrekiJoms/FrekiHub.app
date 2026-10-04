@@ -1,5 +1,9 @@
 # FrekiHub application audit
 
+## Legend pill symmetry and edge fades — 2026-10-04
+
+The latest requested spacing adds 5 px top/bottom padding around the compact Map legend row. Selection is now conveyed by opacity instead of a colored background: selected categories are fully opaque; unselected categories use a 40% ghost treatment. A shared-motion 150 ms fade respects reduced motion. A static horizontal alpha mask softens both scroll-strip ends; it does not intercept gestures or introduce an animation controller or extra backdrop blur. Labels remain single-line with retained category semantics, feedback and horizontal scrolling. All three focused Map checks passed, including the final padding, fade-mask presence, deselection/reselection opacity and existing map behaviors. The update hot-reloaded successfully to the attached Xiaomi phone. Documentation links and diff whitespace checks passed.
+
 ## Compact Map legend pill — 2026-10-04
 
 Removed MAP from the legend strip at the user's request. The centered glass pill shrinks to content width, capped by screen margins, and retains horizontal scrolling for overflow. Single-line 11 px category labels, 13 px icons, compact chip density and reduced padding make the strip smaller. Category colors, selected semantics, filtering, feedback, shadows and the right tool rail remain intact. This supersedes the Map title addition below.

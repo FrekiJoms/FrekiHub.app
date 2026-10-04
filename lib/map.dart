@@ -624,57 +624,79 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   key: const ValueKey('map-legends'),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
-                    vertical: 2,
+                    vertical: 5,
                   ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: colors.entries
-                          .map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 2,
-                              ),
-                              child: FilterChip(
-                                label: Text(
-                                  entry.key,
-                                  maxLines: 1,
-                                  softWrap: false,
-                                ),
-                                labelStyle: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                labelPadding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
-                                ),
+                  child: ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [
+                        Colors.transparent,
+                        Colors.white,
+                        Colors.white,
+                        Colors.transparent,
+                      ],
+                      stops: [0, .055, .945, 1],
+                    ).createShader(bounds),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: colors.entries
+                            .map(
+                              (entry) => Padding(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 4,
+                                  horizontal: 2,
                                 ),
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                showCheckmark: false,
-                                avatar: Icon(
-                                  icons[entry.key],
-                                  size: 13,
-                                  color: entry.value,
+                                child: AnimatedOpacity(
+                                  opacity: categories.contains(entry.key)
+                                      ? 1
+                                      : .4,
+                                  duration: Motion.duration(c, 150),
+                                  child: FilterChip(
+                                    backgroundColor: Colors.transparent,
+                                    selectedColor: Colors.transparent,
+                                    side: BorderSide.none,
+                                    label: Text(
+                                      entry.key,
+                                      maxLines: 1,
+                                      softWrap: false,
+                                    ),
+                                    labelStyle: TextStyle(
+                                      color: Theme.of(c).colorScheme.onSurface,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    labelPadding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    showCheckmark: false,
+                                    avatar: Icon(
+                                      icons[entry.key],
+                                      size: 13,
+                                      color: entry.value,
+                                    ),
+                                    selected: categories.contains(entry.key),
+                                    onSelected: (_) {
+                                      ActionFeedback.tap();
+                                      setState(() {
+                                        if (!categories.remove(entry.key)) {
+                                          categories.add(entry.key);
+                                        }
+                                      });
+                                      publishContext();
+                                    },
+                                  ),
                                 ),
-                                selected: categories.contains(entry.key),
-                                onSelected: (_) {
-                                  ActionFeedback.tap();
-                                  setState(() {
-                                    if (!categories.remove(entry.key)) {
-                                      categories.add(entry.key);
-                                    }
-                                  });
-                                  publishContext();
-                                },
                               ),
-                            ),
-                          )
-                          .toList(),
+                            )
+                            .toList(),
+                      ),
                     ),
                   ),
                 ),
