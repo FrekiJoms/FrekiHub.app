@@ -766,7 +766,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget agenda(BuildContext c) {
-    final ss = sessions(selected)
+    final ss = [...sessions(selected)]
       ..sort((a, b) => a.started.compareTo(b.started));
     final es = entries(selected);
     final colors = Theme.of(c).colorScheme;

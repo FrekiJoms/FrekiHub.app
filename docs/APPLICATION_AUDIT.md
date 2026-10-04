@@ -74,6 +74,8 @@ Priority: low. Raw activity-log JSON is not comprehensively schema-validated dur
 
 ## Preserved invariants
 
+Calendar unsupported-operation follow-up — 2026-10-04: source inspection found `agenda` sorting `sessions(selected)` directly. Empty dates return `const []`, so sorting throws an unsupported-operation exception; populated dates also mutated the cached list. The agenda now sorts a copy. The focused page layout regression passed and covers navigating to an empty month; targeted static analysis reported no issues. This source-confirmed cause has not been matched against a phone stack trace: no Android device was connected when checked. No APK build/install or record deletion was performed. Logcat capture instructions are in [Development](DEVELOPMENT.md).
+
 Keep one running session, integer money, original record currencies, occurrence and event deduplication, pending-end replay safety, commit-before-confirmation, location freshness, unknown-target/action rejection, branch-change execution, source/program/snapshot/outbox separation, opt-in collection, reduced motion and sound preference. User records must never be cleared as a recovery shortcut.
 
 ## Documentation corrections in this pass

@@ -192,6 +192,15 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 100));
+      if (page is CalendarScreen) {
+        await tester.tap(find.byTooltip('Next month'));
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'An empty calendar date must not sort a constant list',
+        );
+      }
       if (page is TodayScreen) {
         expect(find.text('Balance'), findsOneWidget);
         expect(find.text('Current time'), findsOneWidget);

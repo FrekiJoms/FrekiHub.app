@@ -112,6 +112,21 @@ The focused device checklist covers cold open/reopen/Retry, light/dark and enlar
 
 ## Troubleshooting
 
+### Capture an Android UI error without rebuilding
+
+Settings activity logs contain saved actions, not Flutter exception stack traces. Connect the phone with USB debugging, authorize the computer, open FrekiHub and capture [Android Logcat](https://developer.android.com/tools/logcat) in PowerShell from the project root:
+
+```powershell
+$adb = 'C:/Users/ranbing143/AppData/Local/Android/Sdk/platform-tools/adb.exe'
+& $adb devices
+New-Item -ItemType Directory -Path .tmp -Force | Out-Null
+& $adb -d logcat -v threadtime 'flutter:V' 'AndroidRuntime:E' '*:S' | Tee-Object -FilePath .tmp/calendar-log.txt
+```
+
+`-d` before `logcat` selects the single USB device; use `-s DEVICE_ID` instead if more than one is connected. Reproduce the error by opening the Calendar/date while capture runs, then press Ctrl+C. Retain the full exception and following stack frames, not just “Unsupported operation”. This reads logs from the installed app and does not build, install, clear records or clear the system log buffer. Keep captures in ignored `.tmp` and review them before sharing because diagnostics can contain personal details.
+
+Calendar empty-date follow-up (2026-10-04): the agenda previously called `sort` on the constant empty fallback returned when a date had no sessions. Sorting a copied list prevents `Unsupported operation: Cannot modify an unmodifiable list` and avoids modifying the indexed session list. A narrow/enlarged-text page regression now navigates to an empty month.
+
 | Symptom | Start here |
 | --- | --- |
 | Loader hangs | `startup.dart`, `watchAll`, startup tests; retain six-/fifteen-second recovery paths |
