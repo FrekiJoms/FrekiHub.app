@@ -517,142 +517,163 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: 16,
               left: 72,
               right: 72,
-              child: Chrome(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: 28,
-                      child: Row(
-                        children: [
-                          IconButton(
-                            tooltip: 'Previous timeline',
-                            disabledColor: Theme.of(c).colorScheme.onSurface
-                                .withValues(alpha: .3),
-                            onPressed: period == 'custom'
-                                ? null
-                                : withFeedback(() => shift(-1)),
-                            constraints: const BoxConstraints.tightFor(
-                              width: 24,
-                              height: 28,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Chrome(
+                  key: const ValueKey('map-date-pill'),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 25,
+                    vertical: 2,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        height: 28,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Previous timeline',
+                              disabledColor: Theme.of(c).colorScheme.onSurface
+                                  .withValues(alpha: .3),
+                              onPressed: period == 'custom'
+                                  ? null
+                                  : withFeedback(() => shift(-1)),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 24,
+                                height: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                LucideIcons.chevronLeft,
+                                size: 14,
+                              ),
                             ),
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(LucideIcons.chevronLeft, size: 14),
-                          ),
-                          Expanded(
-                            child: InkWell(
-                              onTap: withFeedback(selectDate),
-                              borderRadius: BorderRadius.circular(12),
-                              child: AnimatedSwitcher(
-                                duration: Motion.duration(c, 200),
-                                transitionBuilder: (child, animation) =>
-                                    FadeTransition(
-                                      opacity: animation,
-                                      child: SlideTransition(
-                                        position:
-                                            Tween<Offset>(
-                                              begin: Offset(
-                                                child.key ==
-                                                        ValueKey(
-                                                          '$period:${range.from}',
-                                                        )
-                                                    ? shiftDirection * .15
-                                                    : -shiftDirection * .15,
-                                                0,
+                            Flexible(
+                              child: InkWell(
+                                onTap: withFeedback(selectDate),
+                                borderRadius: BorderRadius.circular(12),
+                                child: AnimatedSwitcher(
+                                  duration: Motion.duration(c, 200),
+                                  transitionBuilder: (child, animation) =>
+                                      FadeTransition(
+                                        opacity: animation,
+                                        child: SlideTransition(
+                                          position:
+                                              Tween<Offset>(
+                                                begin: Offset(
+                                                  child.key ==
+                                                          ValueKey(
+                                                            '$period:${range.from}',
+                                                          )
+                                                      ? shiftDirection * .15
+                                                      : -shiftDirection * .15,
+                                                  0,
+                                                ),
+                                                end: Offset.zero,
+                                              ).animate(
+                                                CurvedAnimation(
+                                                  parent: animation,
+                                                  curve: Motion.curve,
+                                                ),
                                               ),
-                                              end: Offset.zero,
-                                            ).animate(
-                                              CurvedAnimation(
-                                                parent: animation,
-                                                curve: Motion.curve,
-                                              ),
-                                            ),
-                                        child: child,
+                                          child: child,
+                                        ),
                                       ),
+                                  child: Text(
+                                    period == 'year'
+                                        ? '${date.year}'
+                                        : period == 'day'
+                                        ? DateFormat('d MMM').format(date)
+                                        : period == 'week'
+                                        ? DateFormat('d MMM').format(range.from)
+                                        : period == 'custom'
+                                        ? 'Custom range'
+                                        : DateFormat.MMMM().format(date),
+                                    key: ValueKey('$period:${range.from}'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                child: Text(
-                                  period == 'year'
-                                      ? '${date.year}'
-                                      : period == 'day'
-                                      ? DateFormat('d MMM').format(date)
-                                      : period == 'week'
-                                      ? DateFormat('d MMM').format(range.from)
-                                      : period == 'custom'
-                                      ? 'Custom range'
-                                      : DateFormat.MMMM().format(date),
-                                  key: ValueKey('$period:${range.from}'),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
                             ),
-                          ),
-                          IconButton(
-                            tooltip: 'Next timeline',
-                            disabledColor: Theme.of(c).colorScheme.onSurface
-                                .withValues(alpha: .3),
-                            onPressed: period == 'custom'
-                                ? null
-                                : withFeedback(() => shift(1)),
-                            constraints: const BoxConstraints.tightFor(
-                              width: 24,
-                              height: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              LucideIcons.chevronRight,
-                              size: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(
-                      height: 16,
-                      child: PopupMenuButton<String>(
-                        tooltip: 'Timeline mode',
-                        elevation: FloatingDepth.elevation,
-                        shadowColor: FloatingDepth.color(c),
-                        initialValue: period,
-                        onSelected: (value) {
-                          ActionFeedback.tap();
-                          unawaited(choosePeriod(value));
-                        },
-                        itemBuilder: (_) => [
-                          for (final mode in [
-                            'day',
-                            'week',
-                            'month',
-                            'year',
-                            'custom',
-                          ])
-                            PopupMenuItem(
-                              value: mode,
-                              child: Text(
-                                '${mode[0].toUpperCase()}${mode.substring(1)}',
+                            IconButton(
+                              tooltip: 'Next timeline',
+                              disabledColor: Theme.of(c).colorScheme.onSurface
+                                  .withValues(alpha: .3),
+                              onPressed: period == 'custom'
+                                  ? null
+                                  : withFeedback(() => shift(1)),
+                              constraints: const BoxConstraints.tightFor(
+                                width: 24,
+                                height: 28,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: const Icon(
+                                LucideIcons.chevronRight,
+                                size: 14,
                               ),
                             ),
-                        ],
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              period == 'day' ? 'By date' : 'By $period',
-                              style: const TextStyle(fontSize: 9),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(LucideIcons.chevronDown, size: 10),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      SizedBox(
+                        height: 16,
+                        child: Builder(
+                          builder: (anchor) => Tooltip(
+                            message: 'Timeline mode',
+                            child: Semantics(
+                              button: true,
+                              label: 'Choose $period value',
+                              hint: 'Long press to change timeline mode',
+                              child: InkWell(
+                                onTap: withFeedback(selectDate),
+                                onLongPress: withFeedback(() async {
+                                  final value = await showChoiceMenu<String>(
+                                    anchor,
+                                    choices: const {
+                                      'day': 'Day',
+                                      'week': 'Week',
+                                      'month': 'Month',
+                                      'year': 'Year',
+                                      'custom': 'Custom',
+                                    },
+                                    selected: period,
+                                  );
+                                  if (mounted && value != null) {
+                                    await choosePeriod(value);
+                                  }
+                                }),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      period == 'day'
+                                          ? 'Date'
+                                          : '${period[0].toUpperCase()}${period.substring(1)}',
+                                      style: const TextStyle(fontSize: 9),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(
+                                      LucideIcons.chevronDown,
+                                      size: 10,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

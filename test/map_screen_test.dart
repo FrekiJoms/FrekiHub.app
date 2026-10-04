@@ -50,26 +50,40 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 600));
       expect(find.text('October'), findsOneWidget);
+      expect(find.text('By month'), findsNothing);
+      final pillWidth = tester
+          .getSize(find.byKey(const ValueKey('map-date-pill')))
+          .width;
+      expect(pillWidth, lessThan(656));
+      await tester.tap(find.byTooltip('Timeline mode'));
+      await tester.pumpAndSettle();
+      expect(find.text('Confirm'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Next timeline'));
       await tester.pumpAndSettle();
       expect(find.text('November'), findsOneWidget);
       expect(find.text('Timeline'), findsNothing);
       await tester.tap(find.byTooltip('Previous timeline'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Timeline mode'));
+      await tester.longPress(find.byTooltip('Timeline mode'));
       await tester.pumpAndSettle();
       expect(find.text('Day'), findsOneWidget);
       expect(find.text('Week'), findsOneWidget);
-      expect(find.text('Month'), findsOneWidget);
+      expect(find.text('Month'), findsNWidgets(2));
       expect(find.text('Year'), findsOneWidget);
       await tester.tap(find.text('Year'));
       await tester.pumpAndSettle();
       expect(find.text('2026'), findsNWidgets(2));
+      expect(
+        tester.getSize(find.byKey(const ValueKey('map-date-pill'))).width,
+        lessThan(pillWidth),
+      );
       await tester.tap(find.byTooltip('Next timeline'));
       await tester.pumpAndSettle();
       expect(find.text('2027'), findsNWidgets(2));
       for (final mode in ['Week', 'Day']) {
-        await tester.tap(find.byTooltip('Timeline mode'));
+        await tester.longPress(find.byTooltip('Timeline mode'));
         await tester.pumpAndSettle();
         await tester.tap(find.text(mode));
         await tester.pumpAndSettle();
@@ -86,7 +100,7 @@ void main() {
         expect(tester.widget<Text>(heading).data, before);
       }
 
-      await tester.tap(find.byTooltip('Timeline mode'));
+      await tester.longPress(find.byTooltip('Timeline mode'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Custom'));
       await tester.pumpAndSettle();

@@ -268,3 +268,68 @@ class Chrome extends StatelessWidget {
     ),
   );
 }
+
+/// Anchored choices share the app surface, selection and motion treatment.
+Future<T?> showChoiceMenu<T>(
+  BuildContext anchor, {
+  required Map<T, String> choices,
+  required T selected,
+}) {
+  final box = anchor.findRenderObject()! as RenderBox;
+  final overlay =
+      Navigator.of(anchor).overlay!.context.findRenderObject()! as RenderBox;
+  final origin = box.localToGlobal(Offset.zero, ancestor: overlay);
+  final theme = Theme.of(anchor);
+  return showMenu<T>(
+    context: anchor,
+    position: RelativeRect.fromRect(
+      Rect.fromLTWH(
+        origin.dx,
+        origin.dy + box.size.height + 8,
+        box.size.width,
+        0,
+      ),
+      Offset.zero & overlay.size,
+    ),
+    color: theme.colorScheme.surface,
+    surfaceTintColor: Colors.transparent,
+    elevation: FloatingDepth.elevation,
+    shadowColor: FloatingDepth.color(anchor),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(24),
+      side: BorderSide(
+        color: theme.colorScheme.onSurface.withValues(alpha: .08),
+      ),
+    ),
+    popUpAnimationStyle: AnimationStyle(
+      duration: Motion.duration(anchor, 150),
+      reverseDuration: Motion.duration(anchor, 120),
+      curve: Motion.curve,
+    ),
+    items: [
+      for (final entry in choices.entries)
+        PopupMenuItem<T>(
+          value: entry.key,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              color: entry.key == selected
+                  ? theme.colorScheme.onSurface.withValues(alpha: .08)
+                  : Colors.transparent,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(entry.value, style: theme.textTheme.bodyMedium),
+                ),
+                if (entry.key == selected)
+                  const Icon(Icons.check_rounded, size: 16),
+              ],
+            ),
+          ),
+        ),
+    ],
+  );
+}
