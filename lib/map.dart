@@ -149,6 +149,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         'map.period': period,
         'map.from': dayKey(range.from),
         'map.until': dayKey(range.until),
+        'map.from_epoch': range.from.millisecondsSinceEpoch,
+        'map.until_epoch': range.until.millisecondsSinceEpoch,
         'map.trace_enabled': trace,
         'map.visible_count': visible.length,
         'map.total_count': previousRows.length,
@@ -209,73 +211,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     publishContext();
   }
 
-  Future<void> choosePeriod([String? chosen]) async {
-    final value =
-        chosen ??
-        await panel<String>(
-          context,
-          _ChoiceSheet(
-            title: 'Timeline',
-            selected: period,
-            values: const ['day', 'week', 'month', 'year', 'custom'],
-          ),
-        );
-    if (!mounted || value == null) return;
+  Future<void> choosePeriod(String value) async {
+    MapRange? custom;
     if (value == 'custom') {
-      final from = await showWheelDatePicker(
-        context: context,
-        initialDate: range.from,
-        firstDate: DateTime(1970),
-        lastDate: DateTime(2100),
-      );
-      if (!mounted || from == null) return;
-      final until = await showWheelDatePicker(
-        context: context,
-        initialDate:
-            range.until.subtract(const Duration(days: 1)).isBefore(from)
-            ? from
-            : range.until.subtract(const Duration(days: 1)),
-        firstDate: from,
-        lastDate: DateTime(2100),
-      );
-      if (!mounted || until == null) return;
-      setState(() {
-        period = value;
-        date = from;
-        range = MapRange(
-          from,
-          DateTime(until.year, until.month, until.day + 1),
-        );
-        selected.clear();
-        watch();
-      });
-    } else {
-      setState(() {
-        period = value;
-        range = MapRange.period(period, date);
-        selected.clear();
-        watch();
-      });
+      custom = await panel<MapRange>(context, _MapRangeSheet(initial: range));
+      if (!mounted || custom == null) return;
     }
+    setState(() {
+      period = value;
+      if (custom != null) date = custom.from;
+      range = custom ?? MapRange.period(period, date);
+      selected.clear();
+      watch();
+    });
     await guarded(context, saveView);
   }
 
+  int shiftDirection = 1;
   void shift(int direction) {
     setState(() {
+      shiftDirection = direction;
       if (period == 'custom') {
-        final days = range.until.difference(range.from).inDays;
-        final from = DateTime(
-          range.from.year,
-          range.from.month,
-          range.from.day + days * direction,
-        );
-        final until = DateTime(
-          range.until.year,
-          range.until.month,
-          range.until.day + days * direction,
-        );
-        range = MapRange(from, until);
-        date = from;
+        final offset = range.until.difference(range.from) * direction;
+        range = MapRange(range.from.add(offset), range.until.add(offset));
+        date = range.from;
       } else {
         date = switch (period) {
           'year' => DateTime(date.year + direction, date.month, 1),
@@ -293,7 +252,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   Future<void> selectDate() async {
     if (period == 'custom') {
-      await choosePeriod();
+      await choosePeriod('custom');
       return;
     }
     final result = await showWheelDatePicker(
@@ -326,60 +285,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     setState(() => selected = result);
     publishContext();
     if (selected.isNotEmpty) fit();
-  }
-
-  Future<void> showTimeline(String label) async {
-    final choice = await panel<String>(
-      context,
-      PanelContent(
-        header: PanelHeading(title: label),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                control(
-                  'Previous timeline',
-                  LucideIcons.chevronLeft,
-                  () => Navigator.pop(context, 'previous'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, 'date'),
-                  child: const Text('Choose date'),
-                ),
-                control(
-                  'Next timeline',
-                  LucideIcons.chevronRight,
-                  () => Navigator.pop(context, 'next'),
-                ),
-              ],
-            ),
-            for (final value in const [
-              'day',
-              'week',
-              'month',
-              'year',
-              'custom',
-            ])
-              ListTile(
-                title: Text('${value[0].toUpperCase()}${value.substring(1)}'),
-                trailing: value == period
-                    ? const Icon(LucideIcons.check)
-                    : null,
-                onTap: withFeedback(() => Navigator.pop(context, value)),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (!mounted || choice == null) return;
-    if (choice == 'previous' || choice == 'next') {
-      shift(choice == 'previous' ? -1 : 1);
-    } else if (choice == 'date') {
-      await selectDate();
-    } else {
-      await choosePeriod(choice);
-    }
   }
 
   List<Widget> mapActions() => [
@@ -473,6 +378,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         ? DateFormat('MMMM yyyy').format(range.from)
         : period == 'year'
         ? '${range.from.year}'
+        : period == 'custom'
+        ? '${DateFormat('d MMM yyyy, HH:mm').format(range.from)} – ${DateFormat('d MMM yyyy, HH:mm').format(range.until.subtract(const Duration(minutes: 1)))}'
         : '${DateFormat('d MMM').format(range.from)} – ${DateFormat('d MMM yyyy').format(range.until.subtract(const Duration(days: 1)))}';
     final status = loading
         ? 'Loading recorded locations…'
@@ -610,24 +517,142 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               top: 16,
               left: 72,
               right: 72,
-              child: Center(
-                child: Chrome(
-                  padding: EdgeInsets.zero,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      control(
-                        'Choose timeline',
-                        LucideIcons.calendarRange,
-                        () => showTimeline(dateLabel),
+              child: Chrome(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 32,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: 'Previous timeline',
+                            disabledColor: Theme.of(c).colorScheme.onSurface
+                                .withValues(alpha: .3),
+                            onPressed: period == 'custom'
+                                ? null
+                                : withFeedback(() => shift(-1)),
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 32,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(LucideIcons.chevronLeft, size: 16),
+                          ),
+                          Expanded(
+                            child: InkWell(
+                              onTap: withFeedback(selectDate),
+                              borderRadius: BorderRadius.circular(12),
+                              child: AnimatedSwitcher(
+                                duration: Motion.duration(c, 200),
+                                transitionBuilder: (child, animation) =>
+                                    FadeTransition(
+                                      opacity: animation,
+                                      child: SlideTransition(
+                                        position:
+                                            Tween<Offset>(
+                                              begin: Offset(
+                                                child.key ==
+                                                        ValueKey(
+                                                          '$period:${range.from}',
+                                                        )
+                                                    ? shiftDirection * .15
+                                                    : -shiftDirection * .15,
+                                                0,
+                                              ),
+                                              end: Offset.zero,
+                                            ).animate(
+                                              CurvedAnimation(
+                                                parent: animation,
+                                                curve: Motion.curve,
+                                              ),
+                                            ),
+                                        child: child,
+                                      ),
+                                    ),
+                                child: Text(
+                                  period == 'year'
+                                      ? '${date.year}'
+                                      : period == 'day'
+                                      ? DateFormat('d MMM').format(date)
+                                      : period == 'week'
+                                      ? DateFormat('d MMM').format(range.from)
+                                      : period == 'custom'
+                                      ? 'Custom range'
+                                      : DateFormat.MMMM().format(date),
+                                  key: ValueKey('$period:${range.from}'),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'Next timeline',
+                            disabledColor: Theme.of(c).colorScheme.onSurface
+                                .withValues(alpha: .3),
+                            onPressed: period == 'custom'
+                                ? null
+                                : withFeedback(() => shift(1)),
+                            constraints: const BoxConstraints.tightFor(
+                              width: 28,
+                              height: 32,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              LucideIcons.chevronRight,
+                              size: 16,
+                            ),
+                          ),
+                        ],
                       ),
-                      control(
-                        'Choose located logs',
-                        LucideIcons.listFilter,
-                        () => showRecords(),
+                    ),
+                    SizedBox(
+                      height: 24,
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Timeline mode',
+                        elevation: FloatingDepth.elevation,
+                        shadowColor: FloatingDepth.color(c),
+                        initialValue: period,
+                        onSelected: (value) {
+                          ActionFeedback.tap();
+                          unawaited(choosePeriod(value));
+                        },
+                        itemBuilder: (_) => [
+                          for (final mode in [
+                            'day',
+                            'week',
+                            'month',
+                            'year',
+                            'custom',
+                          ])
+                            PopupMenuItem(
+                              value: mode,
+                              child: Text(
+                                '${mode[0].toUpperCase()}${mode.substring(1)}',
+                              ),
+                            ),
+                        ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              period == 'day' ? 'By date' : 'By $period',
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(LucideIcons.chevronDown, size: 12),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -724,20 +749,37 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               bottom: 0,
               right: 12,
               child: Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: math.max(48, bounds.maxHeight - 280 - bottom),
-                  ),
-                  child: Chrome(
-                    key: const ValueKey('map-tools-rail'),
-                    padding: EdgeInsets.zero,
-                    child: SingleChildScrollView(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: mapActions(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Chrome(
+                      padding: EdgeInsets.zero,
+                      child: control(
+                        'Choose located logs',
+                        LucideIcons.listFilter,
+                        () => showRecords(),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: math.max(
+                          48,
+                          bounds.maxHeight - 338 - bottom,
+                        ),
+                      ),
+                      child: Chrome(
+                        key: const ValueKey('map-tools-rail'),
+                        padding: EdgeInsets.zero,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: mapActions(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -995,4 +1037,139 @@ class _MapLogSheetState extends State<_MapLogSheet> {
             ),
     ),
   );
+}
+
+class _MapRangeSheet extends StatefulWidget {
+  final MapRange initial;
+  const _MapRangeSheet({required this.initial});
+  @override
+  State<_MapRangeSheet> createState() => _MapRangeSheetState();
+}
+
+class _MapRangeSheetState extends State<_MapRangeSheet> {
+  late DateTime from = DateUtils.dateOnly(widget.initial.from);
+  late DateTime through = DateUtils.dateOnly(
+    widget.initial.until.subtract(const Duration(minutes: 1)),
+  );
+  late TimeOfDay startTime = TimeOfDay.fromDateTime(widget.initial.from);
+  late TimeOfDay endTime = TimeOfDay.fromDateTime(
+    widget.initial.until.subtract(const Duration(minutes: 1)),
+  );
+  late bool timed =
+      widget.initial.from.hour != 0 ||
+      widget.initial.from.minute != 0 ||
+      widget.initial.until.hour != 0 ||
+      widget.initial.until.minute != 0;
+  MapRange get draft => MapRange(
+    DateTime(
+      from.year,
+      from.month,
+      from.day,
+      timed ? startTime.hour : 0,
+      timed ? startTime.minute : 0,
+    ),
+    timed
+        ? DateTime(
+            through.year,
+            through.month,
+            through.day,
+            endTime.hour,
+            endTime.minute + 1,
+          )
+        : DateTime(through.year, through.month, through.day + 1),
+  );
+  Future<void> pickDate(bool start) async {
+    final picked = await showWheelDatePicker(
+      context: context,
+      initialDate: start ? from : through,
+      firstDate: DateTime(1970),
+      lastDate: DateTime(2100),
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      if (start) {
+        from = picked;
+      } else {
+        through = picked;
+      }
+    });
+  }
+
+  Future<void> pickTime(bool start) async {
+    final picked = await showWheelTimePicker(
+      context: context,
+      initialTime: start ? startTime : endTime,
+    );
+    if (!mounted || picked == null) return;
+    setState(() {
+      if (start) {
+        startTime = picked;
+      } else {
+        endTime = picked;
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final valid = draft.until.isAfter(draft.from);
+    return PanelContent(
+      header: const PanelHeading(title: 'Custom timeline'),
+      footer: PanelActions(
+        children: [
+          AppButton(
+            label: 'Apply range',
+            onPressed: valid ? () => Navigator.pop(context, draft) : null,
+          ),
+          AppButton(
+            label: 'Cancel',
+            secondary: true,
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          ListTile(
+            title: const Text('From date'),
+            subtitle: Text(DateFormat.yMMMd().format(from)),
+            trailing: const Icon(LucideIcons.calendar),
+            onTap: withFeedback(() => pickDate(true)),
+          ),
+          ListTile(
+            title: const Text('Through date'),
+            subtitle: Text(DateFormat.yMMMd().format(through)),
+            trailing: const Icon(LucideIcons.calendar),
+            onTap: withFeedback(() => pickDate(false)),
+          ),
+          SwitchListTile(
+            title: const Text('Set a time range'),
+            subtitle: const Text(
+              'Choose the start and end times within these dates',
+            ),
+            value: timed,
+            onChanged: (value) {
+              ActionFeedback.tap();
+              setState(() => timed = value);
+            },
+          ),
+          if (timed) ...[
+            ListTile(
+              title: const Text('Start time'),
+              subtitle: Text(startTime.format(context)),
+              trailing: const Icon(LucideIcons.clock3),
+              onTap: withFeedback(() => pickTime(true)),
+            ),
+            ListTile(
+              title: const Text('End time'),
+              subtitle: Text(endTime.format(context)),
+              trailing: const Icon(LucideIcons.clock3),
+              onTap: withFeedback(() => pickTime(false)),
+            ),
+          ],
+          if (!valid) const Text('Choose an end after the start.'),
+        ],
+      ),
+    );
+  }
 }

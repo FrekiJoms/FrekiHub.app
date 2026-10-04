@@ -42,7 +42,7 @@ Finance net is actual income minus expenses minus savings. Safe-to-spend exclude
 - Weekly finance recurrence uses UTC calendar-day differences, avoiding fixed-duration DST drift.
 - Calendar grid weeks start Sunday; Map range weeks start Monday.
 - Reminder next-occurrence calculations use Android local `Calendar`, selected weekdays and local clock time.
-- Map range start is inclusive and end exclusive. Custom final dates expand to the following local midnight.
+- Map range start is inclusive and end exclusive. Date-only custom final dates expand to the following local midnight. With custom times enabled, the final selected minute is included by an exclusive boundary at the next minute. Precise map.from_epoch/map.until_epoch context uses epoch milliseconds.
 
 Do not apply a blanket 24-hour millisecond offset when implementing calendar recurrences. Check any new week/date navigation behavior around daylight-saving transitions, even though the current workspace timezone is Asia/Manila.
 

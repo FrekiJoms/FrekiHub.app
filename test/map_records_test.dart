@@ -94,6 +94,15 @@ void main() {
     'Map rule target accepts typed fields and rejects inappropriate actions',
     () {
       RuleCompiler.compile(
+        'target == map_page { if (map.from_epoch > 0 && map.until_epoch > 0) { log("Range"); } }',
+      );
+      expect(
+        () => RuleCompiler.compile(
+          'target == map_page { if (map.from_epoch == "today") { log("Invalid"); } }',
+        ),
+        throwsFormatException,
+      );
+      RuleCompiler.compile(
         'target == map_page { if (data.get("map.visible_count") > 0 && data.get("map.trace_enabled") == true) { app.toast("Trace is visible"); } }',
       );
       expect(
@@ -131,6 +140,20 @@ void main() {
       expect(snapshot['map.total_count'], 7);
       expect(snapshot['map.unlocated_count'], 3);
       expect(snapshot['map.trace_enabled'], true);
+      final stored = RuleCatalog.snapshot(
+        AppData([], [], [], {
+          'mapFrom': '2026-10-04T09:30:00',
+          'mapUntil': '2026-10-04T12:01:00',
+        }),
+      );
+      expect(
+        stored['map.from_epoch'],
+        DateTime(2026, 10, 4, 9, 30).millisecondsSinceEpoch,
+      );
+      expect(
+        stored['map.until_epoch'],
+        DateTime(2026, 10, 4, 12, 1).millisecondsSinceEpoch,
+      );
     },
   );
 }

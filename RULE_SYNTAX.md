@@ -104,7 +104,8 @@ Map fields have completion hints and type checks:
 | Field | Type / meaning |
 | --- | --- |
 | `map.period` | String: `day`, `week`, `month`, `year`, `custom` |
-| `map.from`, `map.until` | Strings: local date boundaries (`yyyy-MM-dd`), start inclusive, end exclusive |
+| `map.from`, `map.until` | Strings: local date components (`yyyy-MM-dd`) of start-inclusive/end-exclusive boundaries; use epoch fields for custom time precision |
+| `map.from_epoch`, `map.until_epoch` | Numbers: exact range boundaries in epoch milliseconds, start inclusive and end exclusive; custom End time includes the chosen minute |
 | `map.trace_enabled` | Boolean: chronological trace enabled |
 | `map.visible_count` | Number: located logs matching timeline and category filters |
 | `map.selected_count` | Number: selected logs within those filters |

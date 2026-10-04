@@ -23,6 +23,93 @@ class _TestTiles extends TileProvider {
 }
 
 void main() {
+  testWidgets(
+    'Inline timeline modes navigate directly and custom disables arrows',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await tester.runAsync(db.readAll);
+      final data = AppData([], [], [], {
+        'mapDate': '2026-10-04',
+        'mapPeriod': 'month',
+      });
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(
+              body: MapScreen(
+                data: data,
+                tileProvider: _TestTiles(),
+                apiKey: 'test-key',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('October'), findsOneWidget);
+      await tester.tap(find.byTooltip('Next timeline'));
+      await tester.pumpAndSettle();
+      expect(find.text('November'), findsOneWidget);
+      expect(find.text('Timeline'), findsNothing);
+      await tester.tap(find.byTooltip('Previous timeline'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Timeline mode'));
+      await tester.pumpAndSettle();
+      expect(find.text('Day'), findsOneWidget);
+      expect(find.text('Week'), findsOneWidget);
+      expect(find.text('Month'), findsOneWidget);
+      expect(find.text('Year'), findsOneWidget);
+      await tester.tap(find.text('Year'));
+      await tester.pumpAndSettle();
+      expect(find.text('2026'), findsNWidgets(2));
+      await tester.tap(find.byTooltip('Next timeline'));
+      await tester.pumpAndSettle();
+      expect(find.text('2027'), findsNWidgets(2));
+      for (final mode in ['Week', 'Day']) {
+        await tester.tap(find.byTooltip('Timeline mode'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(mode));
+        await tester.pumpAndSettle();
+        final heading = find.descendant(
+          of: find.byType(AnimatedSwitcher),
+          matching: find.byType(Text),
+        );
+        final before = tester.widget<Text>(heading).data;
+        await tester.tap(find.byTooltip('Next timeline'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<Text>(heading).data, isNot(before));
+        await tester.tap(find.byTooltip('Previous timeline'));
+        await tester.pumpAndSettle();
+        expect(tester.widget<Text>(heading).data, before);
+      }
+
+      await tester.tap(find.byTooltip('Timeline mode'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Custom'));
+      await tester.pumpAndSettle();
+      expect(find.text('Custom timeline'), findsOneWidget);
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+      expect(find.text('Start time'), findsOneWidget);
+      expect(find.text('End time'), findsOneWidget);
+      await tester.tap(find.text('Apply range'));
+      await tester.pumpAndSettle();
+      for (final label in ['Previous timeline', 'Next timeline']) {
+        final button = tester.widget<IconButton>(
+          find.byWidgetPredicate(
+            (widget) => widget is IconButton && widget.tooltip == label,
+          ),
+        );
+        expect(button.onPressed, isNull);
+      }
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 1));
+    },
+  );
   testWidgets('Missing map key preserves records without requesting tiles', (
     tester,
   ) async {
@@ -201,10 +288,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
       expect(find.text('2 located · 0 without location'), findsOneWidget);
-      expect(tester.getRect(find.byTooltip('Choose timeline')).top, 16);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 16);
       expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
       final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
-      expect(rail.center.dy, 360);
+      expect(rail.center.dy, 389);
       expect(rail.right, 308);
       expect(
         tester.getRect(find.byTooltip('Fit recorded locations')).bottom,
@@ -313,7 +400,7 @@ void main() {
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(tester.getRect(find.byTooltip('Choose timeline')).top, 16);
+      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 16);
       await tester.tap(find.byTooltip('Choose located logs'));
       await tester.pumpAndSettle();
       expect(find.text('Timeline logs'), findsOneWidget);

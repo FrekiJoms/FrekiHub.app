@@ -39,6 +39,8 @@ abstract final class RuleCatalog {
             'map.center_lat',
             'map.center_lng',
             'map.zoom',
+            'map.from_epoch',
+            'map.until_epoch',
           ].contains(field));
   static const targets = [
     'session_page',
@@ -76,8 +78,10 @@ abstract final class RuleCatalog {
     'calendar.view': 'year, month, week or day',
     'calendar.today': 'Today (yyyy-MM-dd)',
     'map.period': 'day, week, month, year or custom',
-    'map.from': 'Map timeline start date, inclusive (yyyy-MM-dd)',
-    'map.until': 'Map timeline end date, exclusive (yyyy-MM-dd)',
+    'map.from': 'Local date component of range start; use from_epoch for time precision',
+    'map.until': 'Local date component of exclusive end; use until_epoch for time precision',
+    'map.from_epoch': 'Map range start epoch milliseconds, inclusive',
+    'map.until_epoch': 'Map range end epoch milliseconds, exclusive',
     'map.trace_enabled': 'Chronological map trace is visible',
     'map.visible_count':
         'Located records matching map category and timeline filters',
@@ -180,6 +184,16 @@ abstract final class RuleCatalog {
       'map.until':
           mapContext['map.until'] ??
           dayKey(DateTime(now.year, now.month, now.day + 1)),
+      'map.from_epoch':
+          mapContext['map.from_epoch'] ??
+          DateTime.tryParse(data.prefs['mapFrom'] ?? '')
+              ?.millisecondsSinceEpoch ??
+          DateTime(now.year, now.month, now.day).millisecondsSinceEpoch,
+      'map.until_epoch':
+          mapContext['map.until_epoch'] ??
+          DateTime.tryParse(data.prefs['mapUntil'] ?? '')
+              ?.millisecondsSinceEpoch ??
+          DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch,
       'map.trace_enabled': mapContext['map.trace_enabled'] ?? false,
       'map.visible_count': mapContext['map.visible_count'] ?? 0,
       'map.selected_count': mapContext['map.selected_count'] ?? 0,
