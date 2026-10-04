@@ -113,6 +113,7 @@ Map fields have completion hints and type checks:
 | `map.unlocated_count` | Number: timeline logs lacking usable recorded coordinates; these appear in Timeline logs but cannot be selected or traced |
 | `map.center_lat`, `map.center_lng`, `map.zoom` | Numbers: current viewport, refreshed after interaction settles |
 | `map.current_location_visible` | Boolean: fresh foreground You marker was visible in the last Map snapshot; expired samples yield false on snapshot refresh |
+| `map.current_location_accuracy` | Number: foreground fix uncertainty in metres; zero when absent. A fresh estimate wider than 100 m is shown with its accuracy halo, rather than discarded |
 | `map.current_location_sample_epoch` | Number: one-shot user fix epoch milliseconds; zero when absent. Marker expires after two minutes; snapshots are observed state, not continuous native GPS |
 
 ```javascript

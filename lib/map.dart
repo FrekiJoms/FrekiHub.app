@@ -36,8 +36,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
     title: 'Find yourself on the map',
     intro: 'Show your current location and center the map on it.',
     benefit: 'A clear point of reference',
-    detail:
-        'A pulsing circle marks a fresh, accurate location from your phone.',
+    detail: 'A pulsing circle marks your latest position. A soft halo shows its estimated accuracy.',
     control: 'This requests one location fix. It does not enable background tracking or add a saved log.',
     next: 'Choose Precise location and allow access while using the app.',
     action: 'Allow precise location',
@@ -59,7 +58,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       String? raw;
       try {
         raw = await NativeSession.channel
-            .invokeMethod<String>('currentLocation')
+            .invokeMethod<String>('mapCurrentLocation')
             .timeout(const Duration(seconds: 25));
       } on PlatformException catch (error) {
         throw StateError(
@@ -70,7 +69,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       final fix = MapUserLocation.parse(raw, DateTime.now());
       if (fix == null)
         throw StateError(
-          'No fresh, accurate location available. Enable precise location and try again.',
+          'No fresh location fix yet. Check that Location is on and try again.',
         );
       locationExpiry?.cancel();
       setState(() {
@@ -100,7 +99,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
     cameraMotion.stop();
     final from = controller.camera.center;
     final zoom = controller.camera.zoom;
-    final toZoom = math.max(15.0, zoom);
+    final toZoom = fix.accuracy > 100
+        ? math.max(2.0, 15 - math.log(fix.accuracy / 100) / math.ln2)
+        : math.max(15.0, zoom);
     if (MediaQuery.disableAnimationsOf(context)) {
       controller.move(LatLng(fix.lat, fix.lng), toZoom);
       return;
@@ -253,6 +254,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         'map.current_location_visible':
             userLocation != null && showUserLocation,
         'map.current_location_sample_epoch': userLocation?.sampled ?? 0,
+        'map.current_location_accuracy': userLocation?.accuracy ?? 0,
         'map.period': period,
         'map.from': dayKey(range.from),
         'map.until': dayKey(range.until),
@@ -637,6 +639,19 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     }).toList(),
                   ),
                   if (userLocation != null && showUserLocation)
+                    CircleLayer(
+                      circles: [
+                        CircleMarker(
+                          point: LatLng(userLocation!.lat, userLocation!.lng),
+                          radius: userLocation!.accuracy,
+                          useRadiusInMeter: true,
+                          color: userColor.withValues(alpha: .10),
+                          borderColor: userColor.withValues(alpha: .25),
+                          borderStrokeWidth: 1,
+                        ),
+                      ],
+                    ),
+                  if (userLocation != null && showUserLocation)
                     MarkerLayer(
                       markers: [
                         Marker(
@@ -644,7 +659,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
                           width: 48,
                           height: 48,
                           child: Semantics(
-                            label: 'Your current location',
+                            label:
+                                'Your current location, estimated accuracy ${userLocation!.accuracy.round()} meters',
                             child: const IgnorePointer(
                               child: LocationPulse(
                                 key: ValueKey('map-user-location'),

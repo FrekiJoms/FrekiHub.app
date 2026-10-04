@@ -5,6 +5,7 @@ import 'package:freki_hub/data.dart';
 void main() {
   test('Foreground Map location fields have typed completion and snapshots', () {
     expect(RuleCatalog.fields, contains('map.current_location_visible'));
+    expect(RuleCatalog.numericField('map.current_location_accuracy'), isTrue);
     expect(
       RuleCatalog.numericField('map.current_location_sample_epoch'),
       isTrue,

@@ -33,6 +33,7 @@ void main() {
         addTearDown(db.close);
         final data = (await tester.runAsync(db.readAll))!;
         final calls = <MethodCall>[];
+        final accuracy = reduced ? 115.2 : 10.0;
         final messenger =
             TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
         messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
@@ -41,11 +42,11 @@ void main() {
             return {'locationPermission': true};
           }
           if (call.method == 'locationPermission') return true;
-          if (call.method == 'currentLocation') {
+          if (call.method == 'mapCurrentLocation') {
             return jsonEncode({
               'lat': 14.5,
               'lng': 121,
-              'accuracy': 10,
+              'accuracy': accuracy,
               'locationTime': DateTime.now().millisecondsSinceEpoch,
             });
           }
@@ -75,7 +76,7 @@ void main() {
           ),
         );
         await tester.pump(const Duration(milliseconds: 600));
-        expect(calls.where((c) => c.method == 'currentLocation'), isEmpty);
+        expect(calls.where((c) => c.method == 'mapCurrentLocation'), isEmpty);
         expect(find.text('You'), findsOneWidget);
         await tester.tap(find.byTooltip('Center on current location'));
         await tester.pump();
@@ -87,7 +88,15 @@ void main() {
             .camera;
         expect(camera.center.latitude, closeTo(14.5, .001));
         expect(camera.center.longitude, closeTo(121, .001));
-        expect(camera.zoom, 15);
+        expect(camera.zoom, reduced ? lessThan(15) : 15);
+        expect(
+          tester
+              .widget<CircleLayer>(find.byType(CircleLayer))
+              .circles
+              .single
+              .radius,
+          accuracy,
+        );
         expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
         await tester.tap(
           find.ancestor(
@@ -105,7 +114,10 @@ void main() {
         );
         await tester.pump(const Duration(milliseconds: 200));
         expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
-        expect(calls.where((c) => c.method == 'currentLocation'), hasLength(1));
+        expect(
+          calls.where((c) => c.method == 'mapCurrentLocation'),
+          hasLength(1),
+        );
         await tester.pump(const Duration(minutes: 2, seconds: 1));
         await tester.pump();
         expect(find.byKey(const ValueKey('map-user-location')), findsNothing);
@@ -172,7 +184,7 @@ void main() {
     expect(find.byType(PermissionHint), findsNothing);
     expect(
       calls.where(
-        (c) => ['locationPermission', 'currentLocation'].contains(c.method),
+        (c) => ['locationPermission', 'mapCurrentLocation'].contains(c.method),
       ),
       isEmpty,
     );

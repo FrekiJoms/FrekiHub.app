@@ -113,7 +113,6 @@ class MapUserLocation {
         lat.abs() > 90 ||
         lng.abs() > 180 ||
         accuracy < 0 ||
-        accuracy > 100 ||
         now.millisecondsSinceEpoch - sampled > 120000 ||
         sampled - now.millisecondsSinceEpoch > 1000) {
       return null;

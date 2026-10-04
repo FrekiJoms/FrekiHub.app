@@ -43,6 +43,7 @@ abstract final class RuleCatalog {
             'map.from_epoch',
             'map.until_epoch',
             'map.current_location_sample_epoch',
+            'map.current_location_accuracy',
           ].contains(field));
   static const targets = [
     'session_page',
@@ -95,6 +96,8 @@ abstract final class RuleCatalog {
     'map.center_lng': 'Map viewport longitude',
     'map.zoom': 'Map viewport zoom level',
     'map.current_location_visible': 'Fresh foreground user-location marker is visible in the last Map snapshot',
+    'map.current_location_accuracy':
+        'Foreground Map fix accuracy in meters; zero when absent',
     'map.current_location_sample_epoch': 'User-location fix epoch milliseconds; zero when absent, expires after two minutes',
     'settings.theme': 'light, dark or system',
     'settings.sound': 'Sound effects enabled',
@@ -216,6 +219,10 @@ abstract final class RuleCatalog {
           userSampleAge >= -1000 &&
           userSampleAge <= 120000,
       'map.current_location_sample_epoch': userSample,
+      'map.current_location_accuracy':
+          mapContext['map.current_location_accuracy'] is num
+          ? mapContext['map.current_location_accuracy']
+          : 0,
       'settings.theme': data.prefs['theme'] ?? 'system',
       'settings.sound': data.prefs['sound'] == 'true',
       'activity_logs.enabled': data.prefs['activityLogging'] == 'true',
