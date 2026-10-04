@@ -381,10 +381,10 @@ class PageBody extends StatelessWidget {
     this.leading,
   });
   @override
-  Widget build(BuildContext c) => LayoutBuilder(
-    builder: (c, constraints) {
-      final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
-      final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
+  Widget build(BuildContext c) => WidthLayoutBuilder(
+    builder: (c, width) {
+      final inset = width < 380 ? 16.0 : 24.0;
+      final horizontal = math.max(inset, (width - 720) / 2);
       final header = Entrance(
         child: compactHeader
             ? Padding(

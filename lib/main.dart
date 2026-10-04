@@ -241,8 +241,10 @@ class _AppShellState extends ConsumerState<AppShell>
       reduceTransparency: graphics.value == true ? null : true,
       child: StartupIntro(
         child: Scaffold(
+          resizeToAvoidBottomInset: false,
           backgroundColor: Colors.transparent,
           body: GlassScaffold(
+            resizeToAvoidBottomInset: false,
             background: const CanvasBackground(),
             edgeFade: false,
             body: SafeArea(
@@ -251,46 +253,48 @@ class _AppShellState extends ConsumerState<AppShell>
                 data: (data) => Stack(
                   children: [
                     Positioned.fill(
-                      child: ClipRect(
-                        child: AnimatedSwitcher(
-                          duration: Motion.duration(c),
-                          reverseDuration: Motion.duration(c, 200),
-                          switchInCurve: Motion.curve,
-                          switchOutCurve: Motion.curve,
-                          transitionBuilder: (child, animation) {
-                            final incoming = child.key == ValueKey(index);
-                            return IgnorePointer(
-                              ignoring: !incoming,
-                              child: TickerMode(
-                                enabled: incoming,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: SlideTransition(
-                                    position: Tween<Offset>(
-                                      begin: Offset(
-                                        (incoming ? 1 : -1) *
-                                            slideDirection *
-                                            .12,
-                                        0,
-                                      ),
-                                      end: Offset.zero,
-                                    ).animate(animation),
-                                    child: child,
+                      child: KeyboardViewport(
+                        child: ClipRect(
+                          child: AnimatedSwitcher(
+                            duration: Motion.duration(c),
+                            reverseDuration: Motion.duration(c, 200),
+                            switchInCurve: Motion.curve,
+                            switchOutCurve: Motion.curve,
+                            transitionBuilder: (child, animation) {
+                              final incoming = child.key == ValueKey(index);
+                              return IgnorePointer(
+                                ignoring: !incoming,
+                                child: TickerMode(
+                                  enabled: incoming,
+                                  child: FadeTransition(
+                                    opacity: animation,
+                                    child: SlideTransition(
+                                      position: Tween<Offset>(
+                                        begin: Offset(
+                                          (incoming ? 1 : -1) *
+                                              slideDirection *
+                                              .12,
+                                          0,
+                                        ),
+                                        end: Offset.zero,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                          child: KeyedSubtree(
-                            key: ValueKey(index),
-                            child: switch (index) {
-                              0 => TodayScreen(data: data),
-                              1 => MapScreen(data: data),
-                              2 => HistoryScreen(data: data),
-                              3 => BudgetScreen(data: data),
-                              5 => CalendarScreen(data: data),
-                              _ => SettingsScreen(data: data),
+                              );
                             },
+                            child: KeyedSubtree(
+                              key: ValueKey(index),
+                              child: switch (index) {
+                                0 => TodayScreen(data: data),
+                                1 => MapScreen(data: data),
+                                2 => HistoryScreen(data: data),
+                                3 => BudgetScreen(data: data),
+                                5 => CalendarScreen(data: data),
+                                _ => SettingsScreen(data: data),
+                              },
+                            ),
                           ),
                         ),
                       ),
@@ -298,27 +302,29 @@ class _AppShellState extends ConsumerState<AppShell>
                     Positioned(
                       left: 16,
                       right: 16,
-                      bottom: MediaQuery.paddingOf(c).bottom + 12,
+                      bottom: MediaQuery.viewPaddingOf(c).bottom + 12,
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 560),
-                          child: PillNavigation(
-                            index: index,
-                            onQuickAdd: (kind) => openQuickAdd(
-                              c,
-                              data,
-                              dayKey(DateTime.now()),
-                              kind,
+                          child: KeyboardVisibility(
+                            child: PillNavigation(
+                              index: index,
+                              onQuickAdd: (kind) => openQuickAdd(
+                                c,
+                                data,
+                                dayKey(DateTime.now()),
+                                kind,
+                              ),
+                              onChanged: (i) {
+                                if (i == index) return;
+                                ActionFeedback.tap(transition: true);
+                                setState(() {
+                                  slideDirection = i > index ? 1 : -1;
+                                  index = i;
+                                  lastTab = i;
+                                });
+                              },
                             ),
-                            onChanged: (i) {
-                              if (i == index) return;
-                              ActionFeedback.tap(transition: true);
-                              setState(() {
-                                slideDirection = i > index ? 1 : -1;
-                                index = i;
-                                lastTab = i;
-                              });
-                            },
                           ),
                         ),
                       ),

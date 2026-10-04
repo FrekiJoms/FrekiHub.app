@@ -15,6 +15,13 @@ class TodayScreen extends ConsumerStatefulWidget {
 class _TodayScreenState extends ConsumerState<TodayScreen>
     with WidgetsBindingObserver {
   final note = TextEditingController();
+  final noteFocus = FocusNode();
+  Timer? noteDebounce;
+  (String, String)? pendingNote;
+  Future<void> noteWrites = Future.value();
+  AppDatabase? noteStore;
+  String lastDraft = '';
+  bool wasComposing = false, noteBound = false;
   Timer? timer;
   late final tick = ValueNotifier<DateTime>(widget.clockNow());
   StreamSubscription<List<ConnectivityResult>>? connectivity;
@@ -24,6 +31,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     note.text = widget.data.running?.note ?? '';
+    bindNote();
     refreshTime();
     connectivity = Connectivity().onConnectivityChanged.listen(
       updateConnection,
@@ -33,6 +41,59 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         .checkConnectivity()
         .then(updateConnection)
         .catchError((Object _) {});
+  }
+
+  void bindNote() {
+    if (noteBound) return;
+    noteBound = true;
+    lastDraft = note.text;
+    note.addListener(queueNote);
+    noteFocus.addListener(flushOnBlur);
+  }
+
+  void queueNote() {
+    final value = note.value;
+    final composing = value.composing.isValid && !value.composing.isCollapsed;
+    if (value.text == lastDraft && composing == wasComposing) return;
+    lastDraft = value.text;
+    wasComposing = composing;
+    final running = widget.data.running;
+    if (busy || running == null) return;
+    // Capture while mounted, before a blur/navigation flush can run in dispose.
+    noteStore ??= ref.read(databaseProvider);
+    pendingNote = (running.id, value.text);
+    noteDebounce?.cancel();
+    // Selection/caret changes do not write; keep IME composition local.
+    if (!composing) {
+      noteDebounce = Timer(const Duration(milliseconds: 400), () {
+        unawaited(flushNote());
+      });
+    }
+  }
+
+  void flushOnBlur() {
+    if (!noteFocus.hasFocus) unawaited(flushNote());
+  }
+
+  Future<void> flushNote() {
+    noteDebounce?.cancel();
+    final draft = pendingNote;
+    pendingNote = null;
+    if (draft == null) return noteWrites;
+    final db = noteStore!;
+    // Serialize writes so an earlier draft cannot overwrite the latest one.
+    noteWrites = noteWrites
+        .then((_) async {
+          await (db.update(db.sessions)
+                ..where((s) => s.id.equals(draft.$1) & s.ended.isNull()))
+              .write(SessionsCompanion(note: Value(draft.$2)));
+        })
+        .catchError((Object _) {
+          if (mounted) {
+            toast(context, 'Could not save your note. Try again.', error: true);
+          }
+        });
+    return noteWrites;
   }
 
   void refreshTime() {
@@ -56,6 +117,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
       refreshTime();
     } else {
       timer?.cancel();
+      unawaited(flushNote());
     }
   }
 
@@ -67,6 +129,10 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
 
   @override
   void dispose() {
+    unawaited(flushNote());
+    note.removeListener(queueNote);
+    noteFocus.removeListener(flushOnBlur);
+    noteFocus.dispose();
     timer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     tick.dispose();
@@ -93,6 +159,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
       }
       if (!mounted) return;
       setState(() => busy = true);
+      await flushNote();
+      if (!mounted) return;
       final db = ref.read(databaseProvider);
       if (running == null) {
         await db.clockIn(note.text.trim());
@@ -137,6 +205,8 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
 
   @override
   Widget build(BuildContext c) {
+    // Also bind newly added listeners when reviewing this state with hot reload.
+    bindNote();
     final d = widget.data;
     final running = d.running;
     int duration(Session s, DateTime now) => math.max(
@@ -271,22 +341,15 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: note,
-                  decoration: const InputDecoration(
-                    labelText: 'What are you working on?',
-                    prefixIcon: Icon(LucideIcons.pencilLine, size: 18),
+                RepaintBoundary(
+                  child: TextField(
+                    controller: note,
+                    focusNode: noteFocus,
+                    decoration: const InputDecoration(
+                      labelText: 'What are you working on?',
+                      prefixIcon: Icon(LucideIcons.pencilLine, size: 18),
+                    ),
                   ),
-                  onChanged: (value) {
-                    if (running != null) {
-                      final db = ref.read(databaseProvider);
-                      unawaited(
-                        (db.update(db.sessions)
-                              ..where((s) => s.id.equals(running.id)))
-                            .write(SessionsCompanion(note: Value(value))),
-                      );
-                    }
-                  },
                 ),
               ],
             ),
@@ -437,11 +500,11 @@ class _HomeBalanceDockState extends State<_HomeBalanceDock> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
+  Widget build(BuildContext context) => WidthLayoutBuilder(
+    builder: (context, width) {
       WidgetsBinding.instance.addPostFrameCallback((_) => measure());
-      final inset = constraints.maxWidth < 380 ? 16.0 : 24.0;
-      final horizontal = math.max(inset, (constraints.maxWidth - 720) / 2);
+      final inset = width < 380 ? 16.0 : 24.0;
+      final horizontal = math.max(inset, (width - 720) / 2);
       final reduced = MediaQuery.disableAnimationsOf(context);
       return Stack(
         key: stackKey,
@@ -484,8 +547,7 @@ class _HomeBalanceDockState extends State<_HomeBalanceDock> {
                         );
                   // Settings is at y=16 with a 48px touch target; dock 9px below.
                   final top = measured.top + (73 - measured.top) * progress;
-                  final rightShift =
-                      (constraints.maxWidth - measured.width) / 2 - 16;
+                  final rightShift = (width - measured.width) / 2 - 16;
                   return Transform.translate(
                     offset: Offset(rightShift * progress, top),
                     child: Center(child: child),

@@ -1,5 +1,72 @@
 part of 'design.dart';
 
+/// Keeps keyboard metric changes confined to the page viewport.
+class KeyboardViewport extends StatelessWidget {
+  final Widget child;
+  const KeyboardViewport({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: child,
+  );
+}
+
+/// Retains the position of bottom chrome while the keyboard covers it, without
+/// painting its glass effects or ticking its animations behind the keyboard.
+class KeyboardVisibility extends StatelessWidget {
+  final Widget child;
+  const KeyboardVisibility({super.key, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    final visible = MediaQuery.viewInsetsOf(context).bottom == 0;
+    return TickerMode(
+      enabled: visible,
+      child: Visibility(
+        visible: visible,
+        maintainState: true,
+        maintainAnimation: true,
+        maintainSize: true,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Width-dependent layouts reuse their widget tree during height-only resizing.
+class WidthLayoutBuilder extends StatefulWidget {
+  final Widget Function(BuildContext, double) builder;
+  const WidthLayoutBuilder({super.key, required this.builder});
+  @override
+  State<WidthLayoutBuilder> createState() => _WidthLayoutBuilderState();
+}
+
+class _WidthLayoutBuilderState extends State<WidthLayoutBuilder> {
+  double? width;
+  Widget? content;
+  @override
+  void didUpdateWidget(WidthLayoutBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    content = null;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    content = null;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (_, bounds) {
+      if (content == null || width != bounds.maxWidth) {
+        width = bounds.maxWidth;
+        content = widget.builder(context, bounds.maxWidth);
+      }
+      return content!;
+    },
+  );
+}
+
 /// Shared action styling, touch feedback and saving state for repeated footers.
 class AppButton extends StatelessWidget {
   final String label;
