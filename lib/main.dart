@@ -113,9 +113,7 @@ class _AppShellState extends ConsumerState<AppShell>
       }
       final pending = await NativeSession.pending();
       if (pending != null) {
-        await ref
-            .read(databaseProvider)
-            .clockOut(pending['id'] as String, at: pending['ended'] as int);
+        await NativeSession.applyPending(ref.read(databaseProvider), pending);
         await NativeSession.acknowledge();
       }
     } catch (e) {

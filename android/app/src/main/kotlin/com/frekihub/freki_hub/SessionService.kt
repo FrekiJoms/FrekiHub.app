@@ -20,12 +20,6 @@ class SessionService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val prefs = getSharedPreferences("session", MODE_PRIVATE)
-        if (intent?.action == "clockOut") {
-            Automation.prefs(this).edit().remove("activeRule").commit()
-            val id = prefs.getString("id", null)
-            if (id != null) prefs.edit().putString("pendingId", id).putLong("pendingEnd", System.currentTimeMillis()).remove("id").commit()
-            stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY
-        }
         val id = intent?.getStringExtra("id") ?: prefs.getString("id", null) ?: return START_NOT_STICKY
         val started = intent?.getLongExtra("started", 0) ?: prefs.getLong("started", 0)
         if (started <= 0 || prefs.getString("pendingId", null) == id) { stopSelf(); return START_NOT_STICKY }
@@ -35,7 +29,12 @@ class SessionService : Service() {
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel("frekihub_timer", "Running session", NotificationManager.IMPORTANCE_LOW).apply { description = "A quiet timer for your active session"; setSound(null, null); enableVibration(false) })
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val stop = PendingIntent.getService(this, 1, Intent(this, SessionService::class.java).setAction("clockOut"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getActivity(this, 1,
+            Intent(this, SessionConfirmationActivity::class.java)
+                .setData(android.net.Uri.parse("frekihub://end-session/$id"))
+                .putExtra("sessionId", id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, "frekihub_timer") else Notification.Builder(this)
         val notification = builder.setSmallIcon(R.drawable.ic_session).setContentTitle(SESSION_PROGRESS_TEXT).setContentText("Clocked in at ${SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(started))}").setWhen(started).setUsesChronometer(true).setChronometerCountDown(false).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(true).setContentIntent(open).addAction(Notification.Action.Builder(null, "Clock out", stop).build()).build()
         addHyperIsland(notification, started, stop)
@@ -46,7 +45,7 @@ class SessionService : Service() {
     private fun addHyperIsland(notification: Notification, started: Long, stop: PendingIntent) {
         try {
             if (!HyperIslandNotification.isSupported(this)) return
-            val clockOut = HyperAction("clock_out", "Clock out", null, stop, 3)
+            val clockOut = HyperAction("clock_out", "Clock out", null, stop, 1)
             val island = HyperIslandNotification.Builder(this, "frekihub_session", SESSION_PROGRESS_TEXT)
                 .addPicture(HyperPicture("session", this, R.drawable.ic_session))
                 .addAction(clockOut)
@@ -65,6 +64,20 @@ class SessionService : Service() {
             notification.extras.putAll(extras)
         } catch (error: Exception) {
             Log.w("FrekiHub", "HyperIsland unavailable; using session notification", error)
+        }
+    }
+
+    companion object {
+        /** Persist the confirmed end before stopping the timer; never end a newer session. */
+        @Synchronized fun confirmEnd(context: android.content.Context, expectedId: String, note: String): Boolean {
+            val prefs = context.getSharedPreferences("session", MODE_PRIVATE)
+            if (prefs.getString("id", null) != expectedId || prefs.contains("pendingId")) return false
+            if (!prefs.edit().putString("pendingId", expectedId)
+                    .putLong("pendingEnd", System.currentTimeMillis())
+                    .putString("pendingNote", note.trim()).remove("id").commit()) return false
+            Automation.prefs(context).edit().remove("activeRule").commit()
+            context.stopService(Intent(context, SessionService::class.java))
+            return true
         }
     }
 }

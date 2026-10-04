@@ -100,6 +100,7 @@ object RuleProgram {
         }
         val connectivity = c.getSystemService(android.net.ConnectivityManager::class.java)
         values.put("device.connected", connectivity.activeNetwork != null)
+        values.put("device.overlay_allowed", android.provider.Settings.canDrawOverlays(c))
         values.put("device.orientation", if (c.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) "landscape" else "portrait")
         val audio = c.getSystemService(android.media.AudioManager::class.java)
         val maximum = audio.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)

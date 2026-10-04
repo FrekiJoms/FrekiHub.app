@@ -14,6 +14,7 @@ abstract final class RuleCatalog {
     'notifications.exact_allowed',
     'device.charging',
     'device.connected',
+    'device.overlay_allowed',
     'app.foreground',
     'map.trace_enabled',
   };
@@ -102,6 +103,8 @@ abstract final class RuleCatalog {
     'device.battery': 'Battery percentage',
     'device.charging': 'Device is charging',
     'device.connected': 'A network interface is connected',
+    'device.overlay_allowed':
+        'Android permits confirmation over other apps (live native value)',
     'device.orientation': 'portrait or landscape',
     'device.volume': 'Media volume percentage',
     'device.ringer_mode': 'normal, vibrate or silent',

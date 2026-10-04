@@ -3,6 +3,22 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Overlay permission is a discoverable boolean native field', () {
+    expect(RuleCatalog.fields, contains('device.overlay_allowed'));
+    expect(RuleCatalog.booleanFields, contains('device.overlay_allowed'));
+    expect(
+      RuleCompiler.compile(
+        'target == app { if (data.get("device.overlay_allowed") == true) { app.toast("Overlay ready"); } }',
+      )['needsLocation'],
+      false,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == app { if (data.get("device.overlay_allowed") == "yes") { app.toast("Invalid"); } }',
+      ),
+      throwsFormatException,
+    );
+  });
   test('Conditional system notifications combine location and time', () {
     final program = RuleCompiler.compile('''
 target == notifications {

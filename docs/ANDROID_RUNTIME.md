@@ -9,7 +9,7 @@ The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 
 | Component | Responsibility |
 | --- | --- |
 | `MainActivity` | Flutter method channel, posting/location access prompts, native settings intents, sound effects, reminder restore on resume |
-| `SessionService` | Sticky foreground session chronometer, clock-out action and optional Xiaomi HyperIsland; both notification and island display `Session In progress` |
+| `SessionService` | Sticky foreground session chronometer, confirmed clock-out and optional Xiaomi HyperIsland; both notification and island display `Session In progress` |
 | `Automation` | Config/snapshot separation, geofences, rule transition ownership, location capture, durable events |
 | `ZoneReceiver` | Receives geofence enter/exit and evaluates the owning rule |
 | `LocationLogJob` | Persisted approximately fifteen-minute location/recheck and rule-refresh job |
@@ -46,6 +46,7 @@ The manifest declares internet/network state, fine/coarse/background location, n
 - Purchase scanning requires notification-listener access plus explicit package selection. This differs from permission to post FrekiHub notifications.
 - Android 13+ notification posting uses its own permission prompt.
 - Exact reminder scheduling checks Alarms & reminders access and falls back to inexact alarms if denied/revoked.
+- Cross-app session confirmation requires Android Display over other apps access; it is opt-in and checked before each overlay. Android/system or protected surfaces can control whether overlays appear.
 - Choosing a channel sound is an OS setting, not the app's interaction sound toggle.
 - Viewing historical Map records needs internet for tiles, not a new location permission or tracking toggle.
 
@@ -57,7 +58,11 @@ Flutter starts the native timer with ID/start/day/kind/note. `SessionService` po
 
 On supported Xiaomi devices, HyperIsland ToolKit 0.4.0 attaches its resources/extras to the same notification, including count-up display and clock-out. Failure falls back to the standard notification and logs a warning. The vendor/system permission and actual HyperOS rendering remain device-dependent.
 
-Clock-out records `pendingId`/`pendingEnd`, removes the active native ID/rule owner and stops the foreground notification. Flutter reads/applies/acknowledges the pending end after a successful database write. A pending end can exist before an automatic-start event has reached SQLite; keep replay order handling intact.
+Notification and Dynamic Island Clock out actions launch the non-exported, translucent `SessionConfirmationActivity` directly through an activity PendingIntent (HyperIsland intent type 1), capturing the session ID. Without overlay access, a themed permission hint explains the purpose and opens Android Display over other apps settings only on Allow overlay. Denial, Back or Keep running leave the timer active. Settings also exposes a shared Flutter permission hint with Allow overlay/Not now or Manage access when already granted.
+
+With `SYSTEM_ALERT_WINDOW` access, a native `TYPE_APPLICATION_OVERLAY` confirmation appears over the current app without starting a Flutter engine or opening SQLite. It has live elapsed time, an editable note, fixed actions and a scrolling body capped at 70% of available screen height. Native cards reuse one renderer for permission and confirmation, honor theme/system animation scaling, and retain keyboard overlay behavior. Note drafts stay local and survive activity recreation; dismissal discards them. Prefill uses the latest reconciled running-session snapshot or the cached native note.
+
+Only End session checks the captured ID, commits `pendingId`/`pendingEnd`/`pendingNote`, removes the active native ID/rule owner and stops the service/notification. A stale or repeated confirmation cannot end a newer session. Flutter applies note/end together only to a still-running matching record, acknowledges after commit and preserves legacy payloads without a note. The same replay-safe helper runs after a queued automatic start is imported. SQLite saving remains deferred while Flutter is closed. Automated rule clock-outs retain their existing behavior.
 
 ## Location and rule evaluation
 

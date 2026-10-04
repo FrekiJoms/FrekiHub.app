@@ -84,7 +84,7 @@ abstract final class AutomationSync {
     final data = await db.readAll();
     await db.transaction(() async {
       if (pending != null) {
-        await db.clockOut(pending['id'] as String, at: pending['ended'] as int);
+        await NativeSession.applyPending(db, pending);
       }
       for (final event in events) {
         final id = event['id'] as String;
@@ -194,10 +194,7 @@ abstract final class AutomationSync {
         if (action == 'auto_clock_in' &&
             pending != null &&
             event['sessionId'] == pending['id']) {
-          await db.clockOut(
-            pending['id'] as String,
-            at: pending['ended'] as int,
-          );
+          await NativeSession.applyPending(db, pending);
         }
         if (data.prefs['activityLogging'] == 'true') {
           if (action == 'auto_clock_in') {

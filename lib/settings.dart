@@ -1,5 +1,69 @@
 part of 'screens.dart';
 
+class OverlayPermissionHint extends StatelessWidget {
+  final bool allowed;
+  const OverlayPermissionHint({super.key, required this.allowed});
+  @override
+  Widget build(BuildContext context) => PanelContent(
+    header: const PanelHeading(
+      title: 'Confirm wherever you are',
+      leading: Chrome(
+        padding: EdgeInsets.all(10),
+        child: Icon(LucideIcons.layers, size: 20),
+      ),
+    ),
+    footer: PanelActions(
+      children: [
+        AppButton(
+          label: allowed ? 'Manage access' : 'Allow overlay',
+          onPressed: () => Navigator.pop(context, true),
+        ),
+        AppButton(
+          label: 'Not now',
+          secondary: true,
+          onPressed: () => Navigator.pop(context, false),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          allowed
+              ? 'Overlay access is enabled.'
+              : 'A final check, without leaving your current app.',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 20),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(LucideIcons.notebookPen),
+          title: Text('Review before ending'),
+          subtitle: Text(
+            'Clock out opens a confirmation and an editable session note over your current app.',
+          ),
+        ),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(LucideIcons.timer),
+          title: Text('You stay in control'),
+          subtitle: Text(
+            'It appears only when you tap Clock out. Your timer keeps running until you confirm.',
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'On the next screen, ${allowed ? 'manage' : 'enable'} Display over other apps for FrekiHub.',
+          style: TextStyle(
+            fontSize: 12,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 class SettingsScreen extends ConsumerStatefulWidget {
   final AppData data;
   const SettingsScreen({super.key, required this.data});
@@ -21,6 +85,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> manage(String key, List<String> initial) =>
       panel(context, _ManageList(setting: key, initial: initial));
+  Future<void> overlayPermission() => guarded(context, () async {
+    final allowed =
+        await NativeSession.channel.invokeMethod<bool>('overlayAllowed') ??
+        false;
+    if (!mounted) return;
+    final accepted = await panel<bool>(
+      context,
+      OverlayPermissionHint(allowed: allowed),
+    );
+    if (accepted == true && mounted) {
+      await NativeSession.channel.invokeMethod('overlayPermission');
+    }
+  });
   Future<void> notificationSounds() async {
     final category = await panel<String>(
       context,
@@ -240,6 +317,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
                 trailing: const Icon(LucideIcons.chevronRight, size: 18),
                 onTap: withFeedback(notificationSounds),
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.layers),
+                title: const Text('Confirm over other apps'),
+                subtitle: const Text(
+                  'Review your session before clocking out from Dynamic Island',
+                ),
+                trailing: const Icon(LucideIcons.chevronRight, size: 18),
+                onTap: withFeedback(overlayPermission),
               ),
             ],
           ),

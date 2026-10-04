@@ -100,6 +100,8 @@ An event has `id`, `time`, `action`, human-readable `title`, optional `location`
 
 Native automatic session IDs can be pending before SQLite has the session. Reconciliation handles a notification clock-out arriving around that start. Imported purchase IDs and unique occurrences prevent duplicate expenses. Generic insert logs are replaced with native event logs to preserve precise timestamps and position provenance. Logging may be off without disabling a purchase or session action.
 
+Cross-app confirmed endings add an optional `pendingNote` beside native `pendingId`/`pendingEnd`. Flutter writes that note only to the captured still-running record and ends it in the same transaction; replay cannot alter an already-ended note. Legacy payloads without a note preserve existing text. Queued automatic starts receive the note/end after import. All pending fields clear only after database commit.
+
 Import executes inside a database transaction. Only after commit does Flutter post receipts and acknowledge events/pending clock-out. A failed import must not acknowledge data as saved. Receipt delivery failure leaves `purchaseNotice:*` for retry; it does not undo the saved entry. Do not move confirmation before commit.
 
 ## Backup, restore and reset

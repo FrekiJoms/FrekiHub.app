@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <application
         android:label="FrekiHub"
         android:name="${applicationName}"
@@ -27,6 +28,10 @@
         <service android:name=".SessionService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User initiated ongoing OJT session chronometer with clock-out action" />
         </service>
+        <activity android:name=".SessionConfirmationActivity" android:exported="false"
+            android:theme="@style/SessionOverlayTheme" android:excludeFromRecents="true"
+            android:taskAffinity="com.frekihub.freki_hub.session_confirmation"
+            android:launchMode="singleTop" android:windowSoftInputMode="adjustNothing" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -49,7 +49,13 @@ void main() {
               case 'automationEvents':
                 return jsonEncode(queued ? events : []);
               case 'pending':
-                return pending ? {'id': 'first', 'ended': 1790906400000} : null;
+                return pending
+                    ? {
+                        'id': 'first',
+                        'ended': 1790906400000,
+                        'note': 'Edited in overlay',
+                      }
+                    : null;
               case 'acknowledge':
                 pending = false;
                 return null;
@@ -74,6 +80,10 @@ void main() {
         1790906400000,
       );
       expect(data.running?.id, 'second');
+      expect(
+        data.sessions.firstWhere((s) => s.id == 'first').note,
+        'Edited in overlay',
+      );
       await AutomationSync.reconcile(db);
       expect((await db.readAll()).sessions.length, 2);
     },

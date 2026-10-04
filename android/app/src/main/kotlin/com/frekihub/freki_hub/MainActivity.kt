@@ -34,6 +34,11 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             when (call.method) {
+                "overlayAllowed" -> result.success(Settings.canDrawOverlays(this))
+                "overlayPermission" -> {
+                    startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                    result.success(null)
+                }
                 "notificationSoundSettings" -> {
                     try { NotificationSoundSettings.open(this, call.arguments as String); result.success(null) }
                     catch (e: Exception) { result.error("notification_sound", e.message, null) }
@@ -100,8 +105,8 @@ class MainActivity : FlutterActivity() {
                     } else { startTimer(data); result.success(true) }
                 }
                 "stop" -> { stopService(Intent(this, SessionService::class.java)); prefs.edit().remove("id").commit(); Automation.prefs(this).edit().remove("activeRule").commit(); result.success(null) }
-                "pending" -> { val id = prefs.getString("pendingId", null); result.success(if (id == null) null else mapOf("id" to id, "ended" to prefs.getLong("pendingEnd", 0))) }
-                "acknowledge" -> { prefs.edit().remove("pendingId").remove("pendingEnd").commit(); result.success(null) }
+                "pending" -> { val id = prefs.getString("pendingId", null); result.success(if (id == null) null else mapOf("id" to id, "ended" to prefs.getLong("pendingEnd", 0)).let { if (prefs.contains("pendingNote")) it + ("note" to prefs.getString("pendingNote", "")) else it }) }
+                "acknowledge" -> { prefs.edit().remove("pendingId").remove("pendingEnd").remove("pendingNote").commit(); result.success(null) }
                 else -> result.notImplemented()
             }
         }

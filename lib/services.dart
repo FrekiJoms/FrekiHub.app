@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:drift/drift.dart' hide Column;
 
 import 'data.dart';
 
@@ -44,6 +45,20 @@ abstract final class NativeSession {
 
   static Future<void> acknowledge() =>
       channel.invokeMethod<void>('acknowledge');
+
+  /// Legacy actions omit the note; overlay drafts apply only to a running record.
+  static Future<void> applyPending(
+    AppDatabase db,
+    Map<String, dynamic> pending,
+  ) => db.transaction(() async {
+    final id = pending['id'] as String;
+    if (pending['note'] is String) {
+      await (db.update(db.sessions)
+            ..where((s) => s.id.equals(id) & s.ended.isNull()))
+          .write(SessionsCompanion(note: Value(pending['note'] as String)));
+    }
+    await db.clockOut(id, at: pending['ended'] as int);
+  });
 }
 
 abstract final class FeedbackSound {
