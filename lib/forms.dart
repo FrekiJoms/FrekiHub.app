@@ -94,18 +94,22 @@ class _SessionFormState extends ConsumerState<SessionForm> {
     });
     try {
       final db = ref.read(databaseProvider);
-      await db
-          .into(db.sessions)
-          .insertOnConflictUpdate(
-            Session(
-              id: widget.session?.id ?? newId(),
-              day: dayKey(day),
-              kind: kind,
-              started: start.millisecondsSinceEpoch,
-              ended: end?.millisecondsSinceEpoch,
-              note: note.text.trim(),
+      await saveWithLocation(
+        context,
+        db,
+        () => db
+            .into(db.sessions)
+            .insertOnConflictUpdate(
+              Session(
+                id: widget.session?.id ?? newId(),
+                day: dayKey(day),
+                kind: kind,
+                started: start.millisecondsSinceEpoch,
+                ended: end?.millisecondsSinceEpoch,
+                note: note.text.trim(),
+              ),
             ),
-          );
+      );
       if (mounted) {
         dataToast(
           context,
@@ -262,21 +266,25 @@ class _EntryFormState extends ConsumerState<EntryForm> {
         busy = true;
       });
       final db = ref.read(databaseProvider);
-      await db
-          .into(db.entries)
-          .insertOnConflictUpdate(
-            Entry(
-              id: widget.entry?.id ?? newId(),
-              day: day,
-              kind: kind,
-              amount: minor,
-              currency: currency,
-              category: category,
-              method: method,
-              note: note.text.trim(),
-              occurrence: widget.entry?.occurrence,
+      await saveWithLocation(
+        context,
+        db,
+        () => db
+            .into(db.entries)
+            .insertOnConflictUpdate(
+              Entry(
+                id: widget.entry?.id ?? newId(),
+                day: day,
+                kind: kind,
+                amount: minor,
+                currency: currency,
+                category: category,
+                method: method,
+                note: note.text.trim(),
+                occurrence: widget.entry?.occurrence,
+              ),
             ),
-          );
+      );
       if (mounted) {
         dataToast(
           context,

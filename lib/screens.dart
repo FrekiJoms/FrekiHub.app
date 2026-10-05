@@ -49,6 +49,32 @@ part 'syntax_builder.dart';
 part 'controls.dart';
 part 'rule_editor.dart';
 
+Future<T> saveWithLocation<T>(
+  BuildContext context,
+  AppDatabase db,
+  Future<T> Function() save,
+) => RecordLocation.commit(
+  db,
+  save,
+  permission: () async =>
+      context.mounted &&
+      await PermissionHints.request<bool>(
+            context,
+            'locationPermission',
+            hint: const PermissionHintSpec(
+              title: 'Save where this happened',
+              intro: 'Attach your current position to this activity.',
+              benefit: 'Find your records on Map',
+              detail: 'Session actions and Finance saves can include one fresh location sample.',
+              control: 'Declining still saves your record without a location. Activity logging and location must both be enabled.',
+              next: 'Allow precise location while using the app.',
+              action: 'Allow precise location',
+              icon: LucideIcons.mapPin,
+            ),
+          ) ==
+          true,
+);
+
 Future<void> guarded(
   BuildContext c,
   Future<void> Function() operation, {

@@ -1,5 +1,11 @@
 # FrekiHub application audit
 
+## Manual record location persistence — 2026-10-05
+
+Confirmed: manual Home/form/Finance writes previously never requested a fix. Triggers copied a periodic native cache, checked the label against wall-clock time but retained coordinates unconditionally, and Finance updates had no log. Resolved in source with shared opt-in foreground capture, atomic sample/record writes, matching label/position freshness against the event timestamp and meaningful Finance-update logs. Version 3 replaces triggers without modifying existing records/logs. Native event replay retains original snapshots and cannot regress the cache with old/invalid samples. Map still reads saved logs; it does not fabricate missing historical locations. Activity logging remains a separate opt-in requirement.
+
+Verification: 25 targeted checks passed across record-location, migration, session/reconciliation, purchase receipts, data feedback and Home notes. Static analysis of affected source/tests passed; repository-wide analysis separately reported four existing Map lint infos. Physical fix availability and foreground clock/Finance actions require device review; ADB listed no connected phone. Legacy cross-app pending clock-outs without position payloads cannot request their historical position during later reconciliation; only a cached sample matching the event time can attach.
+
 ## Shared in-app skeleton loading policy — 2026-10-04
 
 SkeletonValue/SkeletonList now cover non-startup loading: Map status only, Activity logs before data/first activity snapshot, Syntax builder records, form save actions, Home clock actions, syntax location/save/Run, active Settings export/restore and list-edit action slots. Preloaded Map dates and static section labels stay visible. Placeholders preserve value/action geometry, prevent interaction, hide stale semantics, announce the specific operation and pulse only while pending; reduced motion is static. Settings uses transient action/item identifiers so unrelated actions remain readable. App launch keeps StartupLoading, and determinate Finance charts retain their real progress values. No saved setting, database schema, rule syntax or native source change was added.

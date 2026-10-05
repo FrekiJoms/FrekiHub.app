@@ -123,7 +123,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(driftDatabase(name: 'frekihub'));
   AppDatabase.forTesting(super.executor);
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
@@ -134,7 +134,7 @@ class AppDatabase extends _$AppDatabase {
       await createActivityLogs();
     },
     onUpgrade: (m, from, to) async {
-      if (from < 2) await createActivityLogs();
+      if (from < 3) await createActivityLogs();
     },
   );
   Future<void> createActivityLogs() async {
@@ -146,21 +146,35 @@ class AppDatabase extends _$AppDatabase {
     );
     const enabled =
         "COALESCE((SELECT value FROM preferences WHERE key = 'activityLogging'), 'false') = 'true'";
-    const place =
-        "CASE WHEN CAST(strftime('%s','now') AS INTEGER) * 1000 - CAST(COALESCE((SELECT value FROM preferences WHERE key = 'locationSampleTime'), '0') AS INTEGER) BETWEEN -1000 AND 120000 THEN COALESCE((SELECT value FROM preferences WHERE key = 'locationName'), 'Location unavailable') ELSE 'Location unavailable' END";
-    const position =
-        "COALESCE((SELECT value FROM preferences WHERE key = 'locationDetails'), '')";
-    for (final event in ['session_start', 'session_end', 'transaction']) {
-      final session = event != 'transaction';
+    for (final event in [
+      'session_start',
+      'session_end',
+      'transaction',
+      'transaction_update',
+    ]) {
+      final session = event.startsWith('session');
       final table = session ? 'sessions' : 'entries';
+      final update = event == 'transaction_update';
       final when = event == 'session_end'
           ? 'AFTER UPDATE OF ended ON sessions WHEN OLD.ended IS NULL AND NEW.ended IS NOT NULL AND $enabled'
+          : update
+          ? 'AFTER UPDATE ON entries WHEN $enabled AND (OLD.day != NEW.day OR OLD.kind != NEW.kind OR OLD.amount != NEW.amount OR OLD.currency != NEW.currency OR OLD.category != NEW.category OR OLD.method != NEW.method OR OLD.note != NEW.note)'
           : 'AFTER INSERT ON $table WHEN $enabled';
       final time = event == 'session_start'
           ? 'NEW.started'
           : event == 'session_end'
           ? 'NEW.ended'
           : "CAST(strftime('%s','now') AS INTEGER) * 1000";
+      const payload =
+          "COALESCE((SELECT value FROM preferences WHERE key = 'locationDetails'), '')";
+      final valid =
+          "CASE WHEN json_valid($payload) THEN json_type($payload, '\$.lat') IN ('real', 'integer') AND json_type($payload, '\$.lng') IN ('real', 'integer') AND json_extract($payload, '\$.lat') BETWEEN -90 AND 90 AND json_extract($payload, '\$.lng') BETWEEN -180 AND 180 AND $time - json_extract($payload, '\$.locationTime') BETWEEN -1000 AND 120000 ELSE 0 END";
+      final fresh =
+          "COALESCE((SELECT value FROM preferences WHERE key = 'locationEnabled'), 'false') = 'true' AND $time - CAST(COALESCE((SELECT value FROM preferences WHERE key = 'locationSampleTime'), '0') AS INTEGER) BETWEEN -1000 AND 120000 AND ($valid)";
+      final place =
+          "CASE WHEN $fresh THEN COALESCE((SELECT value FROM preferences WHERE key = 'locationName'), 'Recorded location') ELSE 'Location unavailable' END";
+      final position =
+          "CASE WHEN $fresh THEN (SELECT value FROM preferences WHERE key = 'locationDetails') ELSE '' END";
       final action = event == 'session_start'
           ? "'clock_in'"
           : event == 'session_end'
@@ -170,12 +184,17 @@ class AppDatabase extends _$AppDatabase {
           ? "'Clocked in'"
           : event == 'session_end'
           ? "'Clocked out'"
+          : update
+          ? "'Updated ' || NEW.kind"
           : "CASE NEW.kind WHEN 'expense' THEN 'Purchased ' || CASE WHEN NEW.note != '' THEN NEW.note ELSE NEW.category END WHEN 'income' THEN 'Received income' ELSE 'Saved money' END";
       final details = session
           ? "json_object('kind', NEW.kind, 'note', NEW.note, 'position', $position)"
           : "json_object('currency', NEW.currency, 'amount', NEW.amount, 'method', NEW.method, 'note', NEW.note, 'position', $position)";
+      final id =
+          "'$event:' || NEW.id${update ? " || ':' || hex(randomblob(8))" : ''}";
+      await customStatement('DROP TRIGGER IF EXISTS log_$event');
       await customStatement(
-        "CREATE TRIGGER IF NOT EXISTS log_$event $when BEGIN INSERT OR IGNORE INTO activity_logs VALUES ('$event:' || NEW.id, $time, $action, $title, $place, $details); END",
+        "CREATE TRIGGER log_$event $when BEGIN INSERT OR IGNORE INTO activity_logs VALUES ($id, $time, $action, $title, $place, $details); END",
       );
     }
   }

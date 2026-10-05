@@ -29,25 +29,29 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         await guarded(
                           context,
                           () async {
-                            await db.transaction(() async {
-                              await db
-                                  .into(db.entries)
-                                  .insert(
-                                    Entry(
-                                      id: newId(),
-                                      day: p.day,
-                                      kind: p.rule.kind,
-                                      amount: p.amount,
-                                      currency: p.rule.currency,
-                                      category: p.rule.category,
-                                      method: p.rule.method,
-                                      note: p.rule.title,
-                                      occurrence: p.key,
-                                    ),
-                                    mode: InsertMode.insertOrIgnore,
-                                  );
-                              await db.pref('status:${p.key}', 'planned');
-                            });
+                            await saveWithLocation(
+                              context,
+                              db,
+                              () => db.transaction(() async {
+                                await db
+                                    .into(db.entries)
+                                    .insert(
+                                      Entry(
+                                        id: newId(),
+                                        day: p.day,
+                                        kind: p.rule.kind,
+                                        amount: p.amount,
+                                        currency: p.rule.currency,
+                                        category: p.rule.category,
+                                        method: p.rule.method,
+                                        note: p.rule.title,
+                                        occurrence: p.key,
+                                      ),
+                                      mode: InsertMode.insertOrIgnore,
+                                    );
+                                await db.pref('status:${p.key}', 'planned');
+                              }),
+                            );
                             if (mounted) {
                               Navigator.pop(context);
                             }

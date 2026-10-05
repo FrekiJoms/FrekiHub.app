@@ -1,10 +1,65 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' hide Column;
 
 import 'data.dart';
+import 'map_records.dart';
+
+/// Foreground record capture. Native replay keeps its original event sample.
+abstract final class RecordLocation {
+  static Future<T> commit<T>(
+    AppDatabase db,
+    Future<T> Function() save, {
+    required Future<bool> Function() permission,
+  }) async {
+    final prefs = await db.readPreferences();
+    if (prefs['activityLogging'] != 'true' ||
+        prefs['locationEnabled'] != 'true') {
+      return db.transaction(save);
+    }
+    MapUserLocation? fix;
+    if (prefs['activityLogging'] == 'true' &&
+        prefs['locationEnabled'] == 'true') {
+      try {
+        if (await permission()) {
+          final raw = await NativeSession.channel
+              .invokeMethod<String>('mapCurrentLocation')
+              .timeout(const Duration(seconds: 25));
+          fix = MapUserLocation.parse(raw, DateTime.now());
+        }
+      } on PlatformException {
+        // Location is optional: a failed fix must not discard the record.
+      } on MissingPluginException {
+        // Unsupported previews still save records.
+      } on TimeoutException {
+        // A bounded request never blocks saving indefinitely.
+      }
+    }
+    return db.transaction(() async {
+      // Never borrow a previous action's coordinates when this request fails.
+      await db.pref(
+        'locationName',
+        fix == null ? 'Location unavailable' : 'Recorded location',
+      );
+      await db.pref('locationSampleTime', fix?.sampled ?? 0);
+      await db.pref(
+        'locationDetails',
+        fix == null
+            ? ''
+            : jsonEncode({
+                'lat': fix.lat,
+                'lng': fix.lng,
+                'accuracy': fix.accuracy,
+                'locationTime': fix.sampled,
+              }),
+      );
+      return save();
+    });
+  }
+}
 
 abstract final class NativeSession {
   static const channel = MethodChannel('frekihub/session');

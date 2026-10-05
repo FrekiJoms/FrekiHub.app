@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'data.dart';
 import 'services.dart';
 import 'rule_language.dart';
+import 'map_records.dart';
 
 import 'package:flutter/widgets.dart';
 
@@ -82,6 +83,8 @@ abstract final class AutomationSync {
       return;
     }
     final data = await db.readAll();
+    var cachedSample =
+        int.tryParse(data.prefs['locationSampleTime'] ?? '') ?? 0;
     await db.transaction(() async {
       if (pending != null) {
         await NativeSession.applyPending(db, pending);
@@ -90,13 +93,14 @@ abstract final class AutomationSync {
         final id = event['id'] as String;
         final action = event['action'];
         final time = DateTime.fromMillisecondsSinceEpoch(event['time'] as int);
-        if (event['lat'] != null && event['location'] != null) {
+        final fix = MapUserLocation.parse(event, DateTime.now());
+        if (fix != null &&
+            fix.sampled >= cachedSample &&
+            event['location'] != null) {
+          cachedSample = fix.sampled;
           await db.pref('locationName', event['location']);
           await db.pref('locationDetails', jsonEncode(event));
-          await db.pref(
-            'locationSampleTime',
-            event['locationTime'] ?? event['time'],
-          );
+          await db.pref('locationSampleTime', fix.sampled);
         }
         if (action == 'auto_clock_in') {
           final sessionId = event['sessionId'] as String;
@@ -208,13 +212,6 @@ abstract final class AutomationSync {
             ]);
           }
           await db.addActivity(event);
-        }
-        if (action == 'location') {
-          await db.pref(
-            'locationName',
-            event['location'] ?? 'Location unavailable',
-          );
-          await db.pref('locationDetails', jsonEncode(event));
         }
         acknowledged.add(id);
       }

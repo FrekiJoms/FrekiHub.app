@@ -62,7 +62,7 @@ flutter analyze
 | Home note autosave | `test/home_note_test.dart` (batched writes, cursor changes, IME composition, blur/navigation flush, pending clock-out and ended-session guard) |
 | Committed data-action feedback | `test/data_feedback_test.dart` (in-memory session save/edit/delete, cancellation, notice surviving form dismissal, pending/failed operations never announcing success) |
 | Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
-| Activity storage/backup/native session import | `test/activity_test.dart` |
+| Activity storage/backup/native session import | `test/activity_test.dart`; `test/record_location_test.dart` covers opt-in foreground capture, session/Finance positions, failed/denied fixes, backdating, Finance updates, rollback and trigger migration |
 | Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |
 | Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, completion and saved enabled flags) |

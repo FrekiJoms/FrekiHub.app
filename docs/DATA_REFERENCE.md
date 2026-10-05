@@ -4,7 +4,7 @@ Reviewed on 2026-10-02. Schema/calculations live in `lib/data.dart`; `lib/data.g
 
 ## Storage and schema
 
-Drift opens the local database named `frekihub`, schema version **2**. Version 2 adds a manually created `activity_logs` table and triggers. `sessions`, `entries`, `rules` and `preferences` are typed Drift tables. Keep raw-table creation/migration, export/restore and reactive notifications aligned when changing activity storage.
+Drift opens the local database named `frekihub`, schema version **3**. Version 2 added `activity_logs`; version 3 replaces its triggers to align location labels/positions with event timestamps and log meaningful Finance edits. Existing records and logs remain intact. `sessions`, `entries`, `rules` and `preferences` are typed Drift tables. Keep raw-table creation/migration, export/restore and reactive notifications aligned when changing activity storage.
 
 | Table | Columns / representation | Contract |
 | --- | --- | --- |
@@ -48,9 +48,11 @@ Do not apply a blanket 24-hour millisecond offset when implementing calendar rec
 
 ## Activity logging and location provenance
 
-SQLite triggers run only when `activityLogging == "true"`. They record session insert, the first null-to-ended transition and entry insert. They do not cover every edit/delete, selector tap or setting change. Titles begin with actions such as Clocked in, Clocked out, Purchased, Received income and Saved money.
+SQLite triggers run only when `activityLogging == "true"`. They record session insert, the first null-to-ended transition, entry insert and meaningful changes to an entry's day/kind/amount/currency/category/method/note. Unchanged upserts, session note autosaves, deletions, navigation and setting changes do not create these logs. Titles include Clocked in, Clocked out, Purchased, Received income, Saved money and Updated expense/income/savings.
 
-Triggers retain a nested `position` JSON string from `locationDetails`. Human-readable location is available only if the cached sample is fresh relative to the trigger's current clock. A backdated record must not be assigned today's sample without checking its actual event timestamp.
+Home clock actions, session forms, Finance forms and Mark complete & record share `RecordLocation.commit` through `saveWithLocation`. With Activity logging and Location both enabled, the shared permission hint gates a bounded foreground fix. The validated snapshot and record commit together; failed/denied fixes still save the record unlocated and cannot borrow a previous action's sample. With either opt-in disabled, no fix or permission request occurs. Coordinates live in `activity_logs.details`, not session/entry columns; disabling Activity logging therefore leaves no Map history even when Android location is enabled.
+
+Triggers retain a nested `position` JSON string only when Location is enabled, coordinates are valid, and the sample is within two minutes before / one second after the action timestamp. Both the label and position use the same gate. Session start/end use their actual epoch time; Finance logs use commit time (the selected day remains record metadata). Current fixes cannot locate backdated session actions. New foreground fixes use the label Recorded location; no address is inferred. Native import retains original event positions, and only valid, fresh, newer samples update the shared cache. Historical missing positions are never reconstructed from today's GPS. Legacy pending cross-app clock-out payloads do not request a new fix during replay; only an already cached, time-compatible sample can attach.
 
 Native events can put `lat`, `lng`, `accuracy` and `locationTime` directly in their JSON. `MapRecord.parse` accepts direct or nested position maps/JSON, rejects invalid coordinates and enforces sample freshness relative to event time where provided. It never substitutes a rule's configured center for an actual recorded sample.
 

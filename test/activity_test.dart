@@ -143,8 +143,14 @@ void main() {
         );
     expect(await db.customSelect('SELECT * FROM activity_logs').get(), isEmpty);
     await db.pref('activityLogging', true);
+    await db.pref('locationEnabled', true);
     await db.pref('locationName', 'Office');
-    await db.pref('locationSampleTime', DateTime.now().millisecondsSinceEpoch);
+    final sample = DateTime.now().millisecondsSinceEpoch;
+    await db.pref('locationSampleTime', sample);
+    await db.pref(
+      'locationDetails',
+      jsonEncode({'lat': 14.6, 'lng': 121.0, 'locationTime': sample}),
+    );
     await db.clockOut('manual', at: 1790906400000);
     final purchase = Entry(
       id: 'purchase:ref123',

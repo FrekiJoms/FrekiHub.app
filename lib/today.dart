@@ -166,18 +166,22 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
       if (!mounted) return;
       final db = ref.read(databaseProvider);
       if (running == null) {
-        await db.clockIn(note.text.trim());
+        await saveWithLocation(context, db, () => db.clockIn(note.text.trim()));
         HapticFeedback.mediumImpact();
         unawaited(
           FeedbackSound.play(widget.data.prefs['sound'] == 'true', 'clock-in'),
         );
       } else {
-        await db.transaction(() async {
-          await (db.update(db.sessions)
-                ..where((s) => s.id.equals(running.id) & s.ended.isNull()))
-              .write(SessionsCompanion(note: Value(endingNote)));
-          await db.clockOut(running.id);
-        });
+        await saveWithLocation(
+          context,
+          db,
+          () => db.transaction(() async {
+            await (db.update(db.sessions)
+                  ..where((s) => s.id.equals(running.id) & s.ended.isNull()))
+                .write(SessionsCompanion(note: Value(endingNote)));
+            await db.clockOut(running.id);
+          }),
+        );
         HapticFeedback.mediumImpact();
         unawaited(
           FeedbackSound.play(widget.data.prefs['sound'] == 'true', 'clock-out'),
