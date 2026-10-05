@@ -1,5 +1,11 @@
 # FrekiHub application audit
 
+## Full scan — 2026-10-05
+
+See [Full application scan](FULL_SCAN_2026-10-05.md) for current source evidence, severity and reproduction details. Full Flutter suite: **97 passed**; native reminder clock check: **10 passed**; two synthetic probes confirmed a percentage-projection/restore limit defect and accepted malformed log timestamps. Flutter analysis reported four Map lint infos, with no error/warning/deprecated Dart API diagnostics. Kotlin compilation passed; Android lint failed with two ignored local.properties path-escaping errors and 101 warnings. Deprecated AGP compatibility flags, native legacy branches and outdated packages were identified. The latest foreground location path also delays Home action timestamps until acquisition completes. No app behavior or phone records were changed in this scan.
+
+Current corrections to older entries: Map stream recovery clears errors and checks them before skipping unchanged rows; Finance updates are now logged. F12 refers to `LogsSheet` in `lib/logs.dart`, where stream errors leave initial skeletons or stale data without Retry. Old `lib/activity.dart` references predate the Logs/Syntax split. The app's OS backup policy is implicit; the earlier no-cloud-copy wording does not establish exclusion from Android system backup. Remaining findings and device gaps are detailed in the new report.
+
 ## Manual record location persistence — 2026-10-05
 
 Confirmed: manual Home/form/Finance writes previously never requested a fix. Triggers copied a periodic native cache, checked the label against wall-clock time but retained coordinates unconditionally, and Finance updates had no log. Resolved in source with shared opt-in foreground capture, atomic sample/record writes, matching label/position freshness against the event timestamp and meaningful Finance-update logs. Version 3 replaces triggers without modifying existing records/logs. Native event replay retains original snapshots and cannot regress the cache with old/invalid samples. Map still reads saved logs; it does not fabricate missing historical locations. Activity logging remains a separate opt-in requirement.
