@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
@@ -138,7 +139,7 @@ class _AppShellState extends ConsumerState<AppShell>
           .catchError((Object _) {}),
     );
     if (startupReady && state == AppLifecycleState.resumed) {
-      unawaited(reconcile());
+      unawaited(reconcile().then((_) => mounted ? retrySessionTimer() : null));
     }
   }
 
@@ -178,6 +179,21 @@ class _AppShellState extends ConsumerState<AppShell>
           error: true,
         );
       }
+    }
+  }
+
+  Future<void> retrySessionTimer() async {
+    try {
+      final status = await AutomationSync.status();
+      if (!mounted) return;
+      final running = ref.read(dataProvider).value?.running;
+      if (mounted && running != null && status['timer_available'] == false) {
+        await syncSessionTimer(running);
+      }
+    } on PlatformException {
+      // Reconciliation retains its separate retry/error presentation.
+    } on MissingPluginException {
+      // Native timer delivery is unavailable in desktop previews.
     }
   }
 

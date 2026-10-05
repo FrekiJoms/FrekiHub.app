@@ -90,7 +90,7 @@ Map context includes `map.total_count` for all logs in its selected timeline and
 
 ## Native event contract and reconciliation
 
-An event has `id`, `time`, `action`, human-readable `title`, optional `location` and action-specific metadata. Android persists a JSON array in automation SharedPreferences until Flutter acknowledges IDs. New events must be replay-safe; native emission can precede a Flutter commit by hours or days.
+An event has `id`, `time`, `action`, human-readable `title`, optional `location` and action-specific metadata. Android persists events in segmented runtime SharedPreferences until Flutter acknowledges their committed IDs; see [Android runtime](ANDROID_RUNTIME.md). New events must be replay-safe; native emission can precede a Flutter commit by hours or days.
 
 | Action | Import behavior / extra fields |
 | --- | --- |
@@ -114,8 +114,20 @@ The current JSON envelope is `format: "frekihub"`, `version: 1`, plus `sessions`
 
 Export includes all preferences, including any pending receipt/toast records, and full logs. Native unimported events and Android-owned channel sounds are not part of the SQLite export. Therefore export is not guaranteed to capture everything queued in Android while Flutter has not reconciled.
 
-Restore validates typed records, supported currency/settings, canonical dates, maximum amounts, rule bounds and one-running-session state before replacing data in one transaction. Raw activity log rows rely partly on SQL constraints; their JSON content is not comprehensively schema-validated. Failure rolls back. The Settings restore path additionally resets native state and reconfigures automation. Calling `db.restore` alone does not perform all platform cleanup.
+Restore validates typed records, supported currency/settings, canonical dates, maximum amounts, rule bounds and one-running-session state before replacing data in one transaction. Raw activity logs validate unique nonempty IDs, required text, integer epochs through year 9999, object JSON metadata, nested position shape and any supplied coordinate/sample-time values before replacement. Failure rolls back. The Settings restore path additionally resets native state and reconfigures automation. Calling `db.restore` alone does not perform all platform cleanup.
 
-The UI accepts at most 20 MiB; export has no corresponding size limit. This mismatch is an unresolved audit finding. Native pending events/schedule progress are not a portable backup contract. Notification channel choices remain under Android ownership.
+Export, database restore and file selection share a 128 MiB UTF-8 limit. Export reads one consistent transaction snapshot; top-level isolate helpers encode/decode JSON without capturing database handles. An over-limit export fails explicitly instead of producing a file the app cannot restore. Native pending events/schedule progress are not a portable backup contract. Notification channel choices remain under Android ownership.
 
 Clearing records or uninstalling removes local application data. Backups contain sensitive financial/location information as plain JSON; the application does not add database/backup encryption or a cloud copy.
+
+## Remediation contracts — 2026-10-06
+
+Monthly planner bases and final amounts stay in BigInt until checked against 9,000,000,000,000,000 minor units, preventing large valid entry totals from wrapping before percentage calculations. Invalid projections have an error/status and disabled completion; they are not clipped into valid money. `recordProjection` recomputes the occurrence inside its transaction, validates its current positive amount and preserves occurrence uniqueness on repeat activation.
+
+Home manual clock-in/out stores the confirmed instant before optional location acquisition. A later fix attaches only when compatible with that instant; missing/late fixes remain unlocated. Manual one-per-day clock-in remains separate from native automatic-start import.
+
+New cross-app endings may carry `pendingPosition`, sampled from a precise, fresh cached provider position at confirmation without starting tracking or prompting permissions. Flutter uses that payload only for the matching running record's end trigger, then restores its live sample preferences in the same transaction. Historical replay cannot regress the current cache or update an already-ended note. Legacy payloads stay supported; absent/stale coordinates are not fabricated.
+
+Android system backup/transfer explicitly excludes database/preferences/files. User-selected JSON files remain portable plain-text exports; native unimported queues and channel choices remain outside that contract. Full saved history remains retained until an explicit user data operation.
+
+During batched import, a pending overlay ending stays unacknowledged until its matching session/end has committed; its automatic start may appear in a later batch. A dedicated replay regression covers this ordering.

@@ -7,7 +7,6 @@ import android.app.NotificationManager
 import android.net.Uri
 import android.provider.Settings
 import android.content.pm.PackageManager
-import android.os.Build
 import android.media.AudioAttributes
 import android.media.SoundPool
 import io.flutter.FlutterInjector
@@ -33,7 +32,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
-            when (call.method) {
+            try { when (call.method) {
                 "cacheSession" -> result.success(cacheSession(call.arguments as Map<*, *>))
                 "permissionStatus" -> {
                     val notifications = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
@@ -77,7 +76,7 @@ class MainActivity : FlutterActivity() {
                 "purchaseDestination" -> { val page = intent.getStringExtra("openPage"); intent.removeExtra("openPage"); result.success(page) }
                 "receiptNotificationsAllowed" -> result.success(TransactionNotifications.allowed(this))
                 "receiptNotificationPermission" -> {
-                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         if (receiptPermissionResult != null || pendingResult != null) result.success(false)
                         else { receiptPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 75) }
                     } else {
@@ -93,10 +92,17 @@ class MainActivity : FlutterActivity() {
                     RuleProgram.refresh(this); result.success(null)
                 }
                 "automationConfig" -> { Automation.configure(this, call.arguments as String); result.success(null) }
-                "automationReset" -> { Automation.prefs(this).edit().clear().commit(); Automation.configure(this, "{}"); result.success(null) }
-                "automationEvents" -> result.success(Automation.prefs(this).getString("events", "[]"))
+                "automationReset" -> { RuntimeEvents.reset(this); Automation.prefs(this).edit().clear().commit(); Automation.configure(this, "{}"); result.success(null) }
+                "automationEvents" -> result.success(RuntimeEvents.read(this))
                 "automationAck" -> { Automation.acknowledge(this, (call.arguments as List<*>).filterIsInstance<String>()); result.success(null) }
-                "automationStatus" -> result.success(mapOf("location" to (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED), "background" to Automation.allowed(this), "notifications" to if (Build.VERSION.SDK_INT >= 27) getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java)) else Settings.Secure.getString(contentResolver, "enabled_notification_listeners").orEmpty().contains(packageName)))
+                "automationStatus" -> result.success(mapOf(
+                    "location" to (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
+                    "background" to Automation.allowed(this),
+                    "notifications" to getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java)),
+                    "pending_count" to RuntimeEvents.pending(this),
+                    "logging_paused" to RuntimeEvents.samplesPaused(this),
+                    "timer_available" to !Automation.prefs(this).contains("timerDeliveryError")
+                ))
                 "locationPermission" -> {
                     if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) result.success(true)
                     else if (locationResult != null) result.error("busy", "A permission request is already open", null)
@@ -118,7 +124,7 @@ class MainActivity : FlutterActivity() {
                     catch (e: Exception) { result.error("sound", e.message, null) }
                 }
                 "reminderPermission" -> {
-                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         if (reminderPermissionResult != null) result.error("busy", "A permission request is already open", null)
                         else { reminderPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 76) }
                     } else {
@@ -128,7 +134,7 @@ class MainActivity : FlutterActivity() {
                     }
                 }
                 "exactReminderPermission" -> {
-                    if (Build.VERSION.SDK_INT >= 31 && !RuleNotifications.exactAllowed(this)) {
+                    if (!RuleNotifications.exactAllowed(this)) {
                         startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
                     }
                     result.success(RuleNotifications.exactAllowed(this))
@@ -137,18 +143,27 @@ class MainActivity : FlutterActivity() {
                 "start" -> {
                     val data = call.arguments as Map<*, *>
                     if (!cacheSession(data)) { result.success(false); return@setMethodCallHandler }
-                    if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         startData = data; pendingResult = result
                         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 73)
                     } else if (!getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
                         startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
                         result.success(false)
-                    } else { startTimer(data); result.success(true) }
+                    } else { result.success(startTimer(data)) }
                 }
-                "stop" -> { stopService(Intent(this, SessionService::class.java)); prefs.edit().remove("id").commit(); Automation.prefs(this).edit().remove("activeRule").commit(); result.success(null) }
-                "pending" -> { val id = prefs.getString("pendingId", null); result.success(if (id == null) null else mapOf("id" to id, "ended" to prefs.getLong("pendingEnd", 0)).let { if (prefs.contains("pendingNote")) it + ("note" to prefs.getString("pendingNote", "")) else it }) }
-                "acknowledge" -> { prefs.edit().remove("pendingId").remove("pendingEnd").remove("pendingNote").commit(); result.success(null) }
+                "stop" -> { SessionService.stopTimer(this); prefs.edit().remove("id").commit(); Automation.prefs(this).edit().remove("activeRule").commit(); result.success(null) }
+                "pending" -> {
+                    val id = prefs.getString("pendingId", null)
+                    result.success(if (id == null) null else mutableMapOf<String, Any?>("id" to id, "ended" to prefs.getLong("pendingEnd", 0)).apply {
+                        if (prefs.contains("pendingNote")) put("note", prefs.getString("pendingNote", ""))
+                        if (prefs.contains("pendingPosition")) put("position", prefs.getString("pendingPosition", null))
+                    })
+                }
+                "acknowledge" -> { check(prefs.edit().remove("pendingId").remove("pendingEnd").remove("pendingNote").remove("pendingPosition").commit()); result.success(null) }
                 else -> result.notImplemented()
+            } } catch (error: Exception) {
+                android.util.Log.w("FrekiHub", "Native operation failed: ${call.method}", error)
+                result.error("native_operation", "Could not complete this operation. Your pending actions are retained for retry.", null)
             }
         }
     }
@@ -182,7 +197,7 @@ class MainActivity : FlutterActivity() {
             if (existing in readySounds) pool.play(existing, volume, volume, 1, 0, rate)
         } else {
             val asset = FlutterInjector.instance().flutterLoader().getLookupKeyForAsset("assets/sounds/$assetName.wav")
-            assets.openFd(asset).use { soundIds[name!!] = pool.load(it, 1) }
+            assets.openFd(asset).use { soundIds[name] = pool.load(it, 1) }
         }
     }
     override fun onDestroy() {
@@ -193,11 +208,11 @@ class MainActivity : FlutterActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
     }
-    private fun startTimer(data: Map<*, *>) {
+    private fun startTimer(data: Map<*, *>): Boolean {
         val id = data["id"] as String
-        if (getSharedPreferences("session", MODE_PRIVATE).getString("pendingId", null) == id) return
+        if (getSharedPreferences("session", MODE_PRIVATE).getString("pendingId", null) == id) return false
         val intent = Intent(this, SessionService::class.java).putExtra("id", id).putExtra("started", (data["started"] as Number).toLong()).putExtra("day", data["day"] as String).putExtra("kind", data["kind"] as? String ?: "OJT").putExtra("note", data["note"] as? String ?: "")
-        if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent) else startService(intent)
+        return SessionService.startSafely(this, intent, id)
     }
     private fun cacheSession(data: Map<*, *>): Boolean {
         val prefs = getSharedPreferences("session", MODE_PRIVATE)
@@ -212,8 +227,8 @@ class MainActivity : FlutterActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 73) {
             val approved = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (approved) startData?.let { startTimer(it) }
-            pendingResult?.success(approved); pendingResult = null; startData = null
+            val started = approved && startData?.let { startTimer(it) } == true
+            pendingResult?.success(started); pendingResult = null; startData = null
         }
         if (requestCode == 74) { locationResult?.success(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED); locationResult = null }
         if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }

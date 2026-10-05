@@ -4,7 +4,7 @@ Read [Agent instructions](../AGENTS.md) first. This is an Android-first Flutter 
 
 ## Toolchain and installation
 
-The checked-in Dart constraint is `^3.13.4`; use a compatible Flutter SDK and Java 17. Android compile/target SDK versions are resolved by the Flutter Gradle plugin. The minimum is explicitly API 35 (Android 15), required by HyperIsland ToolKit 0.4.0; devices below Android 15 cannot install this configuration. Dependencies are declared in `pubspec.yaml` with resolved versions in `pubspec.lock`; native dependencies include Play services location 21.3.0 and HyperIsland ToolKit 0.4.0.
+The checked-in Dart constraint is `^3.13.4`; use a compatible Flutter SDK and Java 17. Android compile/target SDK versions are resolved by the Flutter Gradle plugin. The minimum is explicitly API 35 (Android 15), required by HyperIsland ToolKit 0.4.0; devices below Android 15 cannot install this configuration. Dependencies are declared in `pubspec.yaml` with resolved versions in `pubspec.lock`; native dependencies include Play services location 21.4.0 and HyperIsland ToolKit 0.4.0.
 
 From the project root, verify tooling and restore dependencies:
 
@@ -116,7 +116,7 @@ adb devices
 ./android/gradlew.bat -p android :app:installDebug
 ```
 
-The command above is for this Windows workspace; from `android` on a Unix host, use `./gradlew installDebug`. Confirm the intended device before installing. Retain the documented Java/temp/output-directory workaround where necessary. Use `flutter run -d DEVICE_ID` when an attached development session/hot reload is wanted; use the real `DEVICE_ID` from the listing. For a profile performance run, use `flutter run --profile -d DEVICE_ID` with device-testing authorization. Do not claim frame time improvements from debug widget tests. Android builds currently use debug signing even for release; they are not production-store signed.
+The command above is for this Windows workspace; from `android` on a Unix host, use `./gradlew installDebug`. Confirm the intended device before installing. Retain the documented Java/temp/output-directory workaround where necessary. Use `flutter run -d DEVICE_ID` when an attached development session/hot reload is wanted; use the real `DEVICE_ID` from the listing. For a profile performance run, use `flutter run --profile -d DEVICE_ID` with device-testing authorization. Do not claim frame time improvements from debug widget tests. Release tasks require external owner signing credentials; debug signing is not a release fallback. Debug installation remains the development workflow.
 
 ### Fast development loop
 
@@ -195,3 +195,15 @@ Calendar empty-date follow-up (2026-10-04): the agenda previously called `sort` 
 ## Delivery and documentation
 
 Preserve unrelated changes. Update current references and syntax docs in the same feature commit; keep historical audit counts explicitly historical. Verify local documentation links and code paths when editing guides. Commit/push completed features to the existing private origin as requested; do not change visibility, rewrite shared history, publish app binaries or add secrets.
+
+## Audit regression and storage checks — 2026-10-06
+
+`test/audit_regression_test.dart` covers final planner overflow, stale recomputation/occurrence uniqueness, malformed log rollback, backups above the former 20 MiB limit, fixed manual action time, committed-prefix batched retry and cluster membership. `test/audit_ui_test.dart` covers recoverable Logs, Calendar restoration/leap-day navigation and session display formats. Overlay and rule-language tests cover historical position replay and typed delivery/queue/projection diagnostics. Use the full suite once for this app-wide pass; these are disposable in-memory/widget checks, not a phone performance test.
+
+For phone storage, measure Android's app-size/user-data/cache breakdown before attributing growth. ADB must show the authorized device; local APK sizes do not establish installed storage. Do not clear data or uninstall to optimize size. During a subsequent authorized debug install, an ARM64-only build may use `-Ptarget-platform=android-arm64` after verifying the phone ABI; this preserves debug/hot reload and avoids bundling other architecture engines. Do not hard-code an ABI for every supported device or switch to a release build without user direction. See [Flutter app size](https://docs.flutter.dev/perf/app-size).
+
+Release signing inputs are `FREKIHUB_KEYSTORE_PATH`, `FREKIHUB_KEYSTORE_PASSWORD`, `FREKIHUB_KEY_ALIAS` and `FREKIHUB_KEY_PASSWORD`, provided outside Git by the owner. `verifyReleaseSigning` guards Release tasks and checks the keystore file. No owner key is generated here, and setting credentials does not authorize release packaging/publishing.
+
+AGP 9 compatibility flags remain required by the installed Flutter/plugin combination: file_picker, connectivity_plus, JNI and share_plus still apply legacy Kotlin Android integration. Do not remove flags blindly or modify the global package cache. Coordinate migration with compatible plugin releases and [Flutter's built-in Kotlin guide](https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin). HyperIsland 0.4.4 removes the current small-icon/action-key timer API; the existing 0.4.0 integration is retained pending a tested control migration. SDK XML-tool metadata mismatch is a host-toolchain issue, not an app runtime failure.
+
+Flutter commands regenerate ignored `android/local.properties`; normalize SDK/Flutter drive-colon escaping after those commands before host lint. Keep those host paths out of Git. A stale incremental resource merge after qualifier consolidation was recovered by rerunning only `:app:mergeDebugResources --rerun`; no clean/data reset was used.

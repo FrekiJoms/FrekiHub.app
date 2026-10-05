@@ -161,12 +161,17 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
         endingNote = accepted;
       }
       if (!mounted) return;
+      final actionTime = DateTime.now().millisecondsSinceEpoch;
       setState(() => busy = true);
       await flushNote();
       if (!mounted) return;
       final db = ref.read(databaseProvider);
       if (running == null) {
-        await saveWithLocation(context, db, () => db.clockIn(note.text.trim()));
+        await saveWithLocation(
+          context,
+          db,
+          () => db.clockIn(note.text.trim(), at: actionTime),
+        );
         HapticFeedback.mediumImpact();
         unawaited(
           FeedbackSound.play(widget.data.prefs['sound'] == 'true', 'clock-in'),
@@ -179,7 +184,7 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
             await (db.update(db.sessions)
                   ..where((s) => s.id.equals(running.id) & s.ended.isNull()))
                 .write(SessionsCompanion(note: Value(endingNote)));
-            await db.clockOut(running.id);
+            await db.clockOut(running.id, at: actionTime);
           }),
         );
         HapticFeedback.mediumImpact();

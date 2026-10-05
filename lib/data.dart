@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:isolate';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
@@ -9,9 +10,37 @@ import 'package:intl/intl.dart';
 
 part 'data.g.dart';
 
+const maxMoneyMinor = 9000000000000000;
+const maxRecordEpoch = 253402300799999;
+const maxBackupBytes = 128 * 1024 * 1024;
+
+// Top-level helpers keep the database/FFI handle out of isolate closures.
+Future<String> _encodeBackup(Map<String, Object> payload) => Isolate.run(() {
+  final source = jsonEncode(payload);
+  if (utf8.encode(source).length > maxBackupBytes) {
+    throw const FormatException('Backup exceeds the supported 128 MB limit.');
+  }
+  return source;
+});
+Future<dynamic> _decodeBackup(String source) => Isolate.run(() {
+  if (utf8.encode(source).length > maxBackupBytes) {
+    throw const FormatException('Backup exceeds the supported 128 MB limit.');
+  }
+  return jsonDecode(source);
+});
+void validateRecordAmount(int amount) {
+  if (amount <= 0 || amount > maxMoneyMinor) {
+    throw const FormatException(
+      'Amount must be positive and within the supported limit.',
+    );
+  }
+}
+
 String dayKey(DateTime d) =>
     '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 DateTime calendarDate(String s) => DateTime.parse(s);
+DateTime calendarOffset(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
 String newId() =>
     '${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
 String elapsed(int seconds) =>
@@ -347,12 +376,13 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> pref(String key, Object value) => into(preferences)
       .insertOnConflictUpdate(Preference(key: key, value: value.toString()));
-  Future<Session> clockIn(String note) => transaction(() async {
-    final existing =
-        await (select(sessions)..where(
-              (s) => s.ended.isNull() | s.day.equals(dayKey(DateTime.now())),
-            ))
-            .get();
+  Future<Session> clockIn(String note, {int? at}) => transaction(() async {
+    final instant = DateTime.fromMillisecondsSinceEpoch(
+      at ?? DateTime.now().millisecondsSinceEpoch,
+    );
+    final existing = await (select(
+      sessions,
+    )..where((s) => s.ended.isNull() | s.day.equals(dayKey(instant)))).get();
     if (existing.isNotEmpty) {
       throw StateError(
         'A session already exists for today. Open it to edit or resume your records.',
@@ -360,9 +390,9 @@ class AppDatabase extends _$AppDatabase {
     }
     final s = Session(
       id: newId(),
-      day: dayKey(DateTime.now()),
+      day: dayKey(instant),
       kind: 'OJT',
-      started: DateTime.now().millisecondsSinceEpoch,
+      started: instant.millisecondsSinceEpoch,
       ended: null,
       note: note,
     );
@@ -384,23 +414,57 @@ class AppDatabase extends _$AppDatabase {
     await delete(rules).go();
     await delete(preferences).go();
   });
+  Future<void> recordProjection(Projection requested) => transaction(() async {
+    final data = await readAll();
+    final date = calendarDate(requested.day);
+    final candidates = project(
+      data,
+      date,
+      date,
+    ).where((p) => p.key == requested.key);
+    if (candidates.isEmpty) {
+      throw StateError('This planner occurrence no longer exists.');
+    }
+    final current = candidates.single;
+    if (current.status == 'complete') return;
+    if (current.error != null) throw StateError(current.error!);
+    validateRecordAmount(current.amount);
+    await into(entries).insert(
+      Entry(
+        id: newId(),
+        day: current.day,
+        kind: current.rule.kind,
+        amount: current.amount,
+        currency: current.rule.currency,
+        category: current.rule.category,
+        method: current.rule.method,
+        note: current.rule.title,
+        occurrence: current.key,
+      ),
+      mode: InsertMode.insertOrIgnore,
+    );
+    await pref('status:${current.key}', 'planned');
+  });
   Future<String> backup() async {
-    final d = await readAll();
-    return jsonEncode({
-      'format': 'frekihub',
-      'version': 1,
-      'sessions': d.sessions.map((s) => s.toJson()).toList(),
-      'entries': d.entries.map((e) => e.toJson()).toList(),
-      'rules': d.rules.map((r) => r.toJson()).toList(),
-      'preferences': d.prefs,
-      'activityLogs': (await customSelect(
-        'SELECT * FROM activity_logs ORDER BY time',
-      ).get()).map((r) => r.data).toList(),
+    final payload = await transaction(() async {
+      final d = await readAll();
+      return {
+        'format': 'frekihub',
+        'version': 1,
+        'sessions': d.sessions.map((s) => s.toJson()).toList(),
+        'entries': d.entries.map((e) => e.toJson()).toList(),
+        'rules': d.rules.map((r) => r.toJson()).toList(),
+        'preferences': d.prefs,
+        'activityLogs': (await customSelect(
+          'SELECT * FROM activity_logs ORDER BY time',
+        ).get()).map((r) => r.data).toList(),
+      };
     });
+    return _encodeBackup(payload);
   }
 
   Future<void> restore(String source) async {
-    final raw = jsonDecode(source);
+    final raw = await _decodeBackup(source);
     if (raw is! Map<String, dynamic> ||
         raw['format'] != 'frekihub' ||
         raw['version'] != 1) {
@@ -416,6 +480,57 @@ class AppDatabase extends _$AppDatabase {
         .map((e) => Rule.fromJson(e as Map<String, dynamic>))
         .toList();
     final pp = Map<String, String>.from(raw['preferences'] as Map);
+    final logs = <Map<String, dynamic>>[];
+    final logIds = <String>{};
+    for (final item in raw['activityLogs'] as List? ?? const []) {
+      if (item is! Map ||
+          item['id'] is! String ||
+          (item['id'] as String).isEmpty ||
+          !logIds.add(item['id'] as String) ||
+          item['time'] is! int ||
+          item['time'] < 0 ||
+          item['time'] > maxRecordEpoch ||
+          item['action'] is! String ||
+          (item['action'] as String).isEmpty ||
+          item['title'] is! String ||
+          item['location'] is! String ||
+          item['details'] is! String) {
+        throw const FormatException('Invalid activity log in backup.');
+      }
+      final details = jsonDecode(item['details'] as String);
+      if (details is! Map) {
+        throw const FormatException('Invalid activity details.');
+      }
+      final nested = details['position'];
+      if (nested != null && nested is! String && nested is! Map) {
+        throw const FormatException('Invalid activity position.');
+      }
+      final position = nested is String && nested.isNotEmpty
+          ? jsonDecode(nested)
+          : nested is Map
+          ? nested
+          : details;
+      if (position is! Map) {
+        throw const FormatException('Invalid activity position.');
+      }
+      if (position['locationTime'] != null &&
+          (position['locationTime'] is! int ||
+              position['locationTime'] < 0 ||
+              position['locationTime'] > maxRecordEpoch)) {
+        throw const FormatException('Invalid location timestamp.');
+      }
+      if (position['lat'] != null || position['lng'] != null) {
+        if (position['lat'] is! num ||
+            position['lng'] is! num ||
+            !(position['lat'] as num).isFinite ||
+            !(position['lng'] as num).isFinite ||
+            (position['lat'] as num).abs() > 90 ||
+            (position['lng'] as num).abs() > 180) {
+          throw const FormatException('Invalid recorded coordinates.');
+        }
+      }
+      logs.add(Map<String, dynamic>.from(item));
+    }
     if (pp.containsKey('automation')) {
       final config = jsonDecode(pp['automation']!);
       if (config is! Map ||
@@ -481,7 +596,11 @@ class AppDatabase extends _$AppDatabase {
 
     for (final s in ss) {
       validateDay(s.day);
-      if (s.started < 0 || (s.ended != null && s.ended! < s.started)) {
+      if (s.started < 0 ||
+          s.started > maxRecordEpoch ||
+          !['OJT', 'Work', 'Study', 'Personal'].contains(s.kind) ||
+          (s.ended != null &&
+              (s.ended! < s.started || s.ended! > maxRecordEpoch))) {
         throw const FormatException('Invalid session.');
       }
     }
@@ -530,8 +649,7 @@ class AppDatabase extends _$AppDatabase {
       for (final p in pp.entries) {
         await pref(p.key, p.value);
       }
-      for (final log in (raw['activityLogs'] as List? ?? const [])) {
-        final item = Map<String, dynamic>.from(log as Map);
+      for (final item in logs) {
         await customStatement(
           'INSERT INTO activity_logs VALUES (?, ?, ?, ?, ?, ?)',
           [
@@ -602,14 +720,15 @@ class Projection {
   final String day;
   final int amount;
   final String status;
-  Projection(this.rule, this.day, this.amount, this.status);
+  final String? error;
+  Projection(this.rule, this.day, this.amount, this.status, {this.error});
   String get key => '${rule.id}:$day';
 }
 
 List<Projection> project(AppData data, DateTime from, DateTime until) {
   final result = <Projection>[];
   final recordedOccurrences = data.entries.map((e) => e.occurrence).toSet();
-  final monthlyTotals = <String, (int, int)>{};
+  final monthlyTotals = <String, (BigInt, BigInt)>{};
   for (final r in data.rules.where((r) => r.currency == data.currency)) {
     final start = calendarDate(r.start);
     for (
@@ -636,29 +755,32 @@ List<Projection> project(AppData data, DateTime from, DateTime until) {
         continue;
       }
       final month = dayKey(d).substring(0, 7);
-      final totals = monthlyTotals.putIfAbsent(
-        month,
-        () => (
-          data.total('income', month: month),
-          data.total('expense', month: month),
-        ),
-      );
+      final totals = monthlyTotals.putIfAbsent(month, () {
+        var income = BigInt.zero, expenses = BigInt.zero;
+        for (final entry in data.entries.where(
+          (e) => e.currency == data.currency && e.day.startsWith(month),
+        )) {
+          if (entry.kind == 'income') income += BigInt.from(entry.amount);
+          if (entry.kind == 'expense') expenses += BigInt.from(entry.amount);
+        }
+        return (income, expenses);
+      });
       final income = totals.$1;
       final expenses = totals.$2;
       final base = switch (r.basis) {
         'income' => income,
         'expenses' => expenses,
-        'net' => max(0, income - expenses),
-        _ => 0,
+        'net' => income > expenses ? income - expenses : BigInt.zero,
+        _ => BigInt.zero,
       };
-      final amount = r.basis == 'fixed'
-          ? r.amount * r.quantity
-          : ((BigInt.from(base) *
-                            BigInt.from(r.amount) *
-                            BigInt.from(r.quantity) +
-                        BigInt.from(5000)) ~/
-                    BigInt.from(10000))
-                .toInt();
+      final calculated = r.basis == 'fixed'
+          ? BigInt.from(r.amount) * BigInt.from(r.quantity)
+          : ((base * BigInt.from(r.amount) * BigInt.from(r.quantity) +
+                    BigInt.from(5000)) ~/
+                BigInt.from(10000));
+      final invalid =
+          calculated < BigInt.zero || calculated > BigInt.from(maxMoneyMinor);
+      final amount = invalid ? 0 : calculated.toInt();
       final key = '${r.id}:${dayKey(d)}';
       final recorded = recordedOccurrences.contains(key);
       result.add(
@@ -670,7 +792,12 @@ List<Projection> project(AppData data, DateTime from, DateTime until) {
               ? 'complete'
               : ['skipped', 'cancelled'].contains(data.prefs['status:$key'])
               ? data.prefs['status:$key']!
+              : invalid
+              ? 'invalid'
               : 'planned',
+          error: invalid
+              ? 'Projected amount exceeds the supported limit. Edit this planner rule.'
+              : null,
         ),
       );
     }

@@ -17,12 +17,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('${p.day} · ${money(p.amount, widget.data.currency)}'),
+          Text(
+            '${p.day} · ${p.error == null ? money(p.amount, widget.data.currency) : 'Amount needs review'}',
+          ),
+          if (p.error != null) Text(p.error!),
           const SizedBox(height: 20),
           if (p.status != 'complete')
             FilledButton(
               onPressed: withFeedback(
-                p.amount == 0
+                p.amount == 0 || p.error != null
                     ? null
                     : () async {
                         final db = ref.read(databaseProvider);
@@ -32,25 +35,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                             await saveWithLocation(
                               context,
                               db,
-                              () => db.transaction(() async {
-                                await db
-                                    .into(db.entries)
-                                    .insert(
-                                      Entry(
-                                        id: newId(),
-                                        day: p.day,
-                                        kind: p.rule.kind,
-                                        amount: p.amount,
-                                        currency: p.rule.currency,
-                                        category: p.rule.category,
-                                        method: p.rule.method,
-                                        note: p.rule.title,
-                                        occurrence: p.key,
-                                      ),
-                                      mode: InsertMode.insertOrIgnore,
-                                    );
-                                await db.pref('status:${p.key}', 'planned');
-                              }),
+                              () => db.recordProjection(p),
                             );
                             if (mounted) {
                               Navigator.pop(context);
@@ -259,7 +244,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           title: Text(p.rule.title),
           subtitle: Text('Expected · ${p.status} · ${p.rule.category}'),
           trailing: Text(
-            money(p.amount, d.currency),
+            p.error == null ? money(p.amount, d.currency) : 'Needs review',
             style: TextStyle(
               fontFamily: 'Geist Mono',
               fontSize: 12,

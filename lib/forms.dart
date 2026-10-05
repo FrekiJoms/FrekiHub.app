@@ -163,7 +163,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
           OutlinedButton(
             onPressed: withFeedback(() => time(false)),
             child: Text(
-              'Clock in · ${DateFormat('d MMM yyyy, HH:mm').format(start)}',
+              'Clock in · ${displayDate(widget.data, start)}, ${clockTime(widget.data, start.millisecondsSinceEpoch)}',
             ),
           ),
         ),
@@ -171,7 +171,7 @@ class _SessionFormState extends ConsumerState<SessionForm> {
           OutlinedButton(
             onPressed: withFeedback(() => time(true)),
             child: Text(
-              'Clock out · ${end == null ? 'Still running' : DateFormat('d MMM yyyy, HH:mm').format(end!)}',
+              'Clock out · ${end == null ? 'Still running' : '${displayDate(widget.data, end!)}, ${clockTime(widget.data, end!.millisecondsSinceEpoch)}'}',
             ),
           ),
         ),

@@ -22,6 +22,19 @@ object MapLocation {
             location.latitude in -90.0..90.0 && location.longitude in -180.0..180.0
     }
 
+    /** One cached sample at an action instant; never starts historical tracking. */
+    @SuppressLint("MissingPermission")
+    fun cached(context: Context, at: Long): Location? {
+        if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return null
+        val manager = context.getSystemService(LocationManager::class.java)
+        if (!manager.isLocationEnabled) return null
+        return manager.getProviders(true)
+            .filter { it in setOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.FUSED_PROVIDER) }
+            .mapNotNull { provider -> try { manager.getLastKnownLocation(provider) } catch (_: Exception) { null } }
+            .filter { fresh(it) && at - it.time in -1000L..120000L && it.accuracy <= 100 }
+            .minByOrNull { it.accuracy }
+    }
+
     @SuppressLint("MissingPermission")
     fun request(context: Context, done: (Location?, String?) -> Unit) {
         if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {

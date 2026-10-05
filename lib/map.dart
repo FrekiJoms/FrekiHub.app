@@ -22,7 +22,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
       widget.tileProvider ??
       NetworkTileProvider(
         cachingProvider: BuiltInMapCachingProvider.getOrCreateInstance(
-          maxCacheSize: 128 * 1024 * 1024,
+          maxCacheSize: 32 * 1024 * 1024,
         ),
       );
   StreamSubscription<List<Map<String, dynamic>>>? subscription;
@@ -53,8 +53,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
         hint: locationHint,
       );
       if (!mounted || allowed == null) return;
-      if (!allowed)
+      if (!allowed) {
         throw StateError('Allow precise location to find yourself on the map.');
+      }
       String? raw;
       try {
         raw = await NativeSession.channel
@@ -67,10 +68,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
       }
       if (!mounted) return;
       final fix = MapUserLocation.parse(raw, DateTime.now());
-      if (fix == null)
+      if (fix == null) {
         throw StateError(
           'No fresh location fix yet. Check that Location is on and try again.',
         );
+      }
       locationExpiry?.cancel();
       setState(() {
         userLocation = fix;
@@ -141,6 +143,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
   bool ready = false, loading = true, tileError = false;
   String? loadError;
   String lastContext = '';
+  int clusterZoom = 2;
+  bool clusterUpdateQueued = false;
+  List<MapRecord>? clusteredRecords;
+  String clusterSignature = '';
+  List<List<MapRecord>> clusters = [];
   static const colors = <String, Color>{
     'Sessions': Color(0xFF456FE8),
     'Finance': Color(0xFF087C5A),
@@ -222,7 +229,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
             setState(() {
               records = next;
               unlocated = without;
-              selected.removeWhere((id) => !records.any((r) => r.id == id));
+              final recordIds = records.map((r) => r.id).toSet();
+              selected.retainAll(recordIds);
               loading = false;
               loadError = null;
             });
@@ -230,8 +238,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
             if (firstLoad &&
                 ready &&
                 visible.isNotEmpty &&
-                userLocation == null)
+                userLocation == null) {
               fit();
+            }
           },
           onError: (Object _) {
             if (mounted && generation == queryGeneration) {
@@ -488,14 +497,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
   Widget build(BuildContext c) {
     final shown = visible;
     final route = traced;
-    final groups = <String, List<MapRecord>>{};
-    for (final record in shown) {
-      groups
-          .putIfAbsent(
-            '${record.lat.toStringAsFixed(5)},${record.lng.toStringAsFixed(5)}',
-            () => [],
-          )
-          .add(record);
+    final signature = '$clusterZoom:${categories.join(',')}';
+    if (!identical(clusteredRecords, records) ||
+        clusterSignature != signature) {
+      clusteredRecords = records;
+      clusterSignature = signature;
+      clusters = clusterMapRecords(shown, clusterZoom);
     }
     final bottom = MediaQuery.paddingOf(c).bottom;
     final dateLabel = period == 'day'
@@ -542,8 +549,20 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     if (shown.isNotEmpty) fit();
                     publishContext();
                   },
-                  onPositionChanged: (_, gesture) {
+                  onPositionChanged: (camera, gesture) {
                     if (gesture) cameraMotion.stop();
+                    if (camera.zoom.floor() != clusterZoom &&
+                        !clusterUpdateQueued) {
+                      clusterUpdateQueued = true;
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        clusterUpdateQueued = false;
+                        if (mounted) {
+                          setState(
+                            () => clusterZoom = controller.camera.zoom.floor(),
+                          );
+                        }
+                      });
+                    }
                     publishContext();
                   },
                 ),
@@ -582,7 +601,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                       ],
                     ),
                   MarkerLayer(
-                    markers: groups.values.map((items) {
+                    markers: clusters.map((items) {
                       final record = items.last;
                       final chosen = items.any((r) => selected.contains(r.id));
                       return Marker(
@@ -946,63 +965,59 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                     },
                             ),
                           ),
-                          ...colors.entries
-                              .map(
-                                (entry) => Padding(
+                          ...colors.entries.map(
+                            (entry) => Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                              ),
+                              child: AnimatedOpacity(
+                                opacity: categories.contains(entry.key)
+                                    ? 1
+                                    : .4,
+                                duration: Motion.duration(c, 150),
+                                child: FilterChip(
+                                  backgroundColor: Colors.transparent,
+                                  selectedColor: Colors.transparent,
+                                  side: BorderSide.none,
+                                  label: Text(
+                                    entry.key,
+                                    maxLines: 1,
+                                    softWrap: false,
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: Theme.of(c).colorScheme.onSurface,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  labelPadding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 2,
+                                    horizontal: 4,
                                   ),
-                                  child: AnimatedOpacity(
-                                    opacity: categories.contains(entry.key)
-                                        ? 1
-                                        : .4,
-                                    duration: Motion.duration(c, 150),
-                                    child: FilterChip(
-                                      backgroundColor: Colors.transparent,
-                                      selectedColor: Colors.transparent,
-                                      side: BorderSide.none,
-                                      label: Text(
-                                        entry.key,
-                                        maxLines: 1,
-                                        softWrap: false,
-                                      ),
-                                      labelStyle: TextStyle(
-                                        color: Theme.of(c)
-                                            .colorScheme
-                                            .onSurface,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                      labelPadding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 4,
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                      showCheckmark: false,
-                                      avatar: Icon(
-                                        icons[entry.key],
-                                        size: 13,
-                                        color: entry.value,
-                                      ),
-                                      selected: categories.contains(entry.key),
-                                      onSelected: (_) {
-                                        ActionFeedback.tap();
-                                        setState(() {
-                                          if (!categories.remove(entry.key)) {
-                                            categories.add(entry.key);
-                                          }
-                                        });
-                                        publishContext();
-                                      },
-                                    ),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  showCheckmark: false,
+                                  avatar: Icon(
+                                    icons[entry.key],
+                                    size: 13,
+                                    color: entry.value,
                                   ),
+                                  selected: categories.contains(entry.key),
+                                  onSelected: (_) {
+                                    ActionFeedback.tap();
+                                    setState(() {
+                                      if (!categories.remove(entry.key)) {
+                                        categories.add(entry.key);
+                                      }
+                                    });
+                                    publishContext();
+                                  },
                                 ),
-                              )
-                              .toList(),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

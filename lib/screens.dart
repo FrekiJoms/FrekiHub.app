@@ -115,7 +115,10 @@ Widget selectField(
 Widget spaced(Widget child) =>
     Padding(padding: const EdgeInsets.only(bottom: 16), child: child);
 String sessionDate(AppData d, Session s) {
-  final date = calendarDate(s.day);
+  return displayDate(d, calendarDate(s.day));
+}
+
+String displayDate(AppData d, DateTime date) {
   final format = d.prefs['dateFormat'] ?? 'EEE, d MMM';
   if (format == 'relative') {
     final today = DateTime.now();

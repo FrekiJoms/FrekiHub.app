@@ -59,8 +59,14 @@ abstract final class AutomationSync {
         }),
       );
   static Future<void> reconcile(AppDatabase db) =>
-      _work ??= _reconcile(db).whenComplete(() => _work = null);
-  static Future<void> _reconcile(AppDatabase db) async {
+      _work ??= _drain(db).whenComplete(() => _work = null);
+  static Future<void> _drain(AppDatabase db) async {
+    while (await _reconcile(db)) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+
+  static Future<bool> _reconcile(AppDatabase db) async {
     final source =
         await NativeSession.channel.invokeMethod<String>('automationEvents') ??
         '[]';
@@ -80,7 +86,7 @@ abstract final class AutomationSync {
       } else {
         await configure(AppData([], [], [], prefs));
       }
-      return;
+      return false;
     }
     final data = await db.readAll();
     var cachedSample =
@@ -217,11 +223,18 @@ abstract final class AutomationSync {
       }
     });
     await deliverReceipts(db, await db.readPreferences());
-    if (pending != null) await NativeSession.acknowledge();
+    if (pending != null) {
+      final saved = await (db.select(
+        db.sessions,
+      )..where((s) => s.id.equals(pending['id'] as String))).getSingleOrNull();
+      // Its queued clock-in can be in a later batch. Keep the end until committed.
+      if (saved?.ended != null) await NativeSession.acknowledge();
+    }
     if (acknowledged.isNotEmpty) {
       await NativeSession.channel.invokeMethod('automationAck', acknowledged);
     }
     await configure(await db.readAll());
+    return events.length >= 200;
   }
 
   static Future<void> deliverReceipts(

@@ -127,12 +127,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       context,
       () async {
         final file = picked.single;
-        if ((await file.length() ?? 0) > 20 * 1024 * 1024) {
-          throw const FormatException('Backup exceeds the 20 MB limit.');
+        if ((await file.length() ?? 0) > maxBackupBytes) {
+          throw const FormatException(
+            'Backup exceeds the supported 128 MB limit.',
+          );
         }
         final bytes = await file.readAsBytes();
-        if (bytes.length > 20 * 1024 * 1024) {
-          throw const FormatException('Backup exceeds the 20 MB limit.');
+        if (bytes.length > maxBackupBytes) {
+          throw const FormatException(
+            'Backup exceeds the supported 128 MB limit.',
+          );
         }
         await ref.read(databaseProvider).restore(utf8.decode(bytes));
         await NativeSession.channel.invokeMethod('automationReset');

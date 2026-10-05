@@ -5,7 +5,6 @@ import android.app.*
 import android.content.*
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import org.json.JSONObject
 import java.util.Calendar
 
@@ -13,7 +12,7 @@ import java.util.Calendar
 object RuleNotifications {
     private const val CHANNEL = "frekihub_rule_reminders"
     private fun prefs(c: Context) = c.getSharedPreferences("rule_notifications", Context.MODE_PRIVATE)
-    fun exactAllowed(c: Context) = Build.VERSION.SDK_INT < 31 || c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    fun exactAllowed(c: Context) = c.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
     fun count(c: Context) = prefs(c).all.values.count {
         val s = JSONObject(it as String)
         s.optInt("limit") == -1 || s.optInt("sent") < s.optInt("limit")
@@ -128,13 +127,13 @@ object RuleNotifications {
 
     fun post(c: Context, title: String, body: String, tag: String): Boolean {
         val manager = c.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Rule reminders", NotificationManager.IMPORTANCE_DEFAULT))
-        val allowed = (Build.VERSION.SDK_INT < 33 || c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
-            manager.areNotificationsEnabled() && (Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Rule reminders", NotificationManager.IMPORTANCE_DEFAULT))
+        val allowed = (c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+            manager.areNotificationsEnabled() && (manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE)
         if (allowed) {
             val open = PendingIntent.getActivity(c, 93, Intent(c, MainActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(c, CHANNEL) else Notification.Builder(c)
+            val builder = Notification.Builder(c, CHANNEL)
             val notification = builder.setSmallIcon(R.drawable.ic_transaction)
                 .setContentTitle(title).setContentText(body)
                 .setStyle(Notification.BigTextStyle().bigText(body))

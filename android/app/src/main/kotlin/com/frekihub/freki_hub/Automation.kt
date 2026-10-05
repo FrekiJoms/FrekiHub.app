@@ -16,18 +16,13 @@ import java.util.UUID
 object Automation {
     fun prefs(c: Context) = c.getSharedPreferences("automation", Context.MODE_PRIVATE)
     @Synchronized fun emit(c: Context, event: JSONObject) {
-        val p = prefs(c)
-        val events = JSONArray(p.getString("events", "[]"))
-        events.put(event.put("id", event.optString("id", UUID.randomUUID().toString())))
-        p.edit().putString("events", events.toString()).commit()
+        RuntimeEvents.emit(c, event)
     }
     @Synchronized fun acknowledge(c: Context, ids: List<String>) {
-        val p = prefs(c); val source = JSONArray(p.getString("events", "[]")); val remaining = JSONArray()
-        for (i in 0 until source.length()) if (source.getJSONObject(i).getString("id") !in ids) remaining.put(source.getJSONObject(i))
-        p.edit().putString("events", remaining.toString()).commit()
+        RuntimeEvents.acknowledge(c, ids)
     }
     fun config(c: Context) = JSONObject(prefs(c).getString("config", "{}")!!)
-    fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && (Build.VERSION.SDK_INT < 29 || c.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED)
+    fun allowed(c: Context) = c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED && c.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED
     fun configure(c: Context, raw: String) {
         val payload = JSONObject(raw)
         payload.optJSONObject("snapshot")?.let { prefs(c).edit().putString("snapshot", it.toString()).commit() }
@@ -52,7 +47,7 @@ object Automation {
         prefs(c).edit().putString("config", json).commit()
         RuleNotifications.sync(c)
         val config = config(c)
-        val intent = PendingIntent.getBroadcast(c, 91, Intent(c, ZoneReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0)
+        val intent = PendingIntent.getBroadcast(c, 91, Intent(c, ZoneReceiver::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE)
         val client = LocationServices.getGeofencingClient(c)
         client.removeGeofences(intent).addOnCompleteListener {
             if (prefs(c).getString("config", null) != json) return@addOnCompleteListener
@@ -75,20 +70,7 @@ object Automation {
         RuleProgram.refresh(c)
     }
     fun requestLocation(c: Context, done: (Location?) -> Unit) {
-        if (c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) { done(null); return }
-        val manager = c.getSystemService(LocationManager::class.java)
-        val provider = if (manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) LocationManager.GPS_PROVIDER else LocationManager.NETWORK_PROVIDER
-        try {
-            if (Build.VERSION.SDK_INT >= 30) {
-                val signal = CancellationSignal(); var finished = false
-                val handler = Handler(Looper.getMainLooper())
-                val timeout = Runnable { if (!finished) { finished = true; signal.cancel(); done(null) } }
-                handler.postDelayed(timeout, 20000)
-                manager.getCurrentLocation(provider, signal, c.mainExecutor) { location -> if (!finished) { finished = true; handler.removeCallbacks(timeout); done(location) } }
-            } else {
-                done(manager.getLastKnownLocation(provider)?.takeIf { System.currentTimeMillis() - it.time < 120000 })
-            }
-        } catch (e: Exception) { done(null) }
+        MapLocation.request(c) { location, _ -> done(location) }
     }
     fun locationJson(c: Context, location: Location): JSONObject {
         val rules = config(c).optJSONArray("rules") ?: JSONArray(); var name = "${location.latitude}, ${location.longitude}"
@@ -99,7 +81,7 @@ object Automation {
         if (System.currentTimeMillis() - location.time > 120000) return
         val event = locationJson(c, location).put("time", System.currentTimeMillis()).put("action", "location").put("title", "Visited")
         prefs(c).edit().putString("lastLocation", event.toString()).commit()
-        if (config(c).optBoolean("logging")) emit(c, event)
+        if (config(c).optBoolean("logging") && !RuntimeEvents.samplesPaused(c)) emit(c, event)
     }
     fun recheck(c: Context, location: Location) {
         val rules = config(c).optJSONArray("rules") ?: return
@@ -131,11 +113,11 @@ object Automation {
             emit(c, event.put("action", "auto_clock_in").put("title", "Clocked in").put("sessionId", id).put("started", started).put("kind", rule.optString("kind", "OJT")))
             // The geofence exemption allows a foreground timer after a location transition.
             val timer = Intent(c, SessionService::class.java).putExtra("id", id).putExtra("started", started)
-            try { if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(timer) else c.startService(timer) } catch (e: Exception) { }
+            SessionService.startSafely(c, timer, id)
         } else if (prefs(c).getString("activeRule", null) == rule.getString("id") && rule.optString("else", "continue") == "clock_out") {
             val id = p.getString("id", null) ?: return
             emit(c, event.put("action", "auto_clock_out").put("title", "Clocked out").put("sessionId", id))
-            prefs(c).edit().remove("activeRule").commit(); p.edit().remove("id").commit(); c.stopService(Intent(c, SessionService::class.java))
+            prefs(c).edit().remove("activeRule").commit(); p.edit().remove("id").commit(); SessionService.stopTimer(c)
         } else if (config.optBoolean("logging")) emit(c, event.put("action", "location_exit").put("title", "Left"))
     }
 }
@@ -191,5 +173,4 @@ class PurchaseListener : NotificationListenerService() {
         val sourceName = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }; event.put("source", sourceName); Automation.emit(this, event)
     }
 }
-
 

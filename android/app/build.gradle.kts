@@ -4,6 +4,13 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Owner-provided signing values stay outside source control.
+val releaseStore = providers.environmentVariable("FREKIHUB_KEYSTORE_PATH").orNull
+val releaseStorePassword = providers.environmentVariable("FREKIHUB_KEYSTORE_PASSWORD").orNull
+val releaseAlias = providers.environmentVariable("FREKIHUB_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("FREKIHUB_KEY_PASSWORD").orNull
+val hasReleaseSigning = listOf(releaseStore, releaseStorePassword, releaseAlias, releaseKeyPassword).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.frekihub.freki_hub"
     compileSdk = flutter.compileSdkVersion
@@ -30,11 +37,17 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) create("release") {
+            storeFile = file(releaseStore!!)
+            storePassword = releaseStorePassword
+            keyAlias = releaseAlias
+            keyPassword = releaseKeyPassword
+        }
+    }
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 }
@@ -50,6 +63,18 @@ flutter {
 }
 
 dependencies {
-    implementation("com.google.android.gms:play-services-location:21.3.0")
+    implementation("com.google.android.gms:play-services-location:21.4.0")
+    // 0.4.4 removes the icon/action-key timer API; retain the existing clock-out control.
     implementation("io.github.d4viddf:hyperisland_kit:0.4.0")
+}
+
+val verifyReleaseSigning = tasks.register("verifyReleaseSigning") {
+    doLast {
+        check(hasReleaseSigning && file(releaseStore!!).isFile) {
+            "Release signing requires the owner's FREKIHUB_KEYSTORE_PATH, FREKIHUB_KEYSTORE_PASSWORD, FREKIHUB_KEY_ALIAS and FREKIHUB_KEY_PASSWORD."
+        }
+    }
+}
+tasks.configureEach {
+    if (name.contains("Release") && name != "verifyReleaseSigning") dependsOn(verifyReleaseSigning)
 }

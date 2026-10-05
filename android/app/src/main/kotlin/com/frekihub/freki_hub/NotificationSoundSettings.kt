@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
-import android.os.Build
 import android.provider.Settings
 
 object NotificationSoundSettings {
@@ -17,7 +16,7 @@ object NotificationSoundSettings {
 
     fun open(c: Context, category: String) {
         val (id, name) = channels[category] ?: throw IllegalArgumentException("Unknown notification category")
-        val intent = if (Build.VERSION.SDK_INT >= 26) {
+        val intent = run {
             val manager = c.getSystemService(NotificationManager::class.java)
             // Create only missing channels; never overwrite a sound chosen in Android settings.
             if (manager.getNotificationChannel(id) == null) {
@@ -30,9 +29,9 @@ object NotificationSoundSettings {
             Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName).putExtra(Settings.EXTRA_CHANNEL_ID, id)
                 .apply {
-                    if (Build.VERSION.SDK_INT >= 31) putExtra(Settings.EXTRA_CHANNEL_FILTER_LIST, arrayOf(NotificationChannel.EDIT_SOUND))
+                    putExtra(Settings.EXTRA_CHANNEL_FILTER_LIST, arrayOf(NotificationChannel.EDIT_SOUND))
                 }
-        } else Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, c.packageName)
+        }
         try { c.startActivity(intent) }
         catch (_: android.content.ActivityNotFoundException) {
             c.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:${c.packageName}")))
@@ -41,7 +40,7 @@ object NotificationSoundSettings {
 
     fun sound(c: Context, category: String): String {
         val id = channels[category]?.first ?: return "silent"
-        if (Build.VERSION.SDK_INT >= 26) {
+        run {
             val channel = c.getSystemService(NotificationManager::class.java).getNotificationChannel(id)
             if (channel != null) {
                 if (channel.importance < NotificationManager.IMPORTANCE_DEFAULT) return "silent"

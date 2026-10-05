@@ -10,6 +10,63 @@ import 'package:freki_hub/services.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('Historical overlay sample attaches to its ending without regressing the live cache', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await db.pref('activityLogging', true);
+    await db.pref('locationEnabled', true);
+    final started = DateTime(2026, 10, 1, 8).millisecondsSinceEpoch;
+    final running = await db.clockIn('Original', at: started);
+    final ended = started + 10000;
+    final live = DateTime.now().millisecondsSinceEpoch;
+    await db.pref('locationName', 'Current place');
+    await db.pref('locationSampleTime', live);
+    await db.pref(
+      'locationDetails',
+      '{"lat":15,"lng":122,"locationTime":$live}',
+    );
+    await NativeSession.applyPending(db, {
+      'id': running.id,
+      'ended': ended,
+      'note': 'Confirmed',
+      'position': jsonEncode({
+        'lat': 14.6,
+        'lng': 121.0,
+        'accuracy': 10,
+        'locationTime': ended - 5000,
+        'location': 'Office',
+      }),
+    });
+    final row =
+        (await db
+                .customSelect(
+                  "SELECT * FROM activity_logs WHERE action = 'clock_out'",
+                )
+                .get())
+            .single
+            .data;
+    expect(row['location'], 'Office');
+    expect(
+      jsonDecode(jsonDecode(row['details'] as String)['position'])['lat'],
+      14.6,
+    );
+    expect((await db.readPreferences())['locationSampleTime'], '$live');
+    await NativeSession.applyPending(db, {
+      'id': running.id,
+      'ended': ended + 1000,
+      'note': 'Replay',
+      'position': '{"lat":16,"lng":123,"accuracy":10,"locationTime":$ended}',
+    });
+    expect((await db.readAll()).sessions.single.note, 'Confirmed');
+    expect(
+      (await db
+          .customSelect(
+            "SELECT * FROM activity_logs WHERE action = 'clock_out'",
+          )
+          .get()),
+      hasLength(1),
+    );
+  });
   test(
     'Overlay note and confirmed time commit before acknowledgement',
     () async {

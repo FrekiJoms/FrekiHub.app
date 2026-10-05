@@ -1,4 +1,24 @@
 import 'dart:convert';
+import 'dart:math' as math;
+
+/// Screen-sized clusters retain every original record and its actual position.
+/// Bucketing is linear in record count and changes only at whole zoom levels.
+List<List<MapRecord>> clusterMapRecords(Iterable<MapRecord> records, int zoom) {
+  final scale = 256 * math.pow(2, zoom.clamp(2, 19));
+  final groups = <(int, int), List<MapRecord>>{};
+  for (final record in records) {
+    final latitude = record.lat.clamp(-85.05112878, 85.05112878);
+    final sinLatitude = math.sin(latitude * math.pi / 180);
+    final x = (record.lng + 180) / 360 * scale;
+    final y =
+        (0.5 -
+            math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * math.pi)) *
+        scale;
+    final cell = ((x / 54).floor(), (y / 54).floor());
+    groups.putIfAbsent(cell, () => []).add(record);
+  }
+  return groups.values.toList();
+}
 
 /// Calendar-aligned local-time ranges, with an exclusive end.
 class MapRange {

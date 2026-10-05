@@ -120,12 +120,50 @@ abstract final class NativeSession {
     Map<String, dynamic> pending,
   ) => db.transaction(() async {
     final id = pending['id'] as String;
+    final ended = pending['ended'] as int;
+    final record = await (db.select(
+      db.sessions,
+    )..where((s) => s.id.equals(id))).getSingleOrNull();
+    if (record == null || record.ended != null) return;
+    if (ended < record.started || ended > maxRecordEpoch) {
+      throw const FormatException('Invalid pending session end.');
+    }
+    final fix = MapUserLocation.parse(
+      pending['position'],
+      DateTime.fromMillisecondsSinceEpoch(ended),
+    );
+    final prefs = fix == null ? null : await db.readPreferences();
+    if (fix != null) {
+      final position = MapRecord.decode(pending['position']);
+      await db.pref(
+        'locationName',
+        position['location'] ?? 'Recorded location',
+      );
+      await db.pref('locationSampleTime', fix.sampled);
+      await db.pref('locationDetails', jsonEncode(position));
+    }
     if (pending['note'] is String) {
       await (db.update(db.sessions)
             ..where((s) => s.id.equals(id) & s.ended.isNull()))
           .write(SessionsCompanion(note: Value(pending['note'] as String)));
     }
-    await db.clockOut(id, at: pending['ended'] as int);
+    await db.clockOut(id, at: ended);
+    // Use the event's own sample for its trigger without regressing the live cache.
+    if (prefs != null) {
+      for (final key in [
+        'locationName',
+        'locationSampleTime',
+        'locationDetails',
+      ]) {
+        if (prefs.containsKey(key)) {
+          await db.pref(key, prefs[key]!);
+        } else {
+          await (db.delete(
+            db.preferences,
+          )..where((p) => p.key.equals(key))).go();
+        }
+      }
+    }
   });
 }
 

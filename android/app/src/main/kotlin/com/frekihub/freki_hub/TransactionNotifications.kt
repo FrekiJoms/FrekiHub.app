@@ -8,29 +8,28 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 
 object TransactionNotifications {
     private const val CHANNEL = "frekihub_transactions"
 
     fun allowed(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
+        if (context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return false
         val manager = context.getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return false
-        return Build.VERSION.SDK_INT < 26 || manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
+        return manager.getNotificationChannel(CHANNEL)?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
     fun post(context: Context, receipt: Map<*, *>): Boolean {
         if (!allowed(context)) return false
         val id = receipt["id"] as? String ?: return false
         val manager = context.getSystemService(NotificationManager::class.java)
-        if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(NotificationChannel(CHANNEL, "Saved transactions", NotificationManager.IMPORTANCE_DEFAULT).apply {
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Saved transactions", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "Confirmation after detected purchases are saved to Finance"
         })
         val open = PendingIntent.getActivity(context, 92,
             Intent(context, MainActivity::class.java).putExtra("openPage", "budget").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        fun builder() = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL) else Notification.Builder(context)
+        fun builder() = Notification.Builder(context, CHANNEL)
         val details = buildString {
             append("Added to Finance and saved\n")
             append("Amount: ${receipt["amount"]}\n")

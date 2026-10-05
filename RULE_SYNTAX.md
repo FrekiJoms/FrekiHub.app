@@ -174,3 +174,16 @@ App data changes refresh the evaluator while Flutter is active. Foreground recon
 Expense actions use the existing deduplicated transaction import and saved-transaction receipt pipeline. Config snapshots are transported separately and never saved recursively into rule preferences. Legacy visual location rules continue to work.
 
 `device.overlay_allowed` is a boolean live Android field: whether Display over other apps access is granted. Completion exposes it; comparisons require `true` or `false`. For example `target == app { if (data.get("device.overlay_allowed") == false) { app.toast("Enable overlay access in Settings to confirm from Dynamic Island"); } }`. It is read from Android during evaluation, does not grant permission, and is not a persisted Flutter snapshot value.
+
+## Runtime diagnostics — 2026-10-06
+
+Completion and type validation include these `data.get` fields on existing targets:
+
+| Field | Type / meaning |
+| --- | --- |
+| `session.timer_available` | Boolean; no recorded native timer-start failure. Does not guarantee an OEM-visible island. Android refreshes it from runtime state. |
+| `activity_logs.pending_count` | Number; unacknowledged native-event count during Android evaluation. |
+| `location.logging_paused` | Boolean; periodic location-history samples paused at 5,000 pending events. Location predicates and essential actions continue. |
+| `budget.invalid_projection_count` | Number; unsupported planner projections in the display currency during the current month. Flutter snapshot observation. |
+
+For example: `target == app { if (data.get("location.logging_paused") == true && data.get("activity_logs.pending_count") >= 5000) { app.toast("Open FrekiHub to sync pending actions"); } }`. Boolean fields reject string comparisons; numeric fields reject nonnumeric literals. Targets, action limits, branch-change deduplication and notification scheduling remain unchanged. Runtime queue/delivery observations override Flutter's initial false/zero/no-failure defaults in Android; they are not persisted into rule source/configuration.

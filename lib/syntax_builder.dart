@@ -92,11 +92,11 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
 
   Future<void> refresh() async {
     await guarded(context, () async {
+      await AutomationSync.reconcile(ref.read(databaseProvider));
       final next = await AutomationSync.status();
       next['receipts'] = await NativeSession.channel.invokeMethod<bool>(
         'receiptNotificationsAllowed',
       );
-      await AutomationSync.reconcile(ref.read(databaseProvider));
       if (mounted) setState(() => status = next);
     });
   }
@@ -438,6 +438,11 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
           value: data.prefs['locationEnabled'] == 'true',
           onChanged: (v) => toggle('locationEnabled', v),
         ),
+        if (status['logging_paused'] == true)
+          Text(
+            'Location history is paused while ${status['pending_count']} pending actions sync. Saved records and location rules are retained.',
+            style: const TextStyle(fontSize: 12),
+          ),
         if (status['background'] != true)
           Wrap(
             spacing: 8,

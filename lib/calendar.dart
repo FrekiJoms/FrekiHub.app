@@ -19,6 +19,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   void initState() {
     super.initState();
+    selected = DateUtils.dateOnly(
+      DateTime.tryParse(widget.data.prefs['calendarSelected'] ?? '') ??
+          DateTime.now(),
+    );
+    final savedView = [
+      'year',
+      'month',
+      'week',
+      'day',
+    ].indexOf(widget.data.prefs['calendarView'] ?? 'month');
+    mode = savedView < 0 ? 1 : savedView;
     indexRecords();
   }
 
@@ -52,10 +63,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   void choose(DateTime date) => setState(() => selected = date);
   void shift(int direction) => setState(() {
     selected = mode == 0
-        ? DateTime(selected.year + direction, selected.month, selected.day)
+        ? DateTime(
+            selected.year + direction,
+            selected.month,
+            math.min(
+              selected.day,
+              DateTime(selected.year + direction, selected.month + 1, 0).day,
+            ),
+          )
         : mode == 1
         ? DateTime(selected.year, selected.month + direction)
-        : selected.add(Duration(days: direction * (mode == 2 ? 7 : 1)));
+        : DateTime(
+            selected.year,
+            selected.month,
+            selected.day + direction * (mode == 2 ? 7 : 1),
+          );
   });
 
   String? storedSelection;
@@ -171,16 +193,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                 : LayoutBuilder(
                     builder: (c, constraints) {
                       final start = DateTime(selected.year, selected.month);
-                      final monthStart = start.subtract(
-                        Duration(days: start.weekday % 7),
+                      final monthStart = calendarOffset(
+                        start,
+                        -(start.weekday % 7),
                       );
                       final rows =
                           ((DateTime(selected.year, selected.month + 1, 0).day +
                                       start.weekday % 7) /
                                   7)
                               .ceil();
-                      final week = selected.subtract(
-                        Duration(days: selected.weekday % 7),
+                      final week = calendarOffset(
+                        selected,
+                        -(selected.weekday % 7),
                       );
                       final single =
                           collapsed || mode == 2 || constraints.maxHeight < 360;
@@ -205,8 +229,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                           (col) => Expanded(
                                             child: dateCell(
                                               c,
-                                              (single ? week : monthStart).add(
-                                                Duration(days: row * 7 + col),
+                                              calendarOffset(
+                                                single ? week : monthStart,
+                                                row * 7 + col,
                                               ),
                                               false,
                                             ),
@@ -572,7 +597,10 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   Widget weekTimeline(BuildContext c, DateTime week) {
     final colors = Theme.of(c).colorScheme;
-    final dates = List.generate(7, (i) => week.add(Duration(days: i)));
+    final dates = List.generate(
+      7,
+      (i) => DateTime(week.year, week.month, week.day + i),
+    );
     final now = DateTime.now();
     const hourHeight = 56.0;
     return Column(
@@ -692,7 +720,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                 s.ended ?? now.millisecondsSinceEpoch,
                               );
                               return start.isBefore(
-                                    dates[i].add(const Duration(days: 1)),
+                                    calendarOffset(dates[i], 1),
                                   ) &&
                                   end.isAfter(dates[i]);
                             })
@@ -707,9 +735,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                   ? 0
                                   : start.hour * 60 + start.minute;
                               final endMinute =
-                                  end.isAfter(
-                                    dates[i].add(const Duration(days: 1)),
-                                  )
+                                  end.isAfter(calendarOffset(dates[i], 1))
                                   ? 1440
                                   : end.hour * 60 + end.minute;
                               final blockHeight = math.max(

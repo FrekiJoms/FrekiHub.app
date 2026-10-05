@@ -87,6 +87,9 @@ object RuleProgram {
             values.put("session.today_seconds", values.optLong("session.today_seconds") + maxOf(0, (System.currentTimeMillis() - values.optLong("_sampleTime", System.currentTimeMillis())) / 1000))
         }
         values.put("notifications.enabled", c.getSystemService(NotificationManager::class.java).areNotificationsEnabled())
+        values.put("session.timer_available", !Automation.prefs(c).contains("timerDeliveryError"))
+        values.put("activity_logs.pending_count", RuntimeEvents.pending(c))
+        values.put("location.logging_paused", RuntimeEvents.samplesPaused(c))
         values.put("notifications.exact_allowed", RuleNotifications.exactAllowed(c))
         values.put("notifications.schedule_count", RuleNotifications.count(c))
         values.put("notifications.reminder_sound", NotificationSoundSettings.sound(c, "reminders"))

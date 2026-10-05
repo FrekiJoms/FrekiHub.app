@@ -6,6 +6,8 @@ import 'data.dart';
 abstract final class RuleCatalog {
   static const booleanFields = {
     'session.active',
+    'session.timer_available',
+    'location.logging_paused',
     'settings.sound',
     'activity_logs.enabled',
     'location.enabled',
@@ -64,6 +66,12 @@ abstract final class RuleCatalog {
     'session.duration_seconds': 'Running duration in seconds',
     'session.today_seconds': 'Recorded time today',
     'session.note': 'Running session note',
+    'session.timer_available':
+        'Native timer delivery state, refreshed on Android',
+    'activity_logs.pending_count':
+        'Pending native events, refreshed on Android',
+    'location.logging_paused':
+        'Background samples paused while the pending queue is full',
     'budget.income': 'Income this month in display currency',
     'budget.expenses': 'Expenses this month',
     'budget.savings': 'Savings this month',
@@ -72,6 +80,8 @@ abstract final class RuleCatalog {
     'budget.currency': 'Display currency',
     'budget.transaction_count': 'Recorded transaction count',
     'budget.rule_count': 'Budget planner rule count',
+    'budget.invalid_projection_count':
+        'Planner occurrences exceeding supported amount limits this month',
     'budget.last.amount': 'Last transaction amount',
     'budget.last.kind': 'Last transaction type',
     'budget.last.category': 'Last category',
@@ -176,6 +186,11 @@ abstract final class RuleCatalog {
       'budget.currency': data.currency,
       'budget.transaction_count': data.entries.length,
       'budget.rule_count': data.rules.length,
+      'budget.invalid_projection_count': project(
+        data,
+        DateTime(now.year, now.month),
+        DateTime(now.year, now.month + 1, 0),
+      ).where((p) => p.error != null).length,
       'budget.goal': major(
         int.tryParse(data.prefs['savingsGoal:${data.currency}'] ?? '') ?? 0,
       ),
@@ -228,6 +243,9 @@ abstract final class RuleCatalog {
       'activity_logs.enabled': data.prefs['activityLogging'] == 'true',
       'activity_logs.count':
           int.tryParse(data.prefs['activityCount'] ?? '') ?? 0,
+      'activity_logs.pending_count': 0,
+      'location.logging_paused': false,
+      'session.timer_available': true,
       'activity_logs.last.action': data.prefs['lastActivityAction'] ?? '',
       'activity_logs.last.title': data.prefs['lastActivityTitle'] ?? '',
       'location.enabled': data.prefs['locationEnabled'] == 'true',

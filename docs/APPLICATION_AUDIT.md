@@ -1,5 +1,15 @@
 # FrekiHub application audit
 
+## Remediation after full scan — 2026-10-06
+
+S01–S04 and S07–S09 have source fixes: bounded/recomputed planner amounts, transactional typed log validation, aligned 128 MiB backup policy/isolate JSON, fixed Home action instants, Logs error/Retry, common provider lookup and explicit OS backup exclusions. S05 has native diagnostics/fallback/resume retry; S06 has segmented durable queues, committed-prefix batches and explicit sample backpressure. Calendar restoration/date arithmetic, session formats, Map clustering/selection pruning, 32 MiB map cache, unused dependency removal, compatible dependency updates, adaptive masking and release-signing gates are also implemented.
+
+Verification: the full Flutter suite passed 109 checks; the final affected planner/reconciliation suite passed 20 checks after the additional batch-ordering and monthly-base overflow guards. Flutter analysis and final affected Dart analysis reported no issues. Native Kotlin compilation and Android lint passed with 0 errors and 75 warnings; the production reminder-clock check passed 10 cases. Documentation links and diff whitespace were checked. No APK was assembled/installed; automated tests do not establish phone performance or native queue crash recovery.
+
+Remaining boundaries: essential queues/history are retained without silent eviction; Map queries still materialize the complete selected range; Android queue process-death migration, actual location/timer/backup transport and profile behavior require a phone. No phone is connected, no APK was assembled/installed and no records were cleared. Legacy Kotlin/AGP flags require coordinated third-party plugin migration, HyperIsland 0.4.4 needs a compatible clock-out control migration, and SDK XML metadata warnings belong to host tooling. Owner release-signing credentials remain unprovisioned. Closed-Flutter Finance saves still reconcile through the existing SQLite owner, and Logs is not a journal of every autosave/deletion.
+
+The historical scan/follow-up statements below describe their original review state; this section and the updated F01/F03–F05/F08–F10 entries supersede their outstanding-status claims.
+
 ## Full scan — 2026-10-05
 
 See [Full application scan](FULL_SCAN_2026-10-05.md) for current source evidence, severity and reproduction details. Full Flutter suite: **97 passed**; native reminder clock check: **10 passed**; two synthetic probes confirmed a percentage-projection/restore limit defect and accepted malformed log timestamps. Flutter analysis reported four Map lint infos, with no error/warning/deprecated Dart API diagnostics. Kotlin compilation passed; Android lint failed with two ignored local.properties path-escaping errors and 101 warnings. Deprecated AGP compatibility flags, native legacy branches and outdated packages were identified. The latest foreground location path also delays Home action timestamps until acquisition completes. No app behavior or phone records were changed in this scan.
@@ -152,47 +162,47 @@ Verification: all three focused clock regressions and all four existing layout c
 
 These findings originated in the initial documentation audit. They remain unresolved unless explicitly marked resolved below. Recheck their source and add focused regression coverage when implementing a change; follow-up evidence appears at the end of this document.
 
-### F01 — Release signing is not production-ready
+### F01 — Release signing fallback removed; owner provisioning remains
 
-Priority: high for an app-store release; not a private source-repository blocker. `android/app/build.gradle.kts` assigns the debug signing configuration to release. A signed store build needs deliberate key management and release configuration. Do not invent/upload signing secrets or treat private Git publishing as an app release.
+Resolved in source: Release tasks require external owner credentials and never select debug signing. No release/key was created. Owner keystore provisioning and actual release validation remain separate authorized work.
 
 ### F02 — Finance has no immediate closed-Flutter commit
 
 Priority: medium, product expectation gap. `PurchaseListener` queues structured JSON; only `AutomationSync._reconcile` inserts Drift expenses and durable receipts. A payment detected with Flutter closed will not appear as a committed Finance entry or generate its saved confirmation until reconciliation. Accurate documentation resolves the misleading claim, not the implementation gap. A future native/shared database writer requires an explicit migration/concurrency design.
 
-### F03 — Time-only background timer start can fail silently
+### F03 — Native timer failure handling added
 
-Priority: medium. `Automation.applySessionTransition` writes session state and emits `auto_clock_in` before attempting a foreground service. Its catch suppresses all service-start exceptions. A non-geofence background evaluation can be restricted by Android, leaving recorded timing without the expected native notification. Add diagnostics and design a platform-compatible fallback before promising reliable time-only outside-app clock-in. Actual occurrence on the user's device remains unverified.
+Resolved in source: persisted delivery diagnostics, normal-notification fallback and resume retry preserve saved session ID/start. Physical Android/OEM rejection/fallback delivery remains unverified.
 
-### F04 — Native event queue has no bound or retention policy
+### F04 — Native queue segmented with explicit sample backpressure
 
-Priority: medium for sustained collection. `Automation.emit` reparses/rewrites a JSON array and commits synchronously. All unacknowledged events remain in SharedPreferences. Extended closed-app logging can increase memory/I/O cost and import latency. Investigate an append-friendly bounded/durable transport with explicit loss/retention semantics; do not silently drop logs to optimize it.
+Resolved growth-amplification path: durable 200-event preference segments, batched committed-prefix import and reclamation; new periodic samples pause at 5,000 pending events. Essential events are retained without a hard eviction cap. Process-death/disk-failure migration needs device verification.
 
-### F05 — Export and restore size policies disagree
+### F05 — Export and restore share a size policy — resolved
 
-Priority: medium. `AppDatabase.backup` builds the full history/preferences JSON with no size bound. Settings rejects restore files above 20 MiB. An exported large backup can be impossible to restore through the UI. A future solution should align limits or stream/segment export/import while preserving rollback and full history.
+Export and restore share a 128 MiB UTF-8 policy; transaction snapshot plus isolate serialization retains atomicity. A larger export fails explicitly rather than producing an unsupported backup.
 
 ### F06 — Map failure recovery and large history need work
 
 Status: **partially resolved, 2026-10-02**. Map tile failures now provide a retry that resets the tile layer and evicts failed images; record-query failures can retry separately. Selected records/dots are preserved during tile retry. Compact controls adapt to short screens, and large badges display `99+` with exact counts retained in accessibility/detail content. The Map widget regression covers retry-triggered image reload, retained selection/trace, a 320 px enlarged-text portrait layout and non-overlapping controls at 640×360; coordinate/query tests also passed (four focused tests total). Static analysis reported no issues. The final widget check verifies zoom activation after map readiness; readiness now rebuilds controls so they cannot remain disabled after initialization.
 
-Remaining: full-year/all-range queries materialize every record and marker group. Unchanged-row skips/cache limits help, but no long-history benchmark or spatial clustering exists. Real network/offline recovery and native GPS permission/provider failures require phone verification. The user's precise location error was not identified from an error message; Map itself does not request GPS. Profile before adding heavy dependencies; preserve named legends, complete query semantics and truthful sampled traces.
+Remaining: full-year/all-range queries materialize every record and marker group. Unchanged-row skips/cache limits help, but zoom-aware spatial clustering now preserves complete membership; no physical long-history benchmark exists. Real network/offline recovery and native GPS permission/provider failures require phone verification. The user's precise location error was not identified from an error message; the explicit Map locate tool now requests a foreground fix. Profile before adding heavy dependencies; preserve named legends, complete query semantics and truthful sampled traces.
 
 ### F07 — Session condition banner is broader than its label — resolved
 
 Priority: low. The banner still links to all saved automation, including notification/Finance-only and paused rules. It now says “Automation rules saved” and directs users to Settings for individual Run/Stop status. It no longer claims that every saved rule is a session condition or that the global location toggle represents every rule. Source checked in `lib/history.dart`; the full widget suite passed.
 
-### F08 — Date/view state restoration is incomplete
+### F08 — Calendar restores navigation state — resolved in source
 
-Priority: low. `CalendarScreen` exports selected date/view preferences but initializes at today/month on remount. This is a documented behavior, not persisted restoration. Some Calendar next/week/day operations still use duration arithmetic; review DST boundaries if restoring navigation state or supporting additional zones. Map date ranges already use calendar-aligned boundaries.
+Saved selected date/view initialize on remount. Day/week/grid/agenda arithmetic uses calendar components; yearly leap-day movement clamps to the target month. Widget regression covers remount and leap-day navigation; Flutter local-time DST behavior remains a timezone/device gap.
 
-### F09 — Apparently unused direct dependencies
+### F09 — Unused direct dependencies removed
 
-Priority: low. A source search found no Dart use of `shared_preferences` or `CupertinoIcons`, though the direct packages remain in `pubspec.yaml`. Android SharedPreferences usage does not require the Dart plugin. Verify generated/plugin/platform dependencies and device startup before removing packages; no dependency was removed in this pass.
+Removed animations, cupertino_icons and shared_preferences plus now-unused preferences plugins. Updated glass/Lucide and Play location within compatible versions. Full source/plugin checks cover removal; physical cold-start review remains pending.
 
-### F10 — Restore/log coverage is narrower than a complete activity journal
+### F10 — Restore validation fixed; journal scope documented
 
-Priority: low. Raw activity-log JSON is not comprehensively schema-validated during restore; SQL constraints/transaction rollback provide part of protection. Trigger logging covers inserts and the initial end transition, not edits/deletes/all UI actions. Document these boundaries; new log types need explicit schema/provenance handling and should not be represented as recorded when absent.
+Raw log identity/text/epoch/JSON/position values validate before transactional replacement. Logs cover session start/end and Finance insertion/meaningful updates, not every deletion/autosave. This journal scope is explicit; user data-action success feedback remains separate.
 
 ## Preserved invariants
 
@@ -236,23 +246,21 @@ Reviewed the six page surfaces, shared navigation/drawers/selectors/forms, start
 
 ### Additional source-confirmed findings
 
-#### F11 — Some async UI callbacks still bypass guarded feedback
+#### F11 — Async mutation failure coverage remains incomplete
 
-Status: partially addressed on 2026-10-04. The data-action feedback feature wraps the listed Finance occurrence/duplicate/delete/reorder, session format, appearance/currency and payment-app/condition deletion callbacks in `guarded`; sound preferences are now awaited before success feedback. A pending/failed-operation regression verifies the shared guard never emits success on failure. Individual injected database/native-failure coverage for every callback remains outstanding; this finding is not claimed fully resolved.
+The listed Finance, formatting, appearance, payment-app and condition callbacks now use guarded feedback; shared tests verify failed/pending commits do not announce success. Individual fault injection for every callback is still a coverage gap, not evidence that these guarded source paths bypass error presentation. The new planner and native batch checks exercise transaction failure/retry explicitly.
 
-Priority: medium. Finance occurrence status changes, planner duplicate/delete/reorder (`lib/budget.dart`), session date/time preference changes (`lib/history.dart`), appearance/currency preferences (`lib/settings.dart`), and selected payment-app saves/condition deletion (`lib/activity.dart`) contain direct awaited writes without their own error handler. `withFeedback` invokes the callback without awaiting its future; the outer handler that opened a sheet does not catch a later button's failure. These paths can fail without the new error pill. The form deletion, goal and managed-list paths were fixed here; the remaining callbacks need a bounded follow-up and injected write-failure coverage. Successful-path widget tests do not prove failure delivery.
+#### F12 — Logs stream recovery — resolved
 
-#### F12 — Logs stream errors can look like an empty journal
+`LogsSheet` in `lib/logs.dart` holds one stream subscription, retains its last loaded rows on failure, and presents explicit Retry. Initial stream errors do not remain skeletons or claim an empty journal. The UI regression injects a read failure after data and verifies retained rows and successful retry; pending-content skeleton behavior retains existing coverage.
 
-Priority: medium. `ActivitySheet.logs` uses `snapshot.data ?? []` without testing `snapshot.hasError`. A database stream error with no data displays “No activity yet” and advice to enable logging, rather than a load failure/Retry state. With prior data, the view can show stale records without indicating failure. Source: `lib/activity.dart`, Logs StreamBuilder. Needs a stream-error regression test and a persistent recoverable state.
+#### F13 — Session display formats — resolved
 
-#### F13 — Session editing ignores display-format preferences
+`SessionForm` shares `displayDate` and `clockTime` with existing display surfaces. The UI regression verifies the chosen dd/MM/yyyy date and twelve-hour clock. Source and full-suite evidence also preserve the default twenty-four-hour path.
 
-Priority: low. Session lists/previews use `sessionDate` and `clockTime`, but `SessionForm` clock-in/out labels hard-code `d MMM yyyy, HH:mm`. Choosing a 12-hour clock or another date format in Settings does not carry into the editing sheet. Source: `lib/forms.dart`. Use the existing formatting helpers and verify 12/24-hour and date-format examples in a future change.
+F06 follow-up: recorded Map stream recovery and tile retry already have passing regressions. This pass adds zoom-aware clusters and set-based selection pruning, preserving complete timeline membership. Full-range materialization and physical long-history performance remain explicit device gaps.
 
-F06 additional evidence: `MapScreen.watch` sets `loadError` after a record-stream error but does not clear it when subsequent rows succeed. Its unchanged-row fast path may also return before clearing the error. The tile-error flag similarly has no explicit recovery/reset. Preserve saved dots and expose recoverable errors without treating network availability as record availability.
-
-### Rechecked outstanding risks
+### Historical rechecked risks — superseded by the 2026-10-05 remediation
 
 F01 debug release signing, F02 queued closed-Flutter purchases, F03 swallowed native timer-start failures, F04 unbounded native events, F05 export/restore size disagreement, F06 Map recovery/history cost, F08 Calendar remount/date arithmetic, F09 apparently unused dependencies, and F10 incomplete restore/log validation remain unresolved. No retention policy, database schema, automation language, platform minimum or permission behavior was changed in this pass. `budget_page` compatibility destinations, integer money/currency isolation, transactional reconciliation and commit-before-receipt behavior are retained.
 

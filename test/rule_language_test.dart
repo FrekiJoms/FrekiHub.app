@@ -3,6 +3,38 @@ import 'package:freki_hub/rule_language.dart';
 import 'package:freki_hub/data.dart';
 
 void main() {
+  test('Queue, timer and invalid-projection diagnostics expose typed fields', () {
+    for (final field in [
+      'session.timer_available',
+      'location.logging_paused',
+    ]) {
+      expect(RuleCatalog.fields, contains(field));
+      RuleCompiler.compile(
+        'target == app { if (data.get("$field") == false) { log("Diagnostic"); } }',
+      );
+      expect(
+        () => RuleCompiler.compile(
+          'target == app { if (data.get("$field") == "false") { log("Wrong type"); } }',
+        ),
+        throwsFormatException,
+      );
+    }
+    for (final field in [
+      'activity_logs.pending_count',
+      'budget.invalid_projection_count',
+    ]) {
+      expect(RuleCatalog.fields, contains(field));
+      RuleCompiler.compile(
+        'target == app { if (data.get("$field") > 0) { log("Pending"); } }',
+      );
+      expect(
+        () => RuleCompiler.compile(
+          'target == app { if (data.get("$field") == "many") { log("Wrong type"); } }',
+        ),
+        throwsFormatException,
+      );
+    }
+  });
   test('Foreground Map location fields have typed completion and snapshots', () {
     expect(RuleCatalog.fields, contains('map.current_location_visible'));
     expect(RuleCatalog.numericField('map.current_location_accuracy'), isTrue);
