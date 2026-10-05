@@ -120,6 +120,12 @@ Export, database restore and file selection share a 128 MiB UTF-8 limit. Export 
 
 Clearing records or uninstalling removes local application data. Backups contain sensitive financial/location information as plain JSON; the application does not add database/backup encryption or a cloud copy.
 
+## Explicit log deletion
+
+`deleteActivityLog(id)` removes one raw activity row in a transaction, updates `logRevision`, `activityCount` and latest action/title (empty when no rows remain), and leaves sessions/entries untouched. Preferences wake both raw-table streams after commit; Map removes deleted IDs from its selection and open timeline. Missing IDs are a quiet no-op. No delete-trigger log is emitted.
+
+`deletedLog:ID` stores only a replay-suppression identity. `addActivity` checks it alongside existing log IDs so a native acknowledgement retry cannot recreate a deleted row. These IDs survive JSON export/restore and explicit record clearing removes them with other preferences. They are excluded from rule snapshots/completion; existing typed activity observables describe the remaining records.
+
 ## Remediation contracts — 2026-10-06
 
 Monthly planner bases and final amounts stay in BigInt until checked against 9,000,000,000,000,000 minor units, preventing large valid entry totals from wrapping before percentage calculations. Invalid projections have an error/status and disabled completion; they are not clipped into valid money. `recordProjection` recomputes the occurrence inside its transaction, validates its current positive amount and preserves occurrence uniqueness on repeat activation.

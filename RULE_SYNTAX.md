@@ -175,6 +175,10 @@ Expense actions use the existing deduplicated transaction import and saved-trans
 
 `device.overlay_allowed` is a boolean live Android field: whether Display over other apps access is granted. Completion exposes it; comparisons require `true` or `false`. For example `target == app { if (data.get("device.overlay_allowed") == false) { app.toast("Enable overlay access in Settings to confirm from Dynamic Island"); } }`. It is read from Android during evaluation, does not grant permission, and is not a persisted Flutter snapshot value.
 
+## Manual log deletion
+
+Deleting a log from its expanded Activity logs or Map timeline row refreshes the existing typed `activity_logs.count`, `activity_logs.last.action` and `activity_logs.last.title` fields after commit. Empty history yields count zero and empty latest strings. Deleted-ID replay markers are internal and excluded from generic settings snapshots/completion. This UI feature adds no rule target or deletion command; existing field validation and completion types are unchanged.
+
 ## Runtime diagnostics — 2026-10-06
 
 Completion and type validation include these `data.get` fields on existing targets:

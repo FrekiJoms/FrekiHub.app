@@ -1110,6 +1110,25 @@ class _MapLogSheet extends StatefulWidget {
 
 class _MapLogSheetState extends State<_MapLogSheet> {
   late final Set<String> selected = {...widget.selected};
+  late final List<MapRecord> records = [...widget.records];
+  late final List<Map<String, dynamic>> unlocated = [...widget.unlocated];
+  Widget deleteAction(String id) => LogDeleteButton(
+    onDelete: () async {
+      final db = ProviderScope.containerOf(
+        context,
+        listen: false,
+      ).read(databaseProvider);
+      final deleted = await deleteActivityLog(context, db, id);
+      if (deleted && mounted) {
+        setState(() {
+          records.removeWhere((r) => r.id == id);
+          unlocated.removeWhere((r) => r['id'] == id);
+          selected.remove(id);
+        });
+      }
+      return deleted;
+    },
+  );
   @override
   Widget build(BuildContext c) => TextButtonTheme(
     data: TextButtonThemeData(
@@ -1148,7 +1167,7 @@ class _MapLogSheetState extends State<_MapLogSheet> {
                 TextButton(
                   onPressed: withFeedback(
                     () => setState(
-                      () => selected.addAll(widget.records.map((r) => r.id)),
+                      () => selected.addAll(records.map((r) => r.id)),
                     ),
                   ),
                   child: const Text('Select all'),
@@ -1177,7 +1196,7 @@ class _MapLogSheetState extends State<_MapLogSheet> {
         ],
       ),
       scrollable: true,
-      child: widget.records.isEmpty && widget.unlocated.isEmpty
+      child: records.isEmpty && unlocated.isEmpty
           ? ListView(
               children: const [
                 Center(child: Text('No records with a usable location')),
@@ -1185,15 +1204,16 @@ class _MapLogSheetState extends State<_MapLogSheet> {
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-              itemCount: widget.records.length + widget.unlocated.length,
+              itemCount: records.length + unlocated.length,
               itemBuilder: (c, i) {
-                if (i >= widget.records.length) {
-                  final row = widget.unlocated[i - widget.records.length];
+                if (i >= records.length) {
+                  final row = unlocated[i - records.length];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: LogRow(
                       key: ValueKey('map-log-${row['id']}'),
                       details: logDetails(row),
+                      action: deleteAction(row['id'] as String),
                       title: row['title']?.toString() ?? 'Activity',
                       dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(
                         DateTime.fromMillisecondsSinceEpoch(row['time'] as int),
@@ -1201,12 +1221,13 @@ class _MapLogSheetState extends State<_MapLogSheet> {
                     ),
                   );
                 }
-                final record = widget.records[i];
+                final record = records[i];
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: LogRow(
                     key: ValueKey('map-log-${record.id}'),
                     details: logDetails(record.row),
+                    action: deleteAction(record.id),
                     title: record.title,
                     dateTime: DateFormat('d MMM yyyy, HH:mm:ss')
                         .format(record.time),

@@ -245,8 +245,11 @@ class AppDatabase extends _$AppDatabase {
   ).watch().map((rows) => rows.map((r) => r.data).toList());
   Future<void> addActivity(Map<String, dynamic> event) async {
     final existing = await customSelect(
-      'SELECT id FROM activity_logs WHERE id = ?',
-      variables: [Variable<String>(event['id'] as String)],
+      'SELECT id FROM activity_logs WHERE id = ? UNION ALL SELECT key FROM preferences WHERE key = ?',
+      variables: [
+        Variable<String>(event['id'] as String),
+        Variable<String>('deletedLog:${event['id']}'),
+      ],
     ).get();
     if (existing.isNotEmpty) return;
     await customStatement(
@@ -268,6 +271,33 @@ class AppDatabase extends _$AppDatabase {
     await pref('lastActivityAction', event['action']);
     await pref('lastActivityTitle', event['title']);
   }
+
+  Future<int> deleteActivityLog(String id) => transaction(() async {
+    final removed = await customUpdate(
+      'DELETE FROM activity_logs WHERE id = ?',
+      variables: [Variable<String>(id)],
+    );
+    if (removed == 0) return 0;
+    // Keep only the identity so a failed native acknowledgement cannot restore it.
+    await pref('deletedLog:$id', true);
+    final count = await customSelect(
+      'SELECT COUNT(*) AS total FROM activity_logs',
+    ).getSingle();
+    final latest = await customSelect(
+      'SELECT action, title FROM activity_logs ORDER BY time DESC, id DESC LIMIT 1',
+    ).get();
+    await pref('activityCount', count.read<int>('total'));
+    await pref(
+      'lastActivityAction',
+      latest.isEmpty ? '' : latest.first.read<String>('action'),
+    );
+    await pref(
+      'lastActivityTitle',
+      latest.isEmpty ? '' : latest.first.read<String>('title'),
+    );
+    await pref('logRevision', DateTime.now().microsecondsSinceEpoch);
+    return removed;
+  });
 
   Stream<AppData> watchAll({
     Duration initialTimeout = const Duration(seconds: 15),

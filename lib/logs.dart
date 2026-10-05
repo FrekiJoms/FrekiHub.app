@@ -1,5 +1,64 @@
 part of 'screens.dart';
 
+Future<bool> deleteActivityLog(
+  BuildContext context,
+  AppDatabase db,
+  String id,
+) async {
+  var deleted = false;
+  await guarded(context, () async {
+    deleted = await db.deleteActivityLog(id) > 0;
+    if (deleted && context.mounted) {
+      dataToast(context, 'Log', DataAction.deleted);
+    }
+  });
+  return deleted;
+}
+
+/// Shared deletion action, including pending state and duplicate-tap protection.
+class LogDeleteButton extends StatefulWidget {
+  final Future<bool> Function() onDelete;
+  const LogDeleteButton({super.key, required this.onDelete});
+  @override
+  State<LogDeleteButton> createState() => _LogDeleteButtonState();
+}
+
+class _LogDeleteButtonState extends State<LogDeleteButton> {
+  bool active = false, busy = false;
+  Future<void> remove() async {
+    if (active) return;
+    setState(() => active = true);
+    try {
+      if (!await confirm(
+            context,
+            'Delete this log?',
+            'This log and its map marker will be permanently removed. Its session or Finance record will be kept.',
+          ) ||
+          !mounted) {
+        return;
+      }
+      setState(() => busy = true);
+      await widget.onDelete();
+    } finally {
+      if (mounted) {
+        setState(() {
+          active = false;
+          busy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AppButton(
+    label: 'Delete log',
+    onPressed: active ? null : remove,
+    busy: busy,
+    quiet: true,
+    destructive: true,
+  );
+}
+
 class LogsSheet extends ConsumerStatefulWidget {
   const LogsSheet({super.key});
   @override
@@ -86,6 +145,13 @@ class _LogsSheetState extends ConsumerState<LogsSheet> {
               child: LogRow(
                 key: ValueKey('activity-log-${event['id']}'),
                 details: logDetails(event),
+                action: LogDeleteButton(
+                  onDelete: () => deleteActivityLog(
+                    context,
+                    ref.read(databaseProvider),
+                    event['id'] as String,
+                  ),
+                ),
                 title: event['title'] as String,
                 dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(time),
               ),

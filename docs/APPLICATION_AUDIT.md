@@ -1,5 +1,11 @@
 # FrekiHub application audit
 
+## Log deletion — 2026-10-06
+
+Both expanded Activity and Map timeline rows expose the shared `LogDeleteButton`. Confirmation precedes the transaction; cancellation stays quiet, pending commits use the existing action skeleton and successful deletion acknowledges once. The deletion removes only the raw log, refreshes Map markers/selection and typed count/latest observables, and leaves source sessions/Finance records intact. Internal ID-only preferences prevent native replay from recreating deleted logs and survive backup/restore while remaining outside rule snapshots/completion.
+
+Verification: 28 targeted checks passed across log deletion, shared rows, Map, activity replay and typed rules; affected Dart analysis reported no issues. Widget checks verify cancellation/error feedback, transaction rollback, source-record preservation, stream updates, replay/backup protection and deleting a selected Map log. No personal phone logs were deleted during verification.
+
 ## Remediation after full scan — 2026-10-06
 
 S01–S04 and S07–S09 have source fixes: bounded/recomputed planner amounts, transactional typed log validation, aligned 128 MiB backup policy/isolate JSON, fixed Home action instants, Logs error/Retry, common provider lookup and explicit OS backup exclusions. S05 has native diagnostics/fallback/resume retry; S06 has segmented durable queues, committed-prefix batches and explicit sample backpressure. Calendar restoration/date arithmetic, session formats, Map clustering/selection pruning, 32 MiB map cache, unused dependency removal, compatible dependency updates, adaptive masking and release-signing gates are also implemented.

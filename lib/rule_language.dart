@@ -258,7 +258,8 @@ abstract final class RuleCatalog {
         (p) =>
             p.key != 'automation' &&
             !p.key.startsWith('purchaseNotice:') &&
-            !p.key.startsWith('ruleToast:'),
+            !p.key.startsWith('ruleToast:') &&
+            !p.key.startsWith('deletedLog:'),
       ))
         'settings.${pref.key}': pref.value,
     }..addAll({

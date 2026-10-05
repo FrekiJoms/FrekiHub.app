@@ -138,6 +138,12 @@ flowchart LR
 
 The native queue and pending receipts are transport state, not rule source. Flutter imports native events transactionally, then acknowledges them. System reminders post from native receivers without a Flutter widget. Flutter toasts and settings/expense changes need reconciliation. [Android runtime](ANDROID_RUNTIME.md) specifies the lifecycle and method-channel contract.
 
+## Deleting activity logs
+
+Expand a record in Settings → Activity logs or Map → Timeline logs, then choose **Delete log**. The shared confirmation explains that only the saved log and its map marker are removed; sessions, Finance entries, logging preferences and pending native actions remain intact. Cancellation is quiet. A committed deletion shows the existing “Log deleted” toast with its trash icon; a failed operation shows the error pill. The action uses shared panel/button/skeleton behavior and disables repeated taps while pending.
+
+Activity rows, Map markers/selection and activity count/latest-action observables refresh after commit. A small internal deleted-ID preference prevents native replay from recreating an intentionally deleted log; it retains no title, location or metadata. Existing JSON backups preserve these IDs. This feature does not request permission or add automated deletion commands.
+
 ## Source map
 
 | File | Owns |

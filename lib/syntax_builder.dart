@@ -677,7 +677,8 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                     (k) =>
                         k != 'settings.automation' &&
                         !k.startsWith('settings.purchaseNotice:') &&
-                        !k.startsWith('settings.ruleToast:'),
+                        !k.startsWith('settings.ruleToast:') &&
+                        !k.startsWith('settings.deletedLog:'),
                   ),
               create: busy
                   ? null

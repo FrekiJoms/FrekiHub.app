@@ -450,13 +450,14 @@ void dataToast(BuildContext context, String resource, DataAction action) {
 /// Compact presentation shared by Map timeline and Settings activity logs.
 class LogRow extends StatelessWidget {
   final String title, dateTime, details;
-  final Widget? leading;
+  final Widget? leading, action;
   const LogRow({
     super.key,
     required this.title,
     required this.dateTime,
     required this.details,
     this.leading,
+    this.action,
   });
   @override
   Widget build(BuildContext context) => Surface(
@@ -494,6 +495,11 @@ class LogRow extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
+        if (action != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Align(alignment: Alignment.centerRight, child: action),
+          ),
       ],
     ),
   );

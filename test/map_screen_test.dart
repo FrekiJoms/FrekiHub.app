@@ -661,6 +661,29 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+      tester.view.physicalSize = const Size(640, 720);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Choose located logs'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Select all'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Purchased lunch'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Delete log'));
+      await tester.tap(find.text('Delete log'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete').last);
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Purchased lunch'), findsNothing);
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(find.text('Log deleted'), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 located · 0 without location'), findsOneWidget);
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
     },
