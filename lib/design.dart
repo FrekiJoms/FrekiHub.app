@@ -653,6 +653,9 @@ class _PillNavigationState extends State<PillNavigation>
 
   void _detachController() {}
 
+  // ignore: unused_element
+  void _onTabScroll() {}
+
   void _removeTooltip() {
     _tooltipTimer?.cancel();
     _tooltipTimer = null;
