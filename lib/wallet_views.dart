@@ -17,6 +17,8 @@ class WalletSection extends ConsumerStatefulWidget {
   final GlobalKey? totalCardKey;
   final VoidCallback? onToggleMasked;
   final Widget? belowMonthCard;
+  final bool? monthCardExpanded;
+  final ValueChanged<bool>? onMonthCardExpandedChanged;
   const WalletSection({
     super.key,
     required this.data,
@@ -29,6 +31,8 @@ class WalletSection extends ConsumerStatefulWidget {
     this.totalCardKey,
     this.onToggleMasked,
     this.belowMonthCard,
+    this.monthCardExpanded,
+    this.onMonthCardExpandedChanged,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -268,6 +272,8 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             wallets: accounts.map((a) => a.name).toList(),
             currency: widget.data.currency,
             masked: _effectiveMasked,
+            expanded: widget.monthCardExpanded,
+            onExpandedChanged: widget.onMonthCardExpandedChanged,
             onPeriod: widget.onPeriod,
             onScope: widget.onWallet == null ? null : _scope,
           ),
@@ -539,6 +545,8 @@ class _WalletMonthCard extends StatefulWidget {
   final List<String> wallets;
   final String currency;
   final bool masked;
+  final bool? expanded;
+  final ValueChanged<bool>? onExpandedChanged;
   final ValueChanged<DateTime>? onPeriod;
   final VoidCallback? onScope;
   const _WalletMonthCard({
@@ -547,6 +555,8 @@ class _WalletMonthCard extends StatefulWidget {
     required this.wallets,
     required this.currency,
     required this.masked,
+    this.expanded,
+    this.onExpandedChanged,
     required this.onPeriod,
     required this.onScope,
   });
@@ -556,12 +566,21 @@ class _WalletMonthCard extends StatefulWidget {
 }
 
 class _WalletMonthCardState extends State<_WalletMonthCard> {
-  bool _expanded = true;
+  late bool _expanded = widget.expanded ?? true;
+
+  @override
+  void didUpdateWidget(covariant _WalletMonthCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.expanded != null && widget.expanded != _expanded) {
+      _expanded = widget.expanded!;
+    }
+  }
 
   String get scope => widget.wallet ?? 'All wallets';
 
   @override
   Widget build(BuildContext c) {
+    final expanded = widget.expanded ?? _expanded;
     final month = widget.month;
     final period = month.period;
     final last = DateTime(period.year, period.month + 1, 0);
@@ -609,13 +628,20 @@ class _WalletMonthCardState extends State<_WalletMonthCard> {
                 icon: const Icon(LucideIcons.chevronRight),
               ),
               IconButton(
-                tooltip: _expanded ? 'Minimize month card' : 'Expand month card',
-                onPressed: withFeedback(() => setState(() => _expanded = !_expanded)),
-                icon: Icon(_expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
+                tooltip: expanded ? 'Minimize month card' : 'Expand month card',
+                onPressed: withFeedback(() {
+                  final next = !expanded;
+                  if (widget.onExpandedChanged != null) {
+                    widget.onExpandedChanged!(next);
+                  } else {
+                    setState(() => _expanded = next);
+                  }
+                }),
+                icon: Icon(expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
               ),
             ],
           ),
-          if (!_expanded)
+          if (!expanded)
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 0, 0, 4),
               child: Row(

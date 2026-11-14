@@ -17,9 +17,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   double _cardTopAtOffset0 = 0;
   double _cardHeight = 0;
   bool _cardMetricsReady = false;
-  String _timelineSort = 'date'; // date | amount | type
-  bool _timelineDesc = false;
-  bool _historyExpanded = true;
+  late String _timelineSort; // date | amount | type
+  late bool _timelineDesc;
+  late bool _historyExpanded;
+  late bool _monthCardExpanded;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -164,6 +165,13 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   void initState() {
     super.initState();
     masked = widget.data.prefs['walletMasked'] == 'true';
+    _historyExpanded = widget.data.prefs['financeHistoryExpanded'] != 'false';
+    _timelineSort = widget.data.prefs['financeHistorySort'] ?? 'date';
+    if (!const {'date', 'amount', 'type'}.contains(_timelineSort)) {
+      _timelineSort = 'date';
+    }
+    _timelineDesc = widget.data.prefs['financeHistoryDesc'] == 'true';
+    _monthCardExpanded = widget.data.prefs['financeMonthCardExpanded'] != 'false';
     _scrollController.addListener(_updateCompactProgress);
     WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
   }
@@ -335,6 +343,16 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               maskedOverride: masked,
               onToggleMasked: _toggleMasked,
               totalCardKey: _totalCardKey,
+              monthCardExpanded: _monthCardExpanded,
+              onMonthCardExpandedChanged: (expanded) {
+                setState(() => _monthCardExpanded = expanded);
+                unawaited(
+                  ref
+                      .read(databaseProvider)
+                      .pref('financeMonthCardExpanded', '$expanded')
+                      .catchError((Object _) {}),
+                );
+              },
               onPeriod: (next) =>
                   setState(() => period = DateTime(next.year, next.month)),
               onWallet: (name) => setState(() => wallet = name),
@@ -616,6 +634,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         _timelineSort = parts[0];
                         _timelineDesc = parts[1] == 'desc';
                       });
+                      final db = ref.read(databaseProvider);
+                      unawaited(db.pref('financeHistorySort', _timelineSort).catchError((Object _) {}));
+                      unawaited(db.pref('financeHistoryDesc', '$_timelineDesc').catchError((Object _) {}));
                     }),
                     icon: Icon(
                       _timelineDesc ? LucideIcons.arrowDownWideNarrow : LucideIcons.arrowUpNarrowWide,
@@ -627,7 +648,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               IconButton(
                 tooltip: _historyExpanded ? 'Minimize' : 'Expand',
                 visualDensity: VisualDensity.compact,
-                onPressed: withFeedback(() => setState(() => _historyExpanded = !_historyExpanded)),
+                onPressed: withFeedback(() {
+                  setState(() => _historyExpanded = !_historyExpanded);
+                  unawaited(
+                    ref
+                        .read(databaseProvider)
+                        .pref('financeHistoryExpanded', '$_historyExpanded')
+                        .catchError((Object _) {}),
+                  );
+                }),
                 icon: Icon(_historyExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
               ),
             ],
