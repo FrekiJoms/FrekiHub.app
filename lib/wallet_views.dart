@@ -16,6 +16,7 @@ class WalletSection extends ConsumerStatefulWidget {
   final bool? maskedOverride;
   final GlobalKey? totalCardKey;
   final VoidCallback? onToggleMasked;
+  final Widget? belowMonthCard;
   const WalletSection({
     super.key,
     required this.data,
@@ -27,6 +28,7 @@ class WalletSection extends ConsumerStatefulWidget {
     this.maskedOverride,
     this.totalCardKey,
     this.onToggleMasked,
+    this.belowMonthCard,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -269,6 +271,10 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             onPeriod: widget.onPeriod,
             onScope: widget.onWallet == null ? null : _scope,
           ),
+        ],
+        if (widget.belowMonthCard != null) ...[
+          const SizedBox(height: 10),
+          widget.belowMonthCard!,
         ],
         const SizedBox(height: 10),
         _WalletToolbar(

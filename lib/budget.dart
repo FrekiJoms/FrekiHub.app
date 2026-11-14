@@ -616,36 +616,42 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ),
         ),
         SectionHeading(
-          'Expected & actual',
+          'History',
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               _scopeTag(c),
               const SizedBox(width: 4),
-              PopupMenuButton<String>(
-                tooltip: 'Sort',
-                icon: const Icon(LucideIcons.arrowUpDown, size: 16),
-                onSelected: (v) {
-                  setState(() {
-                    if (v == 'dir') {
-                      _timelineDesc = !_timelineDesc;
-                    } else {
-                      if (_timelineSort == v) {
-                        _timelineDesc = !_timelineDesc;
-                      } else {
-                        _timelineSort = v;
-                        _timelineDesc = v == 'date' ? false : false;
-                      }
-                    }
-                  });
-                },
-                itemBuilder: (c) => [
-                  CheckedPopupMenuItem(value: 'date', checked: _timelineSort == 'date', child: const Text('Date')),
-                  CheckedPopupMenuItem(value: 'amount', checked: _timelineSort == 'amount', child: const Text('Amount')),
-                  CheckedPopupMenuItem(value: 'type', checked: _timelineSort == 'type', child: const Text('Type')),
-                  const PopupMenuDivider(),
-                  PopupMenuItem(value: 'dir', child: Text(_timelineDesc ? 'Ascending' : 'Descending')),
-                ],
+              Builder(
+                builder: (anchor) => IconButton(
+                  tooltip: 'Sort',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: withFeedback(() async {
+                    final current = '${_timelineSort}_${_timelineDesc ? 'desc' : 'asc'}';
+                    final value = await showChoiceMenu<String>(
+                      anchor,
+                      choices: const {
+                        'date_asc': 'Date (oldest first)',
+                        'date_desc': 'Date (newest first)',
+                        'amount_asc': 'Amount (low to high)',
+                        'amount_desc': 'Amount (high to low)',
+                        'type_asc': 'Type',
+                        'type_desc': 'Type (reverse)',
+                      },
+                      selected: current,
+                    );
+                    if (value == null) return;
+                    final parts = value.split('_');
+                    setState(() {
+                      _timelineSort = parts[0];
+                      _timelineDesc = parts[1] == 'desc';
+                    });
+                  }),
+                  icon: Icon(
+                    _timelineDesc ? LucideIcons.arrowDownWideNarrow : LucideIcons.arrowUpNarrowWide,
+                    size: 16,
+                  ),
+                ),
               ),
             ],
           ),
@@ -963,6 +969,47 @@ class _TimelineRow extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+// ignore: unused_element
+class _CompactPillButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _CompactPillButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .5),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: withFeedback(onTap),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 15),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
