@@ -258,6 +258,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final days = timeline.keys.toList()..sort();
     return PageBody(
       children: [
+        const SizedBox(height: 72),
         WalletSection(
           data: d,
           month: summary,
