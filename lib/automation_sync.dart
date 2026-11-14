@@ -19,6 +19,11 @@ abstract final class AutomationSync {
             ) ??
             {},
       );
+  static Future<void> scanSms() async {
+    try {
+      await NativeSession.channel.invokeMethod('smsScan');
+    } catch (_) {}
+  }
   static Map<String, dynamic> config(AppData data) {
     Map<String, dynamic> stored = {};
     try {
@@ -44,6 +49,7 @@ abstract final class AutomationSync {
       'logging': data.prefs['activityLogging'] == 'true',
       'locationEnabled': data.prefs['locationEnabled'] == 'true',
       'purchases': data.prefs['purchaseScanning'] == 'true',
+      'sms': data.prefs['smsScanning'] == 'true',
     };
   }
 
@@ -67,6 +73,9 @@ abstract final class AutomationSync {
   }
 
   static Future<bool> _reconcile(AppDatabase db) async {
+    try {
+      await scanSms();
+    } catch (_) {}
     final source =
         await NativeSession.channel.invokeMethod<String>('automationEvents') ??
         '[]';

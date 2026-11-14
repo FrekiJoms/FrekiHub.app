@@ -69,6 +69,16 @@ abstract final class PermissionHints {
       action: 'Open location settings',
       icon: LucideIcons.mapPin,
     ),
+    'smsPermission': PermissionHintSpec(
+      title: 'Read transaction SMS',
+      intro: 'Import finance transactions from SMS messages.',
+      benefit: 'SMS transaction import',
+      detail: 'FrekiHub reads SMS locally to find transaction messages from banks and e-wallets.',
+      control: 'SMS content is processed locally and not sent to a server. You can revoke access in Android settings.',
+      next: 'Allow SMS access for FrekiHub on the next screen.',
+      action: 'Allow SMS access',
+      icon: LucideIcons.messageSquare,
+    ),
     'notificationPermission': PermissionHintSpec(
       title: 'Detect Finance transactions from your apps',
       intro:

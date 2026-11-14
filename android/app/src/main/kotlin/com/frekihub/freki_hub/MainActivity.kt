@@ -6,6 +6,8 @@ import android.content.ComponentName
 import android.app.NotificationManager
 import android.net.Uri
 import android.provider.Settings
+import android.provider.Telephony
+import org.json.JSONObject
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -27,6 +29,7 @@ class MainActivity : FlutterActivity() {
     private var startData: Map<*, *>? = null
     private var locationResult: MethodChannel.Result? = null
     private var receiptPermissionResult: MethodChannel.Result? = null
+private var smsPermissionResult: MethodChannel.Result? = null
     private var reminderPermissionResult: MethodChannel.Result? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -43,6 +46,7 @@ class MainActivity : FlutterActivity() {
                         "locationPermission" to (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED),
                         "backgroundPermission" to Automation.allowed(this),
                         "notificationPermission" to getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java)),
+                        "smsPermission" to (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED),
                         "exactReminderPermission" to RuleNotifications.exactAllowed(this),
                         "overlayPermission" to Settings.canDrawOverlays(this)
                     ))
@@ -53,6 +57,7 @@ class MainActivity : FlutterActivity() {
                         "start", "receiptNotificationPermission", "reminderPermission" -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
                         "locationPermission", "backgroundPermission" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
                         "notificationPermission" -> Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                        "smsPermission" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
                         "exactReminderPermission" -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
                         "overlayPermission" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                         else -> null
@@ -109,6 +114,11 @@ class MainActivity : FlutterActivity() {
                     else { locationResult = result; requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 74) }
                 }
                 "backgroundPermission" -> { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))); result.success(null) }
+                "smsPermission" -> {
+                    if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) result.success(true)
+                    else if (smsPermissionResult != null) result.error("busy", "A permission request is already open", null)
+                    else { smsPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.READ_SMS), 77) }
+                }
                 "notificationPermission" -> { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); result.success(null) }
                 "mapCurrentLocation" -> MapLocation.request(this) { location, error ->
                     if (location == null) result.error("location", error, null)
@@ -160,6 +170,51 @@ class MainActivity : FlutterActivity() {
                     })
                 }
                 "acknowledge" -> { check(prefs.edit().remove("pendingId").remove("pendingEnd").remove("pendingNote").remove("pendingPosition").commit()); result.success(null) }
+                "smsScan" -> {
+                    if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) { result.error("permission", "SMS permission required", null); return@setMethodCallHandler }
+                    val since = (call.arguments as? Number)?.toLong() ?: Automation.prefs(this).getLong("smsLastScan", System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000)
+                    var maxDate = since
+                    val cursor = contentResolver.query(Telephony.Sms.Inbox.CONTENT_URI, arrayOf("_id", "address", "body", "date"), "date > ?", arrayOf(since.toString()), "date ASC")
+                    cursor?.use {
+                        val idIdx = it.getColumnIndexOrThrow("_id")
+                        val addrIdx = it.getColumnIndexOrThrow("address")
+                        val bodyIdx = it.getColumnIndexOrThrow("body")
+                        val dateIdx = it.getColumnIndexOrThrow("date")
+                        while (it.moveToNext()) {
+                            val body = it.getString(bodyIdx) ?: continue
+                            val transaction = FinanceNotificationParser.parse(body) ?: continue
+                            val date = it.getLong(dateIdx)
+                            if (date > maxDate) maxDate = date
+                            val reference = Regex("(?i)(?:reference|ref|transaction)(?:\\s*(?:no|number|id))?[.:#\\s]+([A-Z0-9-]{6,})").find(body)?.groupValues?.get(1)
+                            val idPrefix = if (transaction.kind == "income") "income" else "purchase"
+                            val smsId = it.getString(idIdx)
+                            val id = "sms:$smsId"
+                            val counterparty = transaction.counterparty
+                            val eventTitle = when (transaction.kind) {
+                                "income" -> if (counterparty == "Not specified") "Received income" else "Received income · $counterparty"
+                                else -> if (counterparty == "Item not specified") "Purchased · item not specified" else "Purchased at $counterparty"
+                            }
+                            val event = JSONObject(Automation.prefs(this).getString("lastLocation", "{}")!!)
+                                .put("id", "$idPrefix:$id")
+                                .put("time", date)
+                                .put("action", "purchase")
+                                .put("kind", transaction.kind)
+                                .put("title", eventTitle)
+                                .put("merchant", counterparty)
+                                .put("amount", transaction.amount)
+                                .put("currency", transaction.currency)
+                                .put("package", "sms")
+                                .put("reference", reference ?: "")
+                            val addr = it.getString(addrIdx) ?: "SMS"
+                            event.put("source", addr)
+                            val locationTime = event.optLong("locationTime", 0L)
+                            if (System.currentTimeMillis() - locationTime > 120000L) { event.remove("lat"); event.remove("lng"); event.put("location", "Location unavailable") }
+                            Automation.emit(this, event)
+                        }
+                    }
+                    Automation.prefs(this).edit().putLong("smsLastScan", maxDate).commit()
+                    result.success(maxDate)
+                }
                 else -> result.notImplemented()
             } } catch (error: Exception) {
                 android.util.Log.w("FrekiHub", "Native operation failed: ${call.method}", error)
@@ -233,5 +288,6 @@ class MainActivity : FlutterActivity() {
         if (requestCode == 74) { locationResult?.success(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED); locationResult = null }
         if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }
         if (requestCode == 76) { reminderPermissionResult?.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled()); reminderPermissionResult = null }
+        if (requestCode == 77) { smsPermissionResult?.success(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED); smsPermissionResult = null }
     }
 }

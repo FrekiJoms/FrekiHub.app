@@ -97,6 +97,9 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
       next['receipts'] = await NativeSession.channel.invokeMethod<bool>(
         'receiptNotificationsAllowed',
       );
+      final permissionStatus = await NativeSession.channel
+          .invokeMapMethod<String, dynamic>('permissionStatus');
+      next['sms'] = permissionStatus?['smsPermission'] == true;
       if (mounted) setState(() => status = next);
     });
   }
@@ -105,6 +108,8 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
     ActionFeedback.tap();
     final label = key == 'purchaseScanning'
         ? 'Finance notification detection'
+        : key == 'smsScanning'
+        ? 'SMS transaction detection'
         : 'Location conditions';
     await guarded(
       context,
@@ -123,6 +128,12 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
             );
             if (!mounted) return;
           }
+          await refresh();
+        }
+        if (key == 'smsScanning' && value && mounted) {
+          await PermissionHints.request<bool>(context, 'smsPermission');
+          if (!mounted) return;
+          await AutomationSync.scanSms();
           await refresh();
         }
       },
@@ -764,6 +775,28 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
               }),
             ),
             child: const Text('Allow notification access'),
+          ),
+        const SizedBox(height: 12),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Detect Finance transactions from SMS'),
+          subtitle: const Text(
+            'Recognized transaction SMS become editable Finance entries',
+          ),
+          value: data.prefs['smsScanning'] == 'true',
+          onChanged: (v) => toggle('smsScanning', v),
+        ),
+        if (status['sms'] != true)
+          OutlinedButton(
+            onPressed: withFeedback(
+              () => guarded(context, () async {
+                await PermissionHints.request<bool>(
+                  context,
+                  'smsPermission',
+                );
+              }),
+            ),
+            child: const Text('Allow SMS access'),
           ),
         if (data.prefs['purchaseScanning'] == 'true' &&
             status['receipts'] != true)
