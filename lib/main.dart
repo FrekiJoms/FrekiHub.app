@@ -331,7 +331,8 @@ class _AppShellState extends ConsumerState<AppShell>
                               : KeyedSubtree(
                                   key: const ValueKey('tabs'),
                                   child: IndexedStack(
-                                    index: index,
+                                    sizing: StackFit.expand,
+                                    index: index.clamp(0, 3),
                                     children: [
                                       TodayScreen(data: data),
                                       MapScreen(data: data),
