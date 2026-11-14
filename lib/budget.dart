@@ -337,284 +337,252 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               onPeriod: (next) =>
                   setState(() => period = DateTime(next.year, next.month)),
               onWallet: (name) => setState(() => wallet = name),
-            ),
-        Surface(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeading(
-                'Savings goal',
-                trailing: IconButton(
-                  tooltip: 'Set savings goal',
-                  onPressed: withFeedback(() => savingsGoal(c)),
-                  icon: const Icon(LucideIcons.pencilLine, size: 18),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                wallet == null
-                    ? 'SAVED Â· ALL WALLETS'
-                    : 'SAVED Â· ${wallet!.toUpperCase()}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 10, letterSpacing: 1.6),
-              ),
-              const SizedBox(height: 8),
-              NumberValue(money(saved, d.currency), size: 28),
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: LinearProgressIndicator(
-                  value: goal <= 0 ? 0 : (saved / goal).clamp(0, 1),
-                  minHeight: 7,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                goal <= 0
-                    ? 'Set a goal to see your progress.'
-                    : 'of ${money(goal, d.currency)} Â· ${math.min(100, (saved * 100 / goal).round())}% saved${wallet == null ? '' : ' from this wallet'}',
-              ),
-              if (goal > 0 && wallet != null)
-                Text(
-                  'The goal is shared across all wallets.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(c).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              if (savingsEntries.isNotEmpty) ...[
-                const Divider(),
-                Row(
+              belowMonthCard: Chrome(
+                padding: const EdgeInsets.all(6),
+                child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'BY WALLET',
-                        style: TextStyle(
-                          fontSize: 10,
-                          letterSpacing: 1.6,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      child: _CompactPillButton(
+                        label: 'Plan',
+                        icon: LucideIcons.calendarClock,
+                        onTap: () => panel(
+                          c,
+                          PanelContent(
+                            header: PanelHeading(
+                              title: wallet == null ? 'Plan' : 'Plan · $wallet',
+                              trailing: IconButton(
+                                tooltip: wallet == null
+                                    ? 'Add planner rule'
+                                    : 'Add planner rule for $wallet',
+                                onPressed: withFeedback(
+                                  () => panel(c, RuleForm(data: d, initialMethod: wallet)),
+                                ),
+                                icon: const Icon(LucideIcons.plus),
+                              ),
+                            ),
+                            child: rules.isEmpty
+                                ? EmptyState(
+                                    wallet == null
+                                        ? 'A plan starts with one rule.'
+                                        : 'No rules for $wallet yet.',
+                                    wallet == null
+                                        ? 'Add payday savings, rent, or a daily allowance.'
+                                        : 'Add a rule to reserve money from this wallet.',
+                                    LucideIcons.calendarClock,
+                                  )
+                                : Column(
+                                    children: [
+                                      for (final r in rules)
+                                        ListTile(
+                                          contentPadding: EdgeInsets.zero,
+                                          title: Text(r.title),
+                                          subtitle: Text(
+                                            '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
+                                          ),
+                                          onTap: withFeedback(() => ruleMenu(r)),
+                                        ),
+                                    ],
+                                  ),
+                          ),
                         ),
                       ),
                     ),
-                    if (wallet != null)
-                      TextButton(
-                        onPressed: withFeedback(
-                          () => setState(() => wallet = null),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _CompactPillButton(
+                        label: 'Analytics',
+                        icon: LucideIcons.chartPie,
+                        onTap: () => panel(
+                          c,
+                          PanelContent(
+                            header: PanelHeading(title: 'Analytics', trailing: _scopeTag(c)),
+                            child: categories.isEmpty
+                                ? EmptyState(
+                                    'No spending this month.',
+                                    wallet == null
+                                        ? 'Expenses will show here by category.'
+                                        : 'No expenses assigned to $wallet this month.',
+                                    LucideIcons.chartPie,
+                                  )
+                                : Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        height: 180,
+                                        child: Semantics(
+                                          label:
+                                              'Category spending total ${money(summary.expenses, d.currency)} for ${wallet ?? 'all wallets'}',
+                                          child: PieChart(
+                                            PieChartData(
+                                              centerSpaceRadius: 48,
+                                              sectionsSpace: 4,
+                                              sections: List.generate(
+                                                categories.length,
+                                                (i) => PieChartSectionData(
+                                                  value: categories[i].value.toDouble(),
+                                                  color: Design.chart[i % Design.chart.length],
+                                                  radius: 26,
+                                                  showTitle: false,
+                                                ),
+                                              ),
+                                              pieTouchData: PieTouchData(enabled: true),
+                                            ),
+                                            duration: Motion.duration(c),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      ...List.generate(
+                                        categories.length,
+                                        (i) => Padding(
+                                          padding: const EdgeInsets.only(bottom: 12),
+                                          child: Column(
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Container(
+                                                    width: 8,
+                                                    height: 8,
+                                                    decoration: BoxDecoration(
+                                                      color: Design.chart[i % Design.chart.length],
+                                                      shape: BoxShape.circle,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  Expanded(child: Text(categories[i].key)),
+                                                  Text(
+                                                    money(categories[i].value, d.currency),
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Geist Mono',
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 8),
+                                              ClipRRect(
+                                                borderRadius: BorderRadius.circular(6),
+                                                child: LinearProgressIndicator(
+                                                  value: summary.expenses <= 0 ? 0 : categories[i].value / summary.expenses,
+                                                  minHeight: 4,
+                                                  color: Design.chart[i % Design.chart.length],
+                                                  backgroundColor: Theme.of(c).colorScheme.surfaceContainerHighest,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
                         ),
-                        child: const Text('All wallets'),
                       ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: _CompactPillButton(
+                        label: 'Savings',
+                        icon: LucideIcons.piggyBank,
+                        onTap: () => panel(
+                          c,
+                          PanelContent(
+                            header: PanelHeading(
+                              title: 'Savings',
+                              trailing: IconButton(
+                                tooltip: 'Set savings goal',
+                                onPressed: withFeedback(() => savingsGoal(c)),
+                                icon: const Icon(LucideIcons.pencilLine, size: 18),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  wallet == null
+                                      ? 'SAVED · ALL WALLETS'
+                                      : 'SAVED · ${wallet!.toUpperCase()}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 10, letterSpacing: 1.6),
+                                ),
+                                const SizedBox(height: 8),
+                                NumberValue(money(saved, d.currency), size: 28),
+                                const SizedBox(height: 12),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: LinearProgressIndicator(
+                                    value: goal <= 0 ? 0 : (saved / goal).clamp(0, 1),
+                                    minHeight: 7,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  goal <= 0
+                                      ? 'Set a goal to see your progress.'
+                                      : 'of ${money(goal, d.currency)} · ${math.min(100, (saved * 100 / goal).round())}% saved${wallet == null ? '' : ' from this wallet'}',
+                                ),
+                                if (goal > 0 && wallet != null)
+                                  Text(
+                                    'The goal is shared across all wallets.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(c).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                if (savingsEntries.isNotEmpty) ...[
+                                  const Divider(),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          'BY WALLET',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            letterSpacing: 1.6,
+                                            fontWeight: FontWeight.w600,
+                                            color: Theme.of(c).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ),
+                                      if (wallet != null)
+                                        TextButton(
+                                          onPressed: withFeedback(() => setState(() => wallet = null)),
+                                          child: const Text('All wallets'),
+                                        ),
+                                    ],
+                                  ),
+                                  for (final entry in savingsEntries)
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      dense: true,
+                                      visualDensity: VisualDensity.compact,
+                                      title: Text(entry.key),
+                                      subtitle: Text(
+                                        goal <= 0
+                                            ? 'Saved'
+                                            : '${math.min(100, (entry.value * 100 / goal).round())}% of the shared goal',
+                                        style: const TextStyle(fontSize: 11),
+                                      ),
+                                      trailing: Text(
+                                        money(entry.value, d.currency),
+                                        style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 11),
+                                      ),
+                                      onTap: withFeedback(
+                                        () => setState(() => wallet = wallet == entry.key ? null : entry.key),
+                                      ),
+                                    ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
-                for (final entry in savingsEntries)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
-                    title: Text(entry.key),
-                    subtitle: Text(
-                      goal <= 0
-                          ? 'Saved'
-                          : '${math.min(100, (entry.value * 100 / goal).round())}% of the shared goal',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    trailing: Text(
-                      money(entry.value, d.currency),
-                      style: const TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 11,
-                      ),
-                    ),
-                    onTap: withFeedback(
-                      () => setState(
-                        () => wallet = wallet == entry.key ? null : entry.key,
-                      ),
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        ),
-        Surface(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SectionHeading(
-                'Where it went',
-                trailing: _scopeTag(c),
               ),
-              if (categories.isEmpty)
-                EmptyState(
-                  'No spending this month.',
-                  wallet == null
-                      ? 'Expenses will show here by category.'
-                      : 'No expenses assigned to $wallet this month.',
-                  LucideIcons.chartPie,
-                )
-              else ...[
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 150,
-                  child: Semantics(
-                    label:
-                        'Category spending total ${money(summary.expenses, d.currency)} for ${wallet ?? 'all wallets'}',
-                    child: PieChart(
-                      PieChartData(
-                        centerSpaceRadius: 44,
-                        sectionsSpace: 4,
-                        sections: List.generate(
-                          categories.length,
-                          (i) => PieChartSectionData(
-                            value: categories[i].value.toDouble(),
-                            color: Design.chart[i % Design.chart.length],
-                            radius: 24,
-                            showTitle: false,
-                          ),
-                        ),
-                        pieTouchData: PieTouchData(enabled: true),
-                      ),
-                      duration: Motion.duration(c),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                ...List.generate(
-                  categories.length,
-                  (i) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: Design.chart[i % Design.chart.length],
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(categories[i].key)),
-                            Text(
-                              money(categories[i].value, d.currency),
-                              style: const TextStyle(
-                                fontFamily: 'Geist Mono',
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: LinearProgressIndicator(
-                            value: categories[i].value / summary.expenses,
-                            minHeight: 4,
-                            color: Design.chart[i % Design.chart.length],
-                            backgroundColor: Theme.of(c)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        SectionHeading(
-          wallet == null ? 'Give your money a plan.' : 'Plan for $wallet.',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _scopeTag(c),
-              IconButton(
-                tooltip: wallet == null
-                    ? 'Add planner rule'
-                    : 'Add planner rule for $wallet',
-                onPressed: withFeedback(
-                  () => panel(c, RuleForm(data: d, initialMethod: wallet)),
-                ),
-                icon: const Icon(LucideIcons.plus),
-              ),
-            ],
-          ),
-        ),
-        Surface(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: rules.isEmpty
-              ? EmptyState(
-                  wallet == null
-                      ? 'A plan starts with one rule.'
-                      : 'No rules for $wallet yet.',
-                  wallet == null
-                      ? 'Add payday savings, rent, or a daily allowance.'
-                      : 'Add a rule to reserve money from this wallet.',
-                  LucideIcons.calendarClock,
-                )
-              : ReorderableListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  buildDefaultDragHandles: false,
-                  itemCount: rules.length,
-                  onReorderItem: (old, next) async {
-                    final visible = [...rules];
-                    visible.insert(next, visible.removeAt(old));
-                    final full =
-                        d.rules
-                            .where((r) => r.currency == d.currency)
-                            .toList()
-                          ..sort((a, b) => a.position.compareTo(b.position));
-                    final reordered = <Rule>[];
-                    var index = 0;
-                    for (final r in full) {
-                      reordered.add(
-                        wallet == null || walletMethodName(r.method) == wallet
-                            ? visible[index++]
-                            : r,
-                      );
-                    }
-                    final db = ref.read(databaseProvider);
-                    await guarded(
-                      context,
-                      () async {
-                        await db.transaction(() async {
-                          for (var i = 0; i < reordered.length; i++) {
-                            await (db.update(db.rules)
-                                  ..where((r) => r.id.equals(reordered[i].id)))
-                                .write(RulesCompanion(position: Value(i)));
-                          }
-                        });
-                      },
-                      success: 'Planner rules reordered',
-                      successIcon: DataAction.reordered.icon,
-                    );
-                  },
-                  itemBuilder: (c, i) {
-                    final r = rules[i];
-                    return ListTile(
-                      key: ValueKey(r.id),
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(r.title),
-                      subtitle: Text(
-                        '${r.cadence} Â· ${r.method} Â· ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} Ã— ${r.quantity}'}',
-                      ),
-                      onTap: withFeedback(() => ruleMenu(r)),
-                      trailing: ReorderableDragStartListener(
-                        index: i,
-                        child: const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: Icon(LucideIcons.gripVertical, size: 18),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
+            ),
         SectionHeading(
           'History',
           trailing: Row(
