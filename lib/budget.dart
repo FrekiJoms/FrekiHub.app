@@ -625,11 +625,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               ignoring: !_showCompactBalance,
               child: Positioned(
                 top: 16,
-                left: 72,
-                right: 72,
+                left: 64,
+                right: 64,
                 child: Container(
                   height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
@@ -643,6 +643,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   children: [
                     Expanded(
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
                             'TOTAL BALANCE',
