@@ -13,6 +13,7 @@ class WalletSection extends ConsumerStatefulWidget {
 
   /// Planned outflows for the selected month, keyed by wallet.
   final Map<String, int> committed;
+  final bool? maskedOverride;
   const WalletSection({
     super.key,
     required this.data,
@@ -21,6 +22,7 @@ class WalletSection extends ConsumerStatefulWidget {
     this.onPeriod,
     this.onWallet,
     this.committed = const {},
+    this.maskedOverride,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -35,7 +37,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
   void initState() {
     super.initState();
     view = WalletView.restore(widget.data.prefs['walletView']);
-    masked = widget.data.prefs['walletMasked'] == 'true';
+    masked = widget.maskedOverride ?? (widget.data.prefs['walletMasked'] == 'true');
     order = widget.data.orderedWalletNames(
       walletStoredOrder(widget.data.prefs),
     );
@@ -46,6 +48,9 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     super.didUpdateWidget(old);
     final next = widget.data.orderedWalletNames(order);
     if (!_sameNames(next, order)) order = next;
+    if (widget.maskedOverride != null && widget.maskedOverride != masked) {
+      masked = widget.maskedOverride!;
+    }
   }
 
   List<WalletAccount> _accounts() => walletAccounts(

@@ -10,6 +10,9 @@ class BudgetScreen extends ConsumerStatefulWidget {
 class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   DateTime period = DateTime(DateTime.now().year, DateTime.now().month);
   String? wallet;
+  bool masked = false;
+  final ScrollController _scrollController = ScrollController();
+  bool _showCompactBalance = false;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -151,6 +154,34 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     ),
   );
   @override
+  void initState() {
+    super.initState();
+    masked = widget.data.prefs['walletMasked'] == 'true';
+    _scrollController.addListener(() {
+      final show = _scrollController.offset > 100;
+      if (show != _showCompactBalance && mounted) {
+        setState(() => _showCompactBalance = show);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _toggleMasked() {
+    setState(() => masked = !masked);
+    unawaited(
+      ref
+          .read(databaseProvider)
+          .pref('walletMasked', '$masked')
+          .catchError((Object _) {}),
+    );
+  }
+
+  @override
   Widget build(BuildContext c) {
     final d = widget.data;
     final month = dayKey(period).substring(0, 7);
@@ -256,18 +287,26 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       );
     }
     final days = timeline.keys.toList()..sort();
-    return PageBody(
+    final accounts = walletAccounts(widget.data);
+    final totalBalance = accounts
+        .where((a) => a.included)
+        .fold<int>(0, (sum, a) => sum + a.balance);
+    return Stack(
       children: [
-        const SizedBox(height: 72),
-        WalletSection(
-          data: d,
-          month: summary,
-          wallet: wallet,
-          committed: committed,
-          onPeriod: (next) =>
-              setState(() => period = DateTime(next.year, next.month)),
-          onWallet: (name) => setState(() => wallet = name),
-        ),
+        PageBody(
+          scrollController: _scrollController,
+          children: [
+            const SizedBox(height: 72),
+            WalletSection(
+              data: d,
+              month: summary,
+              wallet: wallet,
+              committed: committed,
+              maskedOverride: masked,
+              onPeriod: (next) =>
+                  setState(() => period = DateTime(next.year, next.month)),
+              onWallet: (name) => setState(() => wallet = name),
+            ),
         Surface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -569,6 +608,57 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   const SizedBox(height: 8),
                   ...timeline[day]!,
                 ],
+              ),
+            ),
+          ),
+      ],
+        ),
+        if (_showCompactBalance)
+          Positioned(
+            top: 24,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Chrome(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(c).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        masked
+                            ? walletMaskedAmount(d.currency)
+                            : money(totalBalance, d.currency),
+                        style: const TextStyle(
+                          fontFamily: 'Geist Mono',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Semantics(
+                        button: true,
+                        label: masked ? 'Show amounts' : 'Hide amounts',
+                        child: IconButton(
+                          tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                          onPressed: withFeedback(_toggleMasked),
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(32, 32),
+                            maximumSize: const Size(32, 32),
+                            padding: EdgeInsets.zero,
+                          ),
+                          icon: Icon(
+                            masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

@@ -359,7 +359,7 @@ Map<String, int> walletCommitments(Iterable<Projection> planned) {
   return result;
 }
 
-String walletMaskedAmount(String currency) => '${moneySymbol(currency)}ΓÇóΓÇóΓÇóΓÇóΓÇóΓÇó';
+String walletMaskedAmount(String currency) => '${moneySymbol(currency)}******';
 
 String walletImageFolder() => 'wallet-cards';
 
