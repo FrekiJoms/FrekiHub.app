@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -79,17 +80,44 @@ class _AppShellState extends ConsumerState<AppShell>
   bool startupReady = false;
   late final PageController _tabController = PageController(initialPage: 0);
   bool _tabAnimating = false;
+  bool _pageScrolling = false;
+  final ValueNotifier<bool> _swiping = ValueNotifier<bool>(false);
+  final ValueNotifier<int> _activeTab = ValueNotifier<int>(0);
   AppData? _tabsData;
   List<Widget>? _tabPages;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _tabController.addListener(_onPageScroll);
     automationTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (startupReady &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(reconcile());
       }
+    });
+  }
+
+  void _onPageScroll() {
+    if (!_tabController.hasClients) return;
+    final page = _tabController.page ?? _tabController.initialPage.toDouble();
+    final scrolling = (page - page.roundToDouble()).abs() > 0.002;
+    if (scrolling != _pageScrolling) {
+      _pageScrolling = scrolling;
+      _swiping.value = scrolling;
+      if (!scrolling) _syncPageIndex();
+    }
+  }
+
+  void _syncPageIndex() {
+    if (!mounted || !_tabController.hasClients) return;
+    final i = (_tabController.page ?? index.toDouble()).round().clamp(0, 3);
+    final currentTab = index <= 3 ? index : lastTab;
+    if (i == currentTab || _tabAnimating) return;
+    setState(() {
+      slideDirection = i > currentTab ? 1 : -1;
+      index = i;
+      lastTab = i;
     });
   }
 
@@ -151,20 +179,41 @@ class _AppShellState extends ConsumerState<AppShell>
     if (!identical(_tabsData, data) || _tabPages == null) {
       _tabsData = data;
       _tabPages = [
-        TodayScreen(data: data),
-        MapScreen(data: data),
-        HistoryScreen(data: data),
-        BudgetScreen(data: data),
+        RepaintBoundary(
+          child: _KeepAliveTab(
+            tabIndex: 0,
+            activeTab: _activeTab,
+            child: TodayScreen(data: data),
+          ),
+        ),
+        RepaintBoundary(
+          child: _KeepAliveTab(
+            tabIndex: 1,
+            activeTab: _activeTab,
+            child: _DeferredTab(
+              tabIndex: 1,
+              activeTab: _activeTab,
+              builder: () => MapScreen(data: data),
+            ),
+          ),
+        ),
+        RepaintBoundary(
+          child: _KeepAliveTab(
+            tabIndex: 2,
+            activeTab: _activeTab,
+            child: HistoryScreen(data: data),
+          ),
+        ),
+        RepaintBoundary(
+          child: _KeepAliveTab(
+            tabIndex: 3,
+            activeTab: _activeTab,
+            child: BudgetScreen(data: data),
+          ),
+        ),
       ];
     }
-    final active = index <= 3 ? index : lastTab;
-    return [
-      for (var i = 0; i < _tabPages!.length; i++)
-        _KeepAliveTab(
-          active: active == i,
-          child: _tabPages![i],
-        ),
-    ];
+    return _tabPages!;
   }
 
   void _goToTab(int i) {
@@ -201,7 +250,10 @@ class _AppShellState extends ConsumerState<AppShell>
   void dispose() {
     automationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _tabController.removeListener(_onPageScroll);
     _tabController.dispose();
+    _swiping.dispose();
+    _activeTab.dispose();
     super.dispose();
   }
 
@@ -330,6 +382,8 @@ class _AppShellState extends ConsumerState<AppShell>
         if (mounted) unawaited(reconcile());
       });
     }
+    final activeTabIndex = index <= 3 ? index : lastTab;
+    if (_activeTab.value != activeTabIndex) _activeTab.value = activeTabIndex;
     return GlassAccessibilityScope(
       reduceTransparency: graphics.value == true ? null : true,
       child: StartupIntro(
@@ -353,7 +407,7 @@ class _AppShellState extends ConsumerState<AppShell>
                               ? const NeverScrollableScrollPhysics()
                               : const PageScrollPhysics(),
                           onPageChanged: (i) {
-                            if (_tabAnimating) return;
+                            if (_tabAnimating || _pageScrolling) return;
                             final currentTab = index <= 3 ? index : lastTab;
                             if (i == currentTab) return;
                             setState(() {
@@ -414,6 +468,7 @@ class _AppShellState extends ConsumerState<AppShell>
                           child: PillNavigation(
                             index: index <= 3 ? index : lastTab,
                             tabController: _tabController,
+                            swiping: _swiping,
                             onQuickAdd: (kind) => openQuickAdd(
                               c,
                               data,
@@ -514,9 +569,14 @@ class _AppShellState extends ConsumerState<AppShell>
 
 
 class _KeepAliveTab extends StatefulWidget {
-  final bool active;
+  final int tabIndex;
+  final ValueListenable<int> activeTab;
   final Widget child;
-  const _KeepAliveTab({required this.active, required this.child});
+  const _KeepAliveTab({
+    required this.tabIndex,
+    required this.activeTab,
+    required this.child,
+  });
 
   @override
   State<_KeepAliveTab> createState() => _KeepAliveTabState();
@@ -530,7 +590,80 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return TickerMode(enabled: widget.active, child: widget.child);
+    return ValueListenableBuilder<int>(
+      valueListenable: widget.activeTab,
+      builder: (context, active, child) =>
+          TickerMode(enabled: active == widget.tabIndex, child: child!),
+      child: widget.child,
+    );
+  }
+}
+
+class _DeferredTab extends StatefulWidget {
+  final int tabIndex;
+  final ValueListenable<int> activeTab;
+  final Widget Function() builder;
+  const _DeferredTab({
+    required this.tabIndex,
+    required this.activeTab,
+    required this.builder,
+  });
+
+  @override
+  State<_DeferredTab> createState() => _DeferredTabState();
+}
+
+class _DeferredTabState extends State<_DeferredTab> {
+  Widget? _child;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.activeTab.addListener(_check);
+    _check();
+  }
+
+  @override
+  void didUpdateWidget(covariant _DeferredTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.activeTab != widget.activeTab) {
+      oldWidget.activeTab.removeListener(_check);
+      widget.activeTab.addListener(_check);
+      _check();
+    }
+  }
+
+  void _check() {
+    if (_child != null || !mounted) return;
+    if (widget.activeTab.value == widget.tabIndex) {
+      _timer ??= Timer(const Duration(milliseconds: 250), () {
+        _timer = null;
+        if (mounted && _child == null) {
+          setState(() => _child = widget.builder());
+        }
+      });
+    } else {
+      _timer?.cancel();
+      _timer = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.activeTab.removeListener(_check);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final child = _child;
+    if (child != null) return child;
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      child: const SizedBox.expand(),
+    );
   }
 }
 

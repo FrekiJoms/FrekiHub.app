@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
@@ -575,12 +576,14 @@ class PillNavigation extends StatefulWidget {
   final ValueChanged<int> onChanged;
   final ValueChanged<String> onQuickAdd;
   final PageController? tabController;
+  final ValueListenable<bool>? swiping;
   const PillNavigation({
     super.key,
     required this.index,
     required this.onChanged,
     required this.onQuickAdd,
     this.tabController,
+    this.swiping,
   });
   @override
   State<PillNavigation> createState() => _PillNavigationState();
@@ -917,11 +920,18 @@ class _PillNavigationState extends State<PillNavigation>
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
-            child: GlassContainer(
-              useOwnLayer: true,
-              shape: const LiquidRoundedSuperellipse(borderRadius: 28),
-              settings: const LiquidGlassSettings(blur: 18, thickness: 18),
-              padding: EdgeInsets.zero,
+            child: ValueListenableBuilder<bool>(
+              valueListenable: widget.swiping ?? const AlwaysStoppedAnimation(false),
+              builder: (context, swiping, child) => GlassContainer(
+                useOwnLayer: true,
+                shape: const LiquidRoundedSuperellipse(borderRadius: 28),
+                settings: LiquidGlassSettings(
+                  blur: swiping ? 0 : 18,
+                  thickness: swiping ? 8 : 18,
+                ),
+                padding: EdgeInsets.zero,
+                child: child!,
+              ),
               child: Container(
                 height: 46,
                 width: 220,
