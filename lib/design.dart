@@ -850,7 +850,6 @@ class _PillNavigationState extends State<PillNavigation>
               settings: const LiquidGlassSettings(blur: 18, thickness: 18),
               padding: EdgeInsets.zero,
               child: Container(
-                key: track,
                 height: 46,
                 width: 220,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -864,6 +863,7 @@ class _PillNavigationState extends State<PillNavigation>
                   ),
                 ),
                 child: Stack(
+                  key: track,
                   clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
