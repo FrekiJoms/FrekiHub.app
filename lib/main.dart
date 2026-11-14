@@ -105,20 +105,7 @@ class _AppShellState extends ConsumerState<AppShell>
     if (scrolling != _pageScrolling) {
       _pageScrolling = scrolling;
       _swiping.value = scrolling;
-      if (!scrolling) _syncPageIndex();
     }
-  }
-
-  void _syncPageIndex() {
-    if (!mounted || !_tabController.hasClients) return;
-    final i = (_tabController.page ?? index.toDouble()).round().clamp(0, 3);
-    final currentTab = index <= 3 ? index : lastTab;
-    if (i == currentTab || _tabAnimating) return;
-    setState(() {
-      slideDirection = i > currentTab ? 1 : -1;
-      index = i;
-      lastTab = i;
-    });
   }
 
   Future<void> reconcile() async {
@@ -384,8 +371,12 @@ class _AppShellState extends ConsumerState<AppShell>
     }
     final activeTabIndex = index <= 3 ? index : lastTab;
     if (_activeTab.value != activeTabIndex) _activeTab.value = activeTabIndex;
-    return GlassAccessibilityScope(
-      reduceTransparency: graphics.value == true ? null : true,
+    return ValueListenableBuilder<bool>(
+      valueListenable: _swiping,
+      builder: (context, swiping, child) => GlassAccessibilityScope(
+        reduceTransparency: (graphics.value == true && !swiping) ? null : true,
+        child: child!,
+      ),
       child: StartupIntro(
         child: Scaffold(
           resizeToAvoidBottomInset: false,
@@ -401,22 +392,36 @@ class _AppShellState extends ConsumerState<AppShell>
                   children: [
                     Positioned.fill(
                       child: ClipRect(
-                        child: PageView(
-                          controller: _tabController,
-                          physics: index >= 4
-                              ? const NeverScrollableScrollPhysics()
-                              : const PageScrollPhysics(),
-                          onPageChanged: (i) {
-                            if (_tabAnimating || _pageScrolling) return;
-                            final currentTab = index <= 3 ? index : lastTab;
-                            if (i == currentTab) return;
-                            setState(() {
-                              slideDirection = i > currentTab ? 1 : -1;
-                              index = i;
-                              lastTab = i;
-                            });
+                        child: NotificationListener<ScrollNotification>(
+                          onNotification: (n) {
+                            if (n.depth != 0) return false;
+                            if (n is ScrollStartNotification) {
+                              _swiping.value = true;
+                            } else if (n is ScrollEndNotification) {
+                              _swiping.value = false;
+                              final settled = _tabController.hasClients
+                                  ? (_tabController.page?.round() ?? lastTab)
+                                  : lastTab;
+                              final currentTab = index <= 3 ? index : lastTab;
+                              if (settled != currentTab && !_tabAnimating) {
+                                setState(() {
+                                  slideDirection =
+                                      settled > currentTab ? 1 : -1;
+                                  index = settled;
+                                  lastTab = settled;
+                                });
+                              }
+                            }
+                            return false;
                           },
-                          children: _buildTabPages(data),
+                          child: PageView(
+                            controller: _tabController,
+                            physics: index >= 4
+                                ? const NeverScrollableScrollPhysics()
+                                : const ClampingScrollPhysics(),
+                            onPageChanged: (_) {},
+                            children: _buildTabPages(data),
+                          ),
                         ),
                       ),
                     ),
