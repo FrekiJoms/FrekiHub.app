@@ -594,13 +594,15 @@ class _PillNavigationState extends State<PillNavigation>
   OverlayEntry? menu;
   int? hovered;
   final List<double> _press = List<double>.filled(4, 1.0);
+  Timer? _tooltipTimer;
+  bool _showTooltip = false;
 
   static const labels = ['Home', 'Map', 'Sessions', 'Finance'];
   static const icons = [
     LucideIcons.house,
     LucideIcons.map,
     LucideIcons.table2,
-    LucideIcons.walletCards,
+    LucideIcons.philippinePeso,
   ];
   static const actions = ['session', 'expense', 'income', 'savings', 'rule'];
   static const actionLabels = [
@@ -622,6 +624,19 @@ class _PillNavigationState extends State<PillNavigation>
   void initState() {
     super.initState();
     motion = AnimationController(vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(covariant PillNavigation oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index) {
+      _tooltipTimer?.cancel();
+      setState(() => _showTooltip = true);
+      _tooltipTimer = Timer(const Duration(milliseconds: 900), () {
+        if (!mounted) return;
+        setState(() => _showTooltip = false);
+      });
+    }
   }
 
   Rect? get current {
@@ -742,6 +757,7 @@ class _PillNavigationState extends State<PillNavigation>
   @override
   void dispose() {
     closeMenu();
+    _tooltipTimer?.cancel();
     motion.dispose();
     super.dispose();
   }
@@ -821,6 +837,7 @@ class _PillNavigationState extends State<PillNavigation>
                   ),
                 ),
                 child: Stack(
+                  clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
                     AnimatedBuilder(
@@ -835,16 +852,67 @@ class _PillNavigationState extends State<PillNavigation>
                           width: underlineWidth,
                           height: underlineHeight,
                         );
-                        return Positioned.fromRect(
-                          rect: underlineRect,
-                          child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF34C759),
-                                borderRadius: BorderRadius.circular(2),
+                        final tooltipLeft = (rect.center.dx - 28).clamp(0.0, 220.0 - 56.0);
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Positioned.fromRect(
+                              rect: underlineRect,
+                              child: IgnorePointer(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF34C759),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            Positioned(
+                              left: tooltipLeft,
+                              top: -30,
+                              width: 56,
+                              child: IgnorePointer(
+                                child: AnimatedOpacity(
+                                  opacity: _showTooltip ? 1 : 0,
+                                  duration: Motion.duration(c, 180),
+                                  curve: Curves.easeOut,
+                                  child: AnimatedSlide(
+                                    offset: _showTooltip ? Offset.zero : const Offset(0, 0.15),
+                                    duration: Motion.duration(c, 180),
+                                    curve: Curves.easeOut,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: scheme.surface.withValues(alpha: dark ? .92 : .96),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: scheme.onSurface.withValues(alpha: .08),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(alpha: .12),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        labels[widget.index],
+                                        textAlign: TextAlign.center,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                          color: scheme.onSurface,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
