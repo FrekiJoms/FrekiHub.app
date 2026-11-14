@@ -63,7 +63,7 @@ The list has its own bounded vertical scrolling viewport. The table uses separat
 
 ## Finance
 
-Finance shows selected-month income, expenses, savings, net, safe-to-spend, elapsed-month progress, a shared savings goal, category charts, planner rules and a combined expected/actual timeline. All totals and finance projections use the selected display currency. Existing records keep their own currency; selecting a currency does not convert values.
+Finance shows selected-month income, expenses, savings, net, safe-to-spend, elapsed-month progress, a shared savings goal, category charts, planner rules and a combined expected/actual timeline. All totals and finance projections use the selected display currency. Existing records keep their own currency; selecting a currency does not convert values. The expected/actual timeline uses compact sortable rows: planned items are marked with a blue dot, and amounts are colored by type (income/savings in green, expenses in red).
 
 The page is wallet-first. A dark total card shows the combined all-time balance of included wallets, assets, owed and the wallet count. A month card underneath carries month navigation, scoped month net, elapsed-period progress, safe-to-spend and income/spent/saved metrics. Its scope chip selects **All wallets** or one payment method; that scope then drives the month figures, category chart, planner list and expected/actual timeline, while the total card keeps its clearly labelled all-wallet balance. The scope is session state and returns to All wallets on launch.
 

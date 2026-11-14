@@ -1,4 +1,4 @@
-part of 'screens.dart';
+﻿part of 'screens.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
   final AppData data;
@@ -17,6 +17,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   double _cardTopAtOffset0 = 0;
   double _cardHeight = 0;
   bool _cardMetricsReady = false;
+  String _timelineSort = 'date'; // date | amount | type
+  bool _timelineDesc = false;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -26,7 +28,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${p.day} · ${p.error == null ? money(p.amount, widget.data.currency) : 'Amount needs review'}',
+            '${p.day} Â· ${p.error == null ? money(p.amount, widget.data.currency) : 'Amount needs review'}',
           ),
           if (p.error != null) Text(p.error!),
           const SizedBox(height: 20),
@@ -257,68 +259,67 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ))
             .toList()
           ..sort((a, b) => a.position.compareTo(b.position));
-    final timeline = <String, List<Widget>>{};
-    void add(String day, Widget row) =>
-        timeline.putIfAbsent(day, () => []).add(row);
+    final timelineRows = <_TimelineItem>[];
     for (final e in d.scopedEntries(wallet: wallet, month: month)) {
-      add(
-        e.day,
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          onTap: withFeedback(
-            () => panel(
-              c,
-              EntryForm(data: d, day: e.day, kind: e.kind, entry: e),
-            ),
-          ),
-          leading: Icon(
-            e.kind == 'income'
-                ? LucideIcons.arrowDownLeft
-                : e.kind == 'savings'
-                ? LucideIcons.piggyBank
-                : LucideIcons.arrowUpRight,
-            size: 20,
-          ),
-          title: Text(e.note.isEmpty ? e.category : e.note),
-          subtitle: Text('Actual · ${e.category} · ${e.method}'),
-          trailing: Text(
-            '${e.kind == 'income' ? '+' : '−'}${money(e.amount, d.currency)}',
-            style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
-          ),
+      timelineRows.add(_TimelineItem(
+        day: e.day,
+        title: e.note.isEmpty ? e.category : e.note,
+        detail: 'Actual Â· ${e.category} Â· ${e.method}',
+        amount: e.amount,
+        kind: e.kind,
+        planned: false,
+        status: 'actual',
+        onTap: () => panel(
+          c,
+          EntryForm(data: d, day: e.day, kind: e.kind, entry: e),
         ),
-      );
+      ));
     }
     for (final p in planned) {
       if (p.status == 'complete') continue;
-      add(
-        p.day,
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          onTap: withFeedback(() => occurrence(p)),
-          leading: Icon(
-            p.status == 'complete'
-                ? LucideIcons.circleCheck
-                : p.status == 'planned'
-                ? LucideIcons.calendarClock
-                : LucideIcons.circleMinus,
-            size: 20,
-          ),
-          title: Text(p.rule.title),
-          subtitle: Text(
-            'Expected · ${p.status} · ${p.rule.category} · ${p.rule.method}',
-          ),
-          trailing: Text(
-            p.error == null ? money(p.amount, d.currency) : 'Needs review',
-            style: TextStyle(
-              fontFamily: 'Geist Mono',
-              fontSize: 12,
-              color: Theme.of(c).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ),
-      );
+      timelineRows.add(_TimelineItem(
+        day: p.day,
+        title: p.rule.title,
+        detail: 'Expected Â· ${p.status} Â· ${p.rule.category} Â· ${p.rule.method}',
+        amount: p.amount,
+        kind: p.rule.kind,
+        planned: true,
+        status: p.status,
+        error: p.error,
+        onTap: () => occurrence(p),
+      ));
     }
-    final days = timeline.keys.toList()..sort();
+    int typeRank(_TimelineItem it) {
+      if (it.planned) return 0;
+      if (it.kind == 'income') return 1;
+      if (it.kind == 'savings') return 2;
+      return 3; // expense/other
+    }
+    timelineRows.sort((a, b) {
+      int cmp;
+      switch (_timelineSort) {
+        case 'amount':
+          cmp = a.amount.compareTo(b.amount);
+          if (cmp == 0) cmp = a.day.compareTo(b.day);
+          if (cmp == 0) cmp = typeRank(a).compareTo(typeRank(b));
+          break;
+        case 'type':
+          cmp = typeRank(a).compareTo(typeRank(b));
+          if (cmp == 0) cmp = a.day.compareTo(b.day);
+          if (cmp == 0) cmp = a.amount.compareTo(b.amount);
+          break;
+        case 'date':
+        default:
+          cmp = a.day.compareTo(b.day);
+          if (cmp == 0) cmp = typeRank(a).compareTo(typeRank(b));
+          if (cmp == 0) cmp = a.title.compareTo(b.title);
+      }
+      return _timelineDesc ? -cmp : cmp;
+    });
+    final days = timelineRows.map((e) => e.day).toSet().toList()..sort();
+    if (_timelineDesc && _timelineSort == 'date') {
+      days.sort((a, b) => b.compareTo(a));
+    }
     final accounts = walletAccounts(widget.data);
     final totalBalance = accounts
         .where((a) => a.included)
@@ -356,8 +357,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               const SizedBox(height: 12),
               Text(
                 wallet == null
-                    ? 'SAVED · ALL WALLETS'
-                    : 'SAVED · ${wallet!.toUpperCase()}',
+                    ? 'SAVED Â· ALL WALLETS'
+                    : 'SAVED Â· ${wallet!.toUpperCase()}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 10, letterSpacing: 1.6),
@@ -376,7 +377,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               Text(
                 goal <= 0
                     ? 'Set a goal to see your progress.'
-                    : 'of ${money(goal, d.currency)} · ${math.min(100, (saved * 100 / goal).round())}% saved${wallet == null ? '' : ' from this wallet'}',
+                    : 'of ${money(goal, d.currency)} Â· ${math.min(100, (saved * 100 / goal).round())}% saved${wallet == null ? '' : ' from this wallet'}',
               ),
               if (goal > 0 && wallet != null)
                 Text(
@@ -604,7 +605,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(r.title),
                       subtitle: Text(
-                        '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
+                        '${r.cadence} Â· ${r.method} Â· ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} Ã— ${r.quantity}'}',
                       ),
                       onTap: withFeedback(() => ruleMenu(r)),
                       trailing: ReorderableDragStartListener(
@@ -618,8 +619,42 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   },
                 ),
         ),
-        SectionHeading('Expected & actual', trailing: _scopeTag(c)),
-        if (days.isEmpty)
+        SectionHeading(
+          'Expected & actual',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _scopeTag(c),
+              const SizedBox(width: 4),
+              PopupMenuButton<String>(
+                tooltip: 'Sort',
+                icon: const Icon(LucideIcons.arrowUpDown, size: 16),
+                onSelected: (v) {
+                  setState(() {
+                    if (v == 'dir') {
+                      _timelineDesc = !_timelineDesc;
+                    } else {
+                      if (_timelineSort == v) {
+                        _timelineDesc = !_timelineDesc;
+                      } else {
+                        _timelineSort = v;
+                        _timelineDesc = v == 'date' ? false : false;
+                      }
+                    }
+                  });
+                },
+                itemBuilder: (c) => [
+                  CheckedPopupMenuItem(value: 'date', checked: _timelineSort == 'date', child: const Text('Date')),
+                  CheckedPopupMenuItem(value: 'amount', checked: _timelineSort == 'amount', child: const Text('Amount')),
+                  CheckedPopupMenuItem(value: 'type', checked: _timelineSort == 'type', child: const Text('Type')),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(value: 'dir', child: Text(_timelineDesc ? 'Ascending' : 'Descending')),
+                ],
+              ),
+            ],
+          ),
+        ),
+        if (timelineRows.isEmpty)
           Surface(
             child: EmptyState(
               'A clean slate.',
@@ -629,20 +664,37 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               LucideIcons.wallet,
             ),
           )
-        else
-          ...days.map(
-            (day) => Surface(
+        else if (_timelineSort == 'date')
+          ...days.map((day) {
+            final items = timelineRows.where((e) => e.day == day).toList();
+            return Surface(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     DateFormat('EEE, d MMMM').format(calendarDate(day)),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
-                  const SizedBox(height: 8),
-                  ...timeline[day]!,
+                  const SizedBox(height: 6),
+                  for (var i = 0; i < items.length; i++) ...[
+                    _TimelineRow(item: items[i], currency: d.currency),
+                    if (i != items.length - 1)
+                      Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
+                  ],
                 ],
               ),
+            );
+          })
+        else
+          Surface(
+            child: Column(
+              children: [
+                for (var i = 0; i < timelineRows.length; i++) ...[
+                  _TimelineRow(item: timelineRows[i], currency: d.currency, showDay: true),
+                  if (i != timelineRows.length - 1)
+                    Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
+                ],
+              ],
             ),
           ),
       ],
@@ -816,7 +868,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: 'Goal · ${widget.data.currency}',
+                labelText: 'Goal Â· ${widget.data.currency}',
               ),
             ),
           );
@@ -824,5 +876,120 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       ),
     );
     field.dispose();
+  }
+}
+
+
+class _TimelineItem {
+  final String day;
+  final String title;
+  final String detail;
+  final int amount;
+  final String kind;
+  final bool planned;
+  final String status;
+  final String? error;
+  final VoidCallback onTap;
+  const _TimelineItem({
+    required this.day,
+    required this.title,
+    required this.detail,
+    required this.amount,
+    required this.kind,
+    required this.planned,
+    required this.status,
+    required this.onTap,
+    this.error,
+  });
+}
+
+class _TimelineRow extends StatelessWidget {
+  final _TimelineItem item;
+  final String currency;
+  final bool showDay;
+  const _TimelineRow({
+    required this.item,
+    required this.currency,
+    this.showDay = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isIncome = item.kind == 'income';
+    final isExpense = item.kind == 'expense';
+    final isSavings = item.kind == 'savings';
+    final Color amountColor;
+    final String sign;
+    if (isIncome) {
+      amountColor = const Color(0xFF2E7D32);
+      sign = '+';
+    } else if (isExpense) {
+      amountColor = const Color(0xFFC62828);
+      sign = '−';
+    } else if (isSavings) {
+      amountColor = const Color(0xFF2E7D32);
+      sign = '−';
+    } else {
+      amountColor = scheme.onSurface;
+      sign = '';
+    }
+    final amountText = item.error != null
+        ? 'Needs review'
+        : '$sign${money(item.amount, currency)}';
+    return InkWell(
+      onTap: withFeedback(item.onTap),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            if (item.planned)
+              Container(
+                width: 8,
+                height: 8,
+                margin: const EdgeInsets.only(right: 8),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1E88E5),
+                  shape: BoxShape.circle,
+                ),
+              )
+            else
+              const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    showDay ? '${item.day} · ${item.detail}' : item.detail,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              amountText,
+              style: TextStyle(
+                fontFamily: 'Geist Mono',
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: item.error != null ? scheme.onSurfaceVariant : amountColor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
