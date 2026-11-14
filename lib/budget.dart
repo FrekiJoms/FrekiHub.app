@@ -618,46 +618,77 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             top: 24,
             left: 0,
             right: 0,
-            child: Center(
-              child: Chrome(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(c).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xff191b19), Color(0xff303630)],
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        masked
-                            ? walletMaskedAmount(d.currency)
-                            : money(totalBalance, d.currency),
-                        style: const TextStyle(
-                          fontFamily: 'Geist Mono',
-                          fontWeight: FontWeight.w600,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: Colors.white.withValues(alpha: .06)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Text(
+                            'TOTAL BALANCE',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .55),
+                              fontSize: 9,
+                              letterSpacing: 1.6,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                masked
+                                    ? walletMaskedAmount(d.currency)
+                                    : money(totalBalance, d.currency),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Geist Mono',
+                                  fontSize: 16,
+                                  height: 1,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: -.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Semantics(
+                      button: true,
+                      label: masked ? 'Show amounts' : 'Hide amounts',
+                      child: IconButton(
+                        tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                        onPressed: withFeedback(_toggleMasked),
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(34, 34),
+                          maximumSize: const Size(34, 34),
+                          padding: EdgeInsets.zero,
+                          backgroundColor: Colors.white.withValues(alpha: .08),
+                          foregroundColor: Colors.white,
+                        ),
+                        icon: Icon(
+                          masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                          size: 16,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Semantics(
-                        button: true,
-                        label: masked ? 'Show amounts' : 'Hide amounts',
-                        child: IconButton(
-                          tooltip: masked ? 'Show amounts' : 'Hide amounts',
-                          onPressed: withFeedback(_toggleMasked),
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            maximumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                          ),
-                          icon: Icon(
-                            masked ? LucideIcons.eyeOff : LucideIcons.eye,
-                            size: 16,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
