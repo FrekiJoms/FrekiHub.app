@@ -613,97 +613,101 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
       ],
         ),
-        AnimatedSlide(
-          offset: _showCompactBalance ? Offset.zero : const Offset(0, -0.15),
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          child: AnimatedOpacity(
-            opacity: _showCompactBalance ? 1 : 0,
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            child: IgnorePointer(
-              ignoring: !_showCompactBalance,
-              child: Positioned(
-                top: 16,
-                left: 64,
-                right: 64,
+        Positioned(
+          top: 16,
+          left: 72,
+          right: 72,
+          height: 48,
+          child: IgnorePointer(
+            ignoring: !_showCompactBalance,
+            child: AnimatedSlide(
+              offset: _showCompactBalance ? Offset.zero : const Offset(0, -0.2),
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              child: AnimatedOpacity(
+                opacity: _showCompactBalance ? 1 : 0,
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
                 child: Container(
                   height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xff191b19), Color(0xff303630)],
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xff191b19), Color(0xff303630)],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: .06)),
                   ),
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: Colors.white.withValues(alpha: .06)),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            'TOTAL BALANCE',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: .55),
-                              fontSize: 9,
-                              letterSpacing: 1.6,
-                              fontWeight: FontWeight.w600,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              'TOTAL BALANCE',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .55),
+                                fontSize: 9,
+                                letterSpacing: 1.4,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                masked
-                                    ? walletMaskedAmount(d.currency)
-                                    : money(totalBalance, d.currency),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'Geist Mono',
-                                  fontSize: 16,
-                                  height: 1,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -.4,
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.center,
+                                child: Text(
+                                  masked
+                                      ? walletMaskedAmount(d.currency)
+                                      : money(totalBalance, d.currency),
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'Geist Mono',
+                                    fontSize: 15,
+                                    height: 1,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -.3,
+                                  ),
                                 ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Semantics(
+                        button: true,
+                        label: masked ? 'Show amounts' : 'Hide amounts',
+                        child: IconButton(
+                          tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                          onPressed: withFeedback(_toggleMasked),
+                          visualDensity: VisualDensity.compact,
+                          style: IconButton.styleFrom(
+                            minimumSize: const Size(32, 32),
+                            maximumSize: const Size(32, 32),
+                            padding: EdgeInsets.zero,
+                            backgroundColor: Colors.white.withValues(alpha: .08),
+                            foregroundColor: Colors.white,
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Semantics(
-                      button: true,
-                      label: masked ? 'Show amounts' : 'Hide amounts',
-                      child: IconButton(
-                        tooltip: masked ? 'Show amounts' : 'Hide amounts',
-                        onPressed: withFeedback(_toggleMasked),
-                        style: IconButton.styleFrom(
-                          minimumSize: const Size(34, 34),
-                          maximumSize: const Size(34, 34),
-                          padding: EdgeInsets.zero,
-                          backgroundColor: Colors.white.withValues(alpha: .08),
-                          foregroundColor: Colors.white,
-                        ),
-                        icon: Icon(
-                          masked ? LucideIcons.eyeOff : LucideIcons.eye,
-                          size: 16,
+                          icon: Icon(
+                            masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                            size: 15,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ],
     );
   }
