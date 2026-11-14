@@ -828,31 +828,20 @@ class _PillNavigationState extends State<PillNavigation>
                       builder: (c, _) {
                         final rect = current;
                         if (rect == null) return const SizedBox.shrink();
+                        const underlineWidth = 14.0;
+                        const underlineHeight = 3.0;
+                        final underlineRect = Rect.fromCenter(
+                          center: Offset(rect.center.dx, rect.bottom - 3),
+                          width: underlineWidth,
+                          height: underlineHeight,
+                        );
                         return Positioned.fromRect(
-                          rect: rect,
+                          rect: underlineRect,
                           child: IgnorePointer(
-                            child: AnimatedContainer(
-                              duration: Motion.duration(c, 180),
-                              curve: Curves.easeOutCubic,
+                            child: DecoratedBox(
                               decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                color: dark
-                                    ? Colors.white.withValues(alpha: .14)
-                                    : Colors.white.withValues(alpha: .72),
-                                border: Border.all(
-                                  color: dark
-                                      ? Colors.white.withValues(alpha: .14)
-                                      : Colors.white.withValues(alpha: .85),
-                                  width: 0.6,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: (dark ? Colors.white : scheme.primary)
-                                        .withValues(alpha: dark ? .06 : .10),
-                                    blurRadius: 10,
-                                    spreadRadius: 0,
-                                  ),
-                                ],
+                                color: const Color(0xFF34C759),
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
                           ),
