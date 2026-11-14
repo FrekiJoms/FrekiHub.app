@@ -2,7 +2,26 @@ part of 'screens.dart';
 
 class WalletSection extends ConsumerStatefulWidget {
   final AppData data;
-  const WalletSection({super.key, required this.data});
+
+  /// Selected month summary rendered between the total and the cards.
+  final FinanceMonth? month;
+
+  /// Wallet currently scoping the rest of Finance, or null for all wallets.
+  final String? wallet;
+  final ValueChanged<DateTime>? onPeriod;
+  final ValueChanged<String?>? onWallet;
+
+  /// Planned outflows for the selected month, keyed by wallet.
+  final Map<String, int> committed;
+  const WalletSection({
+    super.key,
+    required this.data,
+    this.month,
+    this.wallet,
+    this.onPeriod,
+    this.onWallet,
+    this.committed = const {},
+  });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
 }
@@ -29,8 +48,32 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     if (!_sameNames(next, order)) order = next;
   }
 
-  List<WalletAccount> _accounts() =>
-      walletAccounts(widget.data, widget.data.orderedWalletNames(order));
+  List<WalletAccount> _accounts() => walletAccounts(
+    widget.data,
+    widget.data.orderedWalletNames(order),
+    widget.committed,
+  );
+
+  Future<void> _scope() async {
+    final accounts = _accounts();
+    await panel(
+      context,
+      _WalletScopeSheet(
+        accounts: accounts,
+        selected: widget.wallet,
+        currency: widget.data.currency,
+        onPick: (name) {
+          Navigator.pop(context);
+          widget.onWallet?.call(name);
+        },
+      ),
+    );
+  }
+
+  void _focus(WalletAccount account) {
+    widget.onWallet?.call(account.name);
+    dataToast(context, 'Finance scoped to ${account.name}', DataAction.updated);
+  }
 
   Future<bool> _saveOrder(List<String> names) async {
     try {
@@ -115,6 +158,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           entries: entries,
           currency: widget.data.currency,
           masked: masked,
+          selected: widget.wallet == account.name,
           onEdit: () {
             Navigator.pop(sheet);
             _design(account);
@@ -123,6 +167,12 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             Navigator.pop(sheet);
             _moveToFront(account);
           },
+          onFocus: widget.onWallet == null
+              ? null
+              : () {
+                  Navigator.pop(sheet);
+                  _focus(account);
+                },
         ),
       ),
     );
@@ -133,6 +183,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     Builder(
       builder: (sheet) => _WalletMenu(
         account: account,
+        selected: widget.wallet == account.name,
         onEdit: () {
           Navigator.pop(sheet);
           _design(account);
@@ -149,6 +200,12 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           Navigator.pop(sheet);
           _addWallet();
         },
+        onFocus: widget.onWallet == null
+            ? null
+            : () {
+                Navigator.pop(sheet);
+                _focus(account);
+              },
       ),
     ),
   );
@@ -182,6 +239,18 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           masked: masked,
           onToggle: _toggleMasked,
         ),
+        if (widget.month != null) ...[
+          const SizedBox(height: 10),
+          _WalletMonthCard(
+            month: widget.month!,
+            wallet: widget.wallet,
+            wallets: accounts.map((a) => a.name).toList(),
+            currency: widget.data.currency,
+            masked: masked,
+            onPeriod: widget.onPeriod,
+            onScope: widget.onWallet == null ? null : _scope,
+          ),
+        ],
         const SizedBox(height: 10),
         _WalletToolbar(
           count: accounts.length,
@@ -204,6 +273,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
               accounts: accounts,
               currency: widget.data.currency,
               masked: masked,
+              selected: widget.wallet,
               onOpen: _detail,
               onReorder: (names) async {
                 final previous = List<String>.from(order);
@@ -217,6 +287,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
               accounts: accounts,
               currency: widget.data.currency,
               masked: masked,
+              selected: widget.wallet,
               onOpen: _detail,
               onMenu: _menu,
             ),
@@ -225,6 +296,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
               accounts: accounts,
               currency: widget.data.currency,
               masked: masked,
+              selected: widget.wallet,
               onOpen: _detail,
               onMenu: _menu,
               onNext: (account) => _move(account, toBack: true),
@@ -288,7 +360,7 @@ class _WalletTotalCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'TOTAL NET BALANCE',
+                    'TOTAL BALANCE',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: .7),
                       fontSize: 10,
@@ -352,7 +424,15 @@ class _WalletTotalCard extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 4),
+            Text(
+              'All wallets · all time, in $currency',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .5),
+                fontSize: 10,
+              ),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
@@ -423,6 +503,368 @@ class _TotalMetric extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    ),
+  );
+}
+
+class _WalletMonthCard extends StatelessWidget {
+  final FinanceMonth month;
+  final String? wallet;
+  final List<String> wallets;
+  final String currency;
+  final bool masked;
+  final ValueChanged<DateTime>? onPeriod;
+  final VoidCallback? onScope;
+  const _WalletMonthCard({
+    required this.month,
+    required this.wallet,
+    required this.wallets,
+    required this.currency,
+    required this.masked,
+    required this.onPeriod,
+    required this.onScope,
+  });
+
+  String get scope => wallet ?? 'All wallets';
+
+  @override
+  Widget build(BuildContext c) {
+    final period = month.period;
+    final last = DateTime(period.year, period.month + 1, 0);
+    final amount = masked
+        ? walletMaskedAmount(currency)
+        : money(month.net, currency);
+    final safe = masked
+        ? walletMaskedAmount(currency)
+        : money(month.safe, currency);
+    final theme = Theme.of(c);
+    return Surface(
+      padding: const EdgeInsets.fromLTRB(6, 4, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Previous month',
+                onPressed: onPeriod == null
+                    ? null
+                    : withFeedback(
+                        () => onPeriod!(
+                          DateTime(period.year, period.month - 1),
+                        ),
+                      ),
+                icon: const Icon(LucideIcons.chevronLeft),
+              ),
+              Expanded(
+                child: Text(
+                  DateFormat('MMMM yyyy').format(period),
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next month',
+                onPressed: onPeriod == null
+                    ? null
+                    : withFeedback(
+                        () => onPeriod!(
+                          DateTime(period.year, period.month + 1),
+                        ),
+                      ),
+                icon: const Icon(LucideIcons.chevronRight),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'MONTH NET · ${scope.toUpperCase()}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.6,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              amount,
+                              style: const TextStyle(
+                                fontFamily: 'Geist Mono',
+                                fontSize: 30,
+                                height: 1.05,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Semantics(
+                      label:
+                          '${(month.used * 100).round()} percent of the month elapsed',
+                      child: SizedBox(
+                        width: 58,
+                        height: 58,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox.expand(
+                              child: CircularProgressIndicator(
+                                value: month.used,
+                                strokeWidth: 4,
+                                backgroundColor:
+                                    theme.colorScheme.surfaceContainerHighest,
+                              ),
+                            ),
+                            Text(
+                              '${(month.used * 100).round()}%',
+                              style: const TextStyle(
+                                fontFamily: 'Geist Mono',
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${DateFormat('MMM').format(period)} · ${last.day} days · ${(month.used * 100).round()}% of period elapsed',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Semantics(
+                    button: onScope != null,
+                    label: 'Finance scope, currently $scope',
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: onScope,
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 230),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(LucideIcons.wallet, size: 14),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                scope,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              LucideIcons.chevronDown,
+                              size: 14,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const Divider(),
+                const Text(
+                  'Safe to spend',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    safe,
+                    style: const TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 28,
+                      height: 1.05,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -.8,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  month.commitments == 0
+                      ? 'No remaining planned expenses or savings for $scope in ${DateFormat('MMMM').format(period)}.'
+                      : 'After ${money(month.commitments, currency)} in remaining planned expenses and savings for $scope.',
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                LayoutBuilder(
+                  builder: (c, constraints) {
+                    final columns = constraints.maxWidth < 260 ? 2 : 3;
+                    final width =
+                        (constraints.maxWidth - 12 * (columns - 1)) / columns;
+                    return Wrap(
+                      spacing: 12,
+                      runSpacing: 16,
+                      children: [
+                        for (final value in [
+                          ('Income', month.income),
+                          ('Spent', month.expenses),
+                          ('Saved', month.savings),
+                        ])
+                          SizedBox(
+                            width: width,
+                            child: _MonthMetric(
+                              label: value.$1,
+                              value: masked
+                                  ? walletMaskedAmount(currency)
+                                  : money(value.$2, currency),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
+                ),
+                if (wallets.length > 1 && onScope != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    wallet == null
+                        ? 'Tap the scope chip to read one wallet only. Cards below stay separate.'
+                        : 'Charts, planner and timeline below follow $scope. Tap a card to open it.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.35,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthMetric extends StatelessWidget {
+  final String label, value;
+  const _MonthMetric({required this.label, required this.value});
+  @override
+  Widget build(BuildContext c) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          color: Theme.of(c).colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 6),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          value,
+          style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 14),
+        ),
+      ),
+    ],
+  );
+}
+
+class _WalletScopeSheet extends StatelessWidget {
+  final List<WalletAccount> accounts;
+  final String? selected;
+  final String currency;
+  final ValueChanged<String?> onPick;
+  const _WalletScopeSheet({
+    required this.accounts,
+    required this.selected,
+    required this.currency,
+    required this.onPick,
+  });
+
+  @override
+  Widget build(BuildContext c) => PanelContent(
+    header: const PanelHeading(title: 'Finance scope'),
+    footer: AppButton(label: 'Done', onPressed: () => Navigator.pop(c)),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Choose the wallet used by month totals, safe to spend, the category chart, planner and timeline.',
+          style: TextStyle(
+            fontSize: 12,
+            height: 1.4,
+            color: Theme.of(c).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 12),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(LucideIcons.wallet, size: 22),
+          title: const Text('All wallets'),
+          subtitle: const Text(
+            'The whole ledger, as before.',
+            style: TextStyle(fontSize: 11),
+          ),
+          trailing: selected == null
+              ? const Icon(LucideIcons.check, size: 18)
+              : null,
+          onTap: () => onPick(null),
+        ),
+        const Divider(),
+        for (final account in accounts)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: _WalletMark(account: account, size: 34),
+            title: Text(account.name),
+            subtitle: Text(
+              'Balance ${money(account.balance, currency)}',
+              style: const TextStyle(fontSize: 11),
+            ),
+            trailing: selected == account.name
+                ? const Icon(LucideIcons.check, size: 18)
+                : null,
+            onTap: () => onPick(account.name),
+          ),
       ],
     ),
   );
@@ -524,12 +966,14 @@ class _WalletRows extends StatelessWidget {
   final List<WalletAccount> accounts;
   final String currency;
   final bool masked;
+  final String? selected;
   final ValueChanged<WalletAccount> onOpen;
   final ValueChanged<List<String>> onReorder;
   const _WalletRows({
     required this.accounts,
     required this.currency,
     required this.masked,
+    required this.selected,
     required this.onOpen,
     required this.onReorder,
   });
@@ -564,9 +1008,15 @@ class _WalletRows extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 subtitle: Text(
-                  account.included
+                  account.name == selected
+                      ? 'Scoping Finance to this wallet'
+                      : account.committed > 0
+                      ? '${account.included ? 'Included' : 'Excluded'} · ${masked ? 'planned' : '${money(account.committed, currency)} planned'}'
+                      : account.included
                       ? 'Included in total'
                       : 'Excluded from total',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 11,
                     color: Theme.of(c).colorScheme.onSurfaceVariant,
@@ -576,6 +1026,14 @@ class _WalletRows extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (account.name == selected) ...[
+                      Icon(
+                        LucideIcons.check,
+                        size: 15,
+                        color: Theme.of(c).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 6),
+                    ],
                     Text(
                       masked
                           ? walletMaskedAmount(currency)
@@ -617,12 +1075,14 @@ class _WalletGrid extends StatelessWidget {
   final List<WalletAccount> accounts;
   final String currency;
   final bool masked;
+  final String? selected;
   final ValueChanged<WalletAccount> onOpen;
   final ValueChanged<WalletAccount> onMenu;
   const _WalletGrid({
     required this.accounts,
     required this.currency,
     required this.masked,
+    required this.selected,
     required this.onOpen,
     required this.onMenu,
   });
@@ -645,11 +1105,12 @@ class _WalletGrid extends StatelessWidget {
                 currency: currency,
                 masked: masked,
                 compact: true,
+                selected: account.name == selected,
                 onTap: () => onOpen(account),
                 onLongPress: () => onMenu(account),
                 onMenu: () => onMenu(account),
                 semanticsLabel:
-                    '${account.name} wallet, ${masked ? 'amount hidden' : money(account.balance, currency)}. ${account.included ? 'Included in total' : 'Excluded from total'}.',
+                    '${account.name} wallet, ${masked ? 'amount hidden' : money(account.balance, currency)}. ${account.committed > 0 ? (masked ? 'Has planned outflows. ' : '${money(account.committed, currency)} planned. ') : ''}${account.included ? 'Included in total' : 'Excluded from total'}.',
               ),
             ),
         ],
@@ -662,6 +1123,7 @@ class _WalletDeck extends StatefulWidget {
   final List<WalletAccount> accounts;
   final String currency;
   final bool masked;
+  final String? selected;
   final ValueChanged<WalletAccount> onOpen;
   final ValueChanged<WalletAccount> onMenu;
   final ValueChanged<WalletAccount> onNext;
@@ -671,6 +1133,7 @@ class _WalletDeck extends StatefulWidget {
     required this.accounts,
     required this.currency,
     required this.masked,
+    required this.selected,
     required this.onOpen,
     required this.onMenu,
     required this.onNext,
@@ -787,6 +1250,9 @@ class _WalletDeckState extends State<_WalletDeck>
                                   account: accounts[i % accounts.length],
                                   currency: widget.currency,
                                   masked: widget.masked,
+                                  selected:
+                                      accounts[i % accounts.length].name ==
+                                      widget.selected,
                                   showMenu: false,
                                 ),
                               ),
@@ -835,6 +1301,7 @@ class _WalletDeckState extends State<_WalletDeck>
                                     account: front,
                                     currency: widget.currency,
                                     masked: widget.masked,
+                                    selected: front.name == widget.selected,
                                     onMenu: () => widget.onMenu(front),
                                     semanticsLabel: '${front.name} wallet card',
                                   ),
@@ -939,14 +1406,18 @@ class _WalletDetail extends StatelessWidget {
   final List<Entry> entries;
   final String currency;
   final bool masked;
+  final bool selected;
   final VoidCallback onEdit, onFront;
+  final VoidCallback? onFocus;
   const _WalletDetail({
     required this.account,
     required this.entries,
     required this.currency,
     required this.masked,
+    required this.selected,
     required this.onEdit,
     required this.onFront,
+    required this.onFocus,
   });
 
   @override
@@ -963,6 +1434,7 @@ class _WalletDetail extends StatelessWidget {
           account: account,
           currency: currency,
           masked: masked,
+          selected: selected,
           showMenu: false,
         ),
         const SizedBox(height: 16),
@@ -979,20 +1451,43 @@ class _WalletDetail extends StatelessWidget {
             const SizedBox(width: 8),
             Expanded(
               child: _DetailStat(
-                label: 'Movements',
-                value: '${entries.length}',
+                label: 'Saved',
+                value: masked
+                    ? walletMaskedAmount(currency)
+                    : money(
+                        entries
+                            .where((entry) => entry.kind == 'savings')
+                            .fold(0, (sum, entry) => sum + entry.amount),
+                        currency,
+                      ),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _DetailStat(
-                label: 'Net total',
-                value: account.included ? 'Included' : 'Excluded',
+                label: 'Planned',
+                value: account.committed == 0
+                    ? 'None'
+                    : masked
+                    ? 'Hidden'
+                    : money(account.committed, currency),
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
+        if (onFocus != null)
+          OutlinedButton.icon(
+            onPressed: onFocus,
+            icon: Icon(
+              selected ? LucideIcons.check : LucideIcons.slidersHorizontal,
+              size: 18,
+            ),
+            label: Text(
+              selected ? 'Finance scoped here' : 'Scope Finance to this wallet',
+            ),
+          ),
+        const SizedBox(height: 4),
         OutlinedButton.icon(
           onPressed: onEdit,
           icon: const Icon(LucideIcons.sparkles, size: 18),
@@ -1098,14 +1593,18 @@ class _DetailStat extends StatelessWidget {
 
 class _WalletMenu extends StatelessWidget {
   final WalletAccount account;
+  final bool selected;
   final VoidCallback onEdit, onFront, onAdd;
+  final VoidCallback? onFocus;
   final ValueChanged<bool> onIncluded;
   const _WalletMenu({
     required this.account,
+    required this.selected,
     required this.onEdit,
     required this.onFront,
     required this.onIncluded,
     required this.onAdd,
+    required this.onFocus,
   });
 
   @override
@@ -1117,6 +1616,22 @@ class _WalletMenu extends StatelessWidget {
     footer: AppButton(label: 'Done', onPressed: () => Navigator.pop(c)),
     child: Column(
       children: [
+        if (onFocus != null)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              selected ? LucideIcons.check : LucideIcons.slidersHorizontal,
+              size: 20,
+            ),
+            title: Text(
+              selected ? 'Finance scoped here' : 'Scope Finance to this wallet',
+            ),
+            subtitle: const Text(
+              'Month totals, safe to spend, chart, planner and timeline.',
+              style: TextStyle(fontSize: 11),
+            ),
+            onTap: onFocus,
+          ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(LucideIcons.sparkles, size: 20),

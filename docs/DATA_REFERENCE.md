@@ -30,7 +30,7 @@ Percentage bases are income, expenses or `max(0, income − expenses)` for the o
 
 Occurrence identity is `ruleId:yyyy-MM-dd`. A transaction's unique `occurrence` marks completion. `status:OCCURRENCE` stores planned/skipped/cancelled choices; a real linked transaction overrides the display to complete. Projection itself does not automatically insert transactions.
 
-Finance net is actual income minus expenses minus savings. Safe-to-spend excludes remaining planned non-income commitments dated today or later within the selected period and clamps at zero. Savings goals are per currency; saved progress uses recorded savings in that currency.
+Finance net is actual income minus expenses minus savings. Safe-to-spend excludes remaining planned non-income commitments dated today or later within the selected period and clamps at zero; both values follow the Finance wallet scope (all wallets or one payment method). Savings goals are per currency and shared across wallets; saved progress uses recorded savings in that currency, and the goal card shows each wallet's lifetime contribution. The wallet scope itself is not persisted.
 
 `AppData.balance` uses recorded income minus expenses minus savings across all dates, filtered to the selected currency, in integer minor units. Today's pill formats it with `money`; the rule snapshot exposes `budget.balance` in major units. Negative balances are retained; future plans and other currencies are excluded.
 

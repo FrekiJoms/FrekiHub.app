@@ -25,6 +25,25 @@ Entry movement(
   note: '',
 );
 
+Entry dated(
+  String id,
+  String day,
+  String kind,
+  int amount,
+  String method, {
+  String currency = 'PHP',
+  String category = 'Other',
+}) => Entry(
+  id: id,
+  day: day,
+  kind: kind,
+  amount: amount,
+  currency: currency,
+  category: category,
+  method: method,
+  note: '',
+);
+
 void main() {
   final entries = [
     movement('a', 'income', 100000, 'GCash'),
@@ -127,6 +146,236 @@ void main() {
     expect(walletImagePreference('wallet:BPI:style'), isFalse);
   });
 
+  test('lifetime savings and month rows can be scoped to one wallet', () {
+    final scopedData = AppData(
+      const [],
+      [
+        dated('i', '2030-01-01', 'income', 100000, 'GCash'),
+        dated('e', '2030-01-02', 'expense', 25000, 'GCash'),
+        dated('s', '2030-01-03', 'savings', 10000, 'GCash'),
+        dated('c', '2030-01-04', 'expense', 6000, 'Cash'),
+        dated('f', '2030-02-01', 'expense', 9999, 'GCash'),
+      ],
+      const [],
+      {'methods': jsonEncode(['Cash', 'GCash'])},
+    );
+    expect(scopedData.savingsByWallet, {'GCash': 10000});
+    expect(
+      scopedData
+          .scopedEntries(wallet: 'Cash', month: '2030-01')
+          .map((entry) => entry.id),
+      ['c'],
+    );
+    expect(scopedData.scopedEntries(month: '2030-01').length, 4);
+    expect(scopedData.scopedEntries(wallet: 'GCash').length, 4);
+  });
+
+  test('finance month scopes totals, safe to spend and card commitments', () {
+    final scopedData = AppData(
+      const [],
+      [
+        dated('i', '2030-01-01', 'income', 100000, 'GCash'),
+        dated('e', '2030-01-02', 'expense', 25000, 'GCash'),
+        dated('s', '2030-01-03', 'savings', 10000, 'GCash'),
+        dated('c', '2030-01-04', 'expense', 6000, 'Cash'),
+        dated('f', '2030-02-01', 'expense', 9999, 'GCash'),
+      ],
+      [
+        Rule(
+          id: 'rent',
+          title: 'Rent',
+          kind: 'expense',
+          amount: 20000,
+          currency: 'PHP',
+          quantity: 1,
+          basis: 'fixed',
+          cadence: 'monthly',
+          start: '2030-01-31',
+          category: 'Other',
+          method: 'GCash',
+          position: 0,
+        ),
+        Rule(
+          id: 'goal',
+          title: 'Goal',
+          kind: 'savings',
+          amount: 7000,
+          currency: 'PHP',
+          quantity: 1,
+          basis: 'fixed',
+          cadence: 'monthly',
+          start: '2030-01-15',
+          category: 'Other',
+          method: 'Cash',
+          position: 1,
+        ),
+      ],
+      {'methods': jsonEncode(['Cash', 'GCash'])},
+    );
+    final period = DateTime(2030, 1);
+    final planned = project(scopedData, period, DateTime(2030, 1, 31));
+
+    final all = financeMonth(scopedData, period, null, planned);
+    expect(all.income, 100000);
+    expect(all.expenses, 31000);
+    expect(all.savings, 10000);
+    expect(all.net, 59000);
+    expect(all.commitments, 27000);
+    expect(all.safe, 32000);
+
+    final gcash = financeMonth(
+      scopedData,
+      period,
+      'GCash',
+      planned.where((p) => p.rule.method == 'GCash').toList(),
+    );
+    expect(gcash.income, 100000);
+    expect(gcash.expenses, 25000);
+    expect(gcash.savings, 10000);
+    expect(gcash.net, 65000);
+    expect(gcash.commitments, 20000);
+    expect(gcash.safe, 45000);
+
+    expect(walletCommitments(planned), {'GCash': 20000, 'Cash': 7000});
+    final accounts = walletAccounts(
+      scopedData,
+      ['GCash', 'Cash'],
+      walletCommitments(planned),
+    );
+    expect(accounts.first.committed, 20000);
+    expect(accounts.last.committed, 7000);
+  });
+
+  testWidgets('month card scope picker narrows Finance to one wallet', (
+    tester,
+  ) async {
+    String? picked;
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final data = AppData(const [], const [], const [], {
+      'methods': jsonEncode(['Cash', 'GCash']),
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: WalletSection(
+                data: data,
+                month: FinanceMonth(
+                  period: DateTime(2026, 11),
+                  income: 0,
+                  expenses: 0,
+                  savings: 0,
+                  net: 0,
+                  safe: 0,
+                  commitments: 0,
+                  used: 0,
+                ),
+                onWallet: (value) => picked = value,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+    await tester.tap(find.text('All wallets'));
+    await tester.pumpAndSettle();
+    expect(find.text('Finance scope'), findsOneWidget);
+    final gcash = find.text('GCash');
+    await tester.ensureVisible(gcash);
+    await tester.pumpAndSettle();
+    await tester.tap(gcash);
+    await tester.pumpAndSettle();
+    expect(picked, 'GCash');
+  });
+
+  testWidgets('Finance scope narrows the month, planner and savings goal', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final today = dayKey(DateTime.now());
+    final data = AppData(
+      const [],
+      [
+        dated('i', today, 'income', 100000, 'GCash'),
+        dated('e', today, 'expense', 25000, 'GCash', category: 'Food'),
+        dated('c', today, 'expense', 6000, 'Cash', category: 'Travel'),
+        dated('s', today, 'savings', 10000, 'GCash'),
+      ],
+      [
+        Rule(
+          id: 'rent',
+          title: 'Rent',
+          kind: 'expense',
+          amount: 20000,
+          currency: 'PHP',
+          quantity: 1,
+          basis: 'fixed',
+          cadence: 'monthly',
+          start: today,
+          category: 'Housing',
+          method: 'GCash',
+          position: 0,
+        ),
+        Rule(
+          id: 'allowance',
+          title: 'Allowance',
+          kind: 'expense',
+          amount: 7000,
+          currency: 'PHP',
+          quantity: 1,
+          basis: 'fixed',
+          cadence: 'monthly',
+          start: today,
+          category: 'Other',
+          method: 'Cash',
+          position: 1,
+        ),
+      ],
+      {
+        'methods': jsonEncode(['Cash', 'GCash']),
+        'savingsGoal:PHP': '50000',
+      },
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          dataProvider.overrideWith((ref) => Stream.value(data)),
+        ],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(body: BudgetScreen(data: data)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+
+    await tester.tap(find.text('All wallets'));
+    await tester.pumpAndSettle();
+    final gcash = find.text('GCash');
+    await tester.ensureVisible(gcash);
+    await tester.pumpAndSettle();
+    await tester.tap(gcash);
+    await tester.pumpAndSettle();
+
+    expect(find.text('MONTH NET · GCASH'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('SAVED · GCASH'), 300);
+    expect(find.textContaining('from this wallet'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Plan for GCash.'), 300);
+    expect(find.text('Rent'), findsOneWidget);
+    expect(find.text('Allowance'), findsNothing);
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('swiping the stack moves the front card back and persists it', (
     tester,
   ) async {
@@ -159,7 +408,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('GCASH'), findsOneWidget);
 
-    await tester.drag(find.text('GCASH'), const Offset(-320, 0));
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('GCASH')),
+    );
+    await gesture.moveBy(const Offset(-120, 0));
+    await tester.pump();
+    await gesture.moveBy(const Offset(-200, 0));
+    await tester.pump();
+    await gesture.up();
     await tester.pumpAndSettle();
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 50)),

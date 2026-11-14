@@ -418,7 +418,13 @@ class _EntryFormState extends ConsumerState<EntryForm> {
 class RuleForm extends ConsumerStatefulWidget {
   final AppData data;
   final Rule? rule;
-  const RuleForm({super.key, required this.data, this.rule});
+  final String? initialMethod;
+  const RuleForm({
+    super.key,
+    required this.data,
+    this.rule,
+    this.initialMethod,
+  });
   @override
   ConsumerState<RuleForm> createState() => _RuleFormState();
 }
@@ -443,7 +449,7 @@ class _RuleFormState extends ConsumerState<RuleForm> {
     kind = r?.kind ?? 'expense';
     cadence = r?.cadence ?? 'monthly';
     category = r?.category ?? widget.data.categories.first;
-    method = r?.method ?? widget.data.methods.first;
+    method = r?.method ?? widget.initialMethod ?? widget.data.methods.first;
     start = r?.start ?? dayKey(DateTime.now());
     finish = r?.finish;
   }

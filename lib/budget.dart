@@ -9,6 +9,7 @@ class BudgetScreen extends ConsumerStatefulWidget {
 
 class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   DateTime period = DateTime(DateTime.now().year, DateTime.now().month);
+  String? wallet;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -154,34 +155,26 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final d = widget.data;
     final month = dayKey(period).substring(0, 7);
     final last = DateTime(period.year, period.month + 1, 0);
-    final income = d.total('income', month: month),
-        expenses = d.total('expense', month: month),
-        savings = d.total('savings', month: month);
-    final net = income - expenses - savings;
-    final planned = project(d, period, last);
-    final today = dayKey(DateTime.now());
-    final commitments = planned
-        .where(
-          (p) =>
-              p.day.compareTo(today) >= 0 &&
-              p.status == 'planned' &&
-              p.rule.kind != 'income',
-        )
-        .fold(0, (sum, p) => sum + p.amount);
-    final safe = math.max(0, net - commitments);
-    final used = period.isAfter(DateTime.now())
-        ? 0.0
-        : last.isBefore(DateTime.now())
-        ? 1.0
-        : DateTime.now().day / last.day;
+    final plannedForPeriod = project(d, period, last);
+    final planned = wallet == null
+        ? plannedForPeriod
+        : plannedForPeriod
+              .where((p) => walletMethodName(p.rule.method) == wallet)
+              .toList();
+    final summary = financeMonth(d, period, wallet, planned);
+    final committed = walletCommitments(plannedForPeriod);
     final goal = int.tryParse(d.prefs['savingsGoal:${d.currency}'] ?? '') ?? 0;
-    final saved = d.total('savings');
+    final saved = wallet == null
+        ? d.total('savings')
+        : d
+              .scopedEntries(wallet: wallet)
+              .where((e) => e.kind == 'savings')
+              .fold(0, (sum, e) => sum + e.amount);
+    final savingsEntries = d.savingsByWallet.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     final breakdown = <String, int>{};
-    for (final e in d.entries.where(
-      (e) =>
-          e.currency == d.currency &&
-          e.day.startsWith(month) &&
-          e.kind == 'expense',
+    for (final e in d.scopedEntries(wallet: wallet, month: month).where(
+      (e) => e.kind == 'expense',
     )) {
       breakdown.update(
         e.category,
@@ -191,14 +184,20 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     }
     final categories = breakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final rules = d.rules.where((r) => r.currency == d.currency).toList()
-      ..sort((a, b) => a.position.compareTo(b.position));
+    final rules =
+        (wallet == null
+              ? d.rules.where((r) => r.currency == d.currency)
+              : d.rules.where(
+                  (r) =>
+                      r.currency == d.currency &&
+                      walletMethodName(r.method) == wallet,
+                ))
+            .toList()
+          ..sort((a, b) => a.position.compareTo(b.position));
     final timeline = <String, List<Widget>>{};
     void add(String day, Widget row) =>
         timeline.putIfAbsent(day, () => []).add(row);
-    for (final e in d.entries.where(
-      (e) => e.currency == d.currency && e.day.startsWith(month),
-    )) {
+    for (final e in d.scopedEntries(wallet: wallet, month: month)) {
       add(
         e.day,
         ListTile(
@@ -242,7 +241,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             size: 20,
           ),
           title: Text(p.rule.title),
-          subtitle: Text('Expected · ${p.status} · ${p.rule.category}'),
+          subtitle: Text(
+            'Expected · ${p.status} · ${p.rule.category} · ${p.rule.method}',
+          ),
           trailing: Text(
             p.error == null ? money(p.amount, d.currency) : 'Needs review',
             style: TextStyle(
@@ -259,137 +260,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       title: 'FINANCE',
       subtitle: 'Your money, clearly',
       children: [
-        WalletSection(data: d),
-        Surface(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Previous month',
-                onPressed: withFeedback(
-                  () => setState(
-                    () => period = DateTime(period.year, period.month - 1),
-                  ),
-                ),
-                icon: const Icon(LucideIcons.chevronLeft),
-              ),
-              Expanded(
-                child: Text(
-                  DateFormat('MMMM yyyy').format(period),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Next month',
-                onPressed: withFeedback(
-                  () => setState(
-                    () => period = DateTime(period.year, period.month + 1),
-                  ),
-                ),
-                icon: const Icon(LucideIcons.chevronRight),
-              ),
-            ],
-          ),
-        ),
-        Surface(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'NET POSITION',
-                          style: TextStyle(fontSize: 11, letterSpacing: 2),
-                        ),
-                        const SizedBox(height: 12),
-                        NumberValue(money(net, d.currency), size: 34),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    width: 72,
-                    height: 72,
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox.expand(
-                          child: CircularProgressIndicator(
-                            value: used,
-                            strokeWidth: 5,
-                            backgroundColor: Theme.of(c)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                          ),
-                        ),
-                        Text(
-                          '${(used * 100).round()}%',
-                          style: const TextStyle(
-                            fontFamily: 'Geist Mono',
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '${DateFormat('MMM').format(period)} · ${last.day} days · ${(used * 100).round()}% of period elapsed',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Theme.of(c).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const Divider(),
-              const Text(
-                'Safe to spend',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              NumberValue(money(safe, d.currency), size: 30),
-              const SizedBox(height: 8),
-              Text(
-                'After ${money(commitments, d.currency)} in remaining planned expenses and savings.',
-                style: TextStyle(
-                  color: Theme.of(c).colorScheme.onSurfaceVariant,
-                  fontSize: 12,
-                ),
-              ),
-              const SizedBox(height: 16),
-              LayoutBuilder(
-                builder: (c, constraints) {
-                  final columns = constraints.maxWidth < 260 ? 2 : 3;
-                  final width =
-                      (constraints.maxWidth - 12 * (columns - 1)) / columns;
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 16,
-                    children: [
-                      for (final value in [
-                        ('Income', income),
-                        ('Spent', expenses),
-                        ('Saved', savings),
-                      ])
-                        SizedBox(
-                          width: width,
-                          child: metric(
-                            c,
-                            value.$1,
-                            money(value.$2, d.currency),
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
-            ],
-          ),
+        WalletSection(
+          data: d,
+          month: summary,
+          wallet: wallet,
+          committed: committed,
+          onPeriod: (next) =>
+              setState(() => period = DateTime(next.year, next.month)),
+          onWallet: (name) => setState(() => wallet = name),
         ),
         Surface(
           child: Column(
@@ -404,6 +282,15 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              Text(
+                wallet == null
+                    ? 'SAVED · ALL WALLETS'
+                    : 'SAVED · ${wallet!.toUpperCase()}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 10, letterSpacing: 1.6),
+              ),
+              const SizedBox(height: 8),
               NumberValue(money(saved, d.currency), size: 28),
               const SizedBox(height: 12),
               ClipRRect(
@@ -417,8 +304,66 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               Text(
                 goal <= 0
                     ? 'Set a goal to see your progress.'
-                    : 'of ${money(goal, d.currency)} · ${math.min(100, (saved * 100 / goal).round())}% saved',
+                    : 'of ${money(goal, d.currency)} · ${math.min(100, (saved * 100 / goal).round())}% saved${wallet == null ? '' : ' from this wallet'}',
               ),
+              if (goal > 0 && wallet != null)
+                Text(
+                  'The goal is shared across all wallets.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(c).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (savingsEntries.isNotEmpty) ...[
+                const Divider(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'BY WALLET',
+                        style: TextStyle(
+                          fontSize: 10,
+                          letterSpacing: 1.6,
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(c).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    if (wallet != null)
+                      TextButton(
+                        onPressed: withFeedback(
+                          () => setState(() => wallet = null),
+                        ),
+                        child: const Text('All wallets'),
+                      ),
+                  ],
+                ),
+                for (final entry in savingsEntries)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    title: Text(entry.key),
+                    subtitle: Text(
+                      goal <= 0
+                          ? 'Saved'
+                          : '${math.min(100, (entry.value * 100 / goal).round())}% of the shared goal',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: Text(
+                      money(entry.value, d.currency),
+                      style: const TextStyle(
+                        fontFamily: 'Geist Mono',
+                        fontSize: 11,
+                      ),
+                    ),
+                    onTap: withFeedback(
+                      () => setState(
+                        () => wallet = wallet == entry.key ? null : entry.key,
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
@@ -426,11 +371,16 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SectionHeading('Where it went'),
+              SectionHeading(
+                'Where it went',
+                trailing: _scopeTag(c),
+              ),
               if (categories.isEmpty)
-                const EmptyState(
+                EmptyState(
                   'No spending this month.',
-                  'Expenses will show here by category.',
+                  wallet == null
+                      ? 'Expenses will show here by category.'
+                      : 'No expenses assigned to $wallet this month.',
                   LucideIcons.chartPie,
                 )
               else ...[
@@ -439,7 +389,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   height: 150,
                   child: Semantics(
                     label:
-                        'Category spending total ${money(expenses, d.currency)}',
+                        'Category spending total ${money(summary.expenses, d.currency)} for ${wallet ?? 'all wallets'}',
                     child: PieChart(
                       PieChartData(
                         centerSpaceRadius: 44,
@@ -491,7 +441,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(6),
                           child: LinearProgressIndicator(
-                            value: categories[i].value / expenses,
+                            value: categories[i].value / summary.expenses,
                             minHeight: 4,
                             color: Design.chart[i % Design.chart.length],
                             backgroundColor: Theme.of(c)
@@ -508,19 +458,33 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
         ),
         SectionHeading(
-          'Give your money a plan.',
-          trailing: IconButton(
-            tooltip: 'Add planner rule',
-            onPressed: withFeedback(() => panel(c, RuleForm(data: d))),
-            icon: const Icon(LucideIcons.plus),
+          wallet == null ? 'Give your money a plan.' : 'Plan for $wallet.',
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _scopeTag(c),
+              IconButton(
+                tooltip: wallet == null
+                    ? 'Add planner rule'
+                    : 'Add planner rule for $wallet',
+                onPressed: withFeedback(
+                  () => panel(c, RuleForm(data: d, initialMethod: wallet)),
+                ),
+                icon: const Icon(LucideIcons.plus),
+              ),
+            ],
           ),
         ),
         Surface(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: rules.isEmpty
-              ? const EmptyState(
-                  'A plan starts with one rule.',
-                  'Add payday savings, rent, or a daily allowance.',
+              ? EmptyState(
+                  wallet == null
+                      ? 'A plan starts with one rule.'
+                      : 'No rules for $wallet yet.',
+                  wallet == null
+                      ? 'Add payday savings, rent, or a daily allowance.'
+                      : 'Add a rule to reserve money from this wallet.',
                   LucideIcons.calendarClock,
                 )
               : ReorderableListView.builder(
@@ -529,8 +493,22 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   buildDefaultDragHandles: false,
                   itemCount: rules.length,
                   onReorderItem: (old, next) async {
-                    final reordered = [...rules];
-                    reordered.insert(next, reordered.removeAt(old));
+                    final visible = [...rules];
+                    visible.insert(next, visible.removeAt(old));
+                    final full =
+                        d.rules
+                            .where((r) => r.currency == d.currency)
+                            .toList()
+                          ..sort((a, b) => a.position.compareTo(b.position));
+                    final reordered = <Rule>[];
+                    var index = 0;
+                    for (final r in full) {
+                      reordered.add(
+                        wallet == null || walletMethodName(r.method) == wallet
+                            ? visible[index++]
+                            : r,
+                      );
+                    }
                     final db = ref.read(databaseProvider);
                     await guarded(
                       context,
@@ -554,7 +532,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                       contentPadding: EdgeInsets.zero,
                       title: Text(r.title),
                       subtitle: Text(
-                        '${r.cadence} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
+                        '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
                       ),
                       onTap: withFeedback(() => ruleMenu(r)),
                       trailing: ReorderableDragStartListener(
@@ -568,12 +546,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   },
                 ),
         ),
-        const SectionHeading('Expected & actual'),
+        SectionHeading('Expected & actual', trailing: _scopeTag(c)),
         if (days.isEmpty)
-          const Surface(
+          Surface(
             child: EmptyState(
               'A clean slate.',
-              'Add a transaction or a planner rule.',
+              wallet == null
+                  ? 'Add a transaction or a planner rule.'
+                  : 'No activity for $wallet this month.',
               LucideIcons.wallet,
             ),
           )
@@ -597,26 +577,19 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     );
   }
 
-  Widget metric(BuildContext c, String label, String value) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        label,
-        style: TextStyle(
-          fontSize: 12,
-          color: Theme.of(c).colorScheme.onSurfaceVariant,
-        ),
+  Widget _scopeTag(BuildContext c) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 120),
+    child: Text(
+      wallet ?? 'All wallets',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w500,
+        color: Theme.of(c).colorScheme.onSurfaceVariant,
       ),
-      const SizedBox(height: 6),
-      FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Text(
-          value,
-          style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 14),
-        ),
-      ),
-    ],
+    ),
   );
   Future<void> savingsGoal(BuildContext c) async {
     final field = TextEditingController(

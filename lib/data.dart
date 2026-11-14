@@ -764,6 +764,30 @@ class AppData {
       )
       .toList();
 
+  /// Ledger rows in the display currency, optionally narrowed to one month and
+  /// one payment method. Finance uses this so every summary, chart and timeline
+  /// changes together when a wallet is selected.
+  List<Entry> scopedEntries({String? wallet, String? month}) => entries
+      .where(
+        (e) =>
+            e.currency == currency &&
+            (month == null || e.day.startsWith(month)) &&
+            (wallet == null || walletMethodName(e.method) == wallet),
+      )
+      .toList();
+
+  /// Lifetime savings contributions per wallet for the goal breakdown.
+  Map<String, int> get savingsByWallet {
+    final result = <String, int>{};
+    for (final e in entries.where(
+      (e) => e.currency == currency && e.kind == 'savings',
+    )) {
+      final name = walletMethodName(e.method);
+      result.update(name, (value) => value + e.amount, ifAbsent: () => e.amount);
+    }
+    return result;
+  }
+
   /// Saved order first, then new or previously unlisted methods by importance.
   List<String> orderedWalletNames(Iterable<String> stored) {
     final balances = walletBalances;

@@ -222,6 +222,9 @@ class WalletAccount {
   final double scale, dx, dy;
   final bool included;
   final int movements;
+
+  /// Planned money that still leaves this wallet in the selected month.
+  final int committed;
   const WalletAccount({
     required this.name,
     required this.balance,
@@ -232,6 +235,7 @@ class WalletAccount {
     required this.dy,
     required this.included,
     required this.movements,
+    this.committed = 0,
   });
 
   bool get hasCustomArtwork =>
@@ -248,7 +252,11 @@ List<String> walletStoredOrder(Map<String, String> prefs) {
   return const [];
 }
 
-List<WalletAccount> walletAccounts(AppData data, [List<String>? ordered]) {
+List<WalletAccount> walletAccounts(
+  AppData data, [
+  List<String>? ordered,
+  Map<String, int> committed = const {},
+]) {
   final names =
       ordered ?? data.orderedWalletNames(walletStoredOrder(data.prefs));
   final balances = data.walletBalances;
@@ -272,8 +280,83 @@ List<WalletAccount> walletAccounts(AppData data, [List<String>? ordered]) {
         dy: double.tryParse(data.prefs['wallet:$name:dy'] ?? '') ?? 0,
         included: data.prefs['wallet:$name:include'] != 'false',
         movements: movements[name] ?? 0,
+        committed: committed[name] ?? 0,
       ),
   ];
+}
+
+/// Everything the Finance header needs for one month and wallet scope.
+class FinanceMonth {
+  final DateTime period;
+  final int income, expenses, savings, net, safe, commitments;
+  final double used;
+  const FinanceMonth({
+    required this.period,
+    required this.income,
+    required this.expenses,
+    required this.savings,
+    required this.net,
+    required this.safe,
+    required this.commitments,
+    required this.used,
+  });
+}
+
+FinanceMonth financeMonth(
+  AppData data,
+  DateTime period,
+  String? wallet,
+  List<Projection> planned,
+) {
+  final month = dayKey(period).substring(0, 7);
+  final scoped = data.scopedEntries(wallet: wallet, month: month);
+  int total(String kind) =>
+      scoped.where((e) => e.kind == kind).fold(0, (sum, e) => sum + e.amount);
+  final income = total('income'), expenses = total('expense');
+  final savings = total('savings');
+  final net = income - expenses - savings;
+  final last = DateTime(period.year, period.month + 1, 0);
+  final today = dayKey(DateTime.now());
+  final commitments = planned
+      .where(
+        (p) =>
+            p.day.compareTo(today) >= 0 &&
+            p.status == 'planned' &&
+            p.rule.kind != 'income',
+      )
+      .fold(0, (sum, p) => sum + p.amount);
+  final used = period.isAfter(DateTime.now())
+      ? 0.0
+      : last.isBefore(DateTime.now())
+      ? 1.0
+      : DateTime.now().day / last.day;
+  return FinanceMonth(
+    period: period,
+    income: income,
+    expenses: expenses,
+    savings: savings,
+    net: net,
+    safe: math.max(0, net - commitments),
+    commitments: commitments,
+    used: used,
+  );
+}
+
+/// Planned outflows for the selected month, keyed by wallet, for the cards'
+/// "planned" line. Includes every wallet even when Finance is scoped.
+Map<String, int> walletCommitments(Iterable<Projection> planned) {
+  final today = dayKey(DateTime.now());
+  final result = <String, int>{};
+  for (final p in planned) {
+    if (p.status != 'planned' ||
+        p.rule.kind == 'income' ||
+        p.day.compareTo(today) < 0) {
+      continue;
+    }
+    final name = walletMethodName(p.rule.method);
+    result.update(name, (value) => value + p.amount, ifAbsent: () => p.amount);
+  }
+  return result;
 }
 
 String walletMaskedAmount(String currency) => '${moneySymbol(currency)}••••••';
@@ -322,6 +405,7 @@ class WalletCard extends StatelessWidget {
   final String currency;
   final bool masked;
   final bool compact;
+  final bool selected;
   final bool showMenu;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -333,6 +417,7 @@ class WalletCard extends StatelessWidget {
     required this.currency,
     required this.masked,
     this.compact = false,
+    this.selected = false,
     this.showMenu = true,
     this.onTap,
     this.onLongPress,
@@ -342,6 +427,7 @@ class WalletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext c) {
+    final theme = Theme.of(c);
     final border = BorderRadius.circular(compact ? 13 : 18);
     final art = AspectRatio(
       aspectRatio: 1.586,
@@ -510,6 +596,23 @@ class WalletCard extends StatelessWidget {
                                 ),
                               ),
                             ),
+                            if (account.committed > 0) ...[
+                              SizedBox(height: 3 * f),
+                              Text(
+                                masked
+                                    ? 'Planned'
+                                    : '${money(account.committed, currency)} planned',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: ink.withValues(alpha: .8),
+                                  fontFamily: 'Geist Mono',
+                                  fontSize: 7 * f,
+                                  height: 1,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -538,7 +641,24 @@ class WalletCard extends StatelessWidget {
               child: art,
             ),
           );
-    return Semantics(button: onTap != null, label: semanticsLabel, child: card);
+    return Semantics(
+      button: onTap != null,
+      selected: selected,
+      label: semanticsLabel,
+      child: selected
+          ? DecoratedBox(
+              position: DecorationPosition.foreground,
+              decoration: BoxDecoration(
+                borderRadius: border,
+                border: Border.all(
+                  color: theme.colorScheme.primary,
+                  width: 2,
+                ),
+              ),
+              child: card,
+            )
+          : card,
+    );
   }
 }
 
