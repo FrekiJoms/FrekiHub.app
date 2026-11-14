@@ -179,16 +179,21 @@ class _AppShellState extends ConsumerState<AppShell>
       lastTab = i;
     });
     if (_tabController.hasClients) {
-      _tabAnimating = true;
-      _tabController
-          .animateToPage(
-            i,
-            duration: Motion.duration(context, 280),
-            curve: Curves.easeOutCubic,
-          )
-          .whenComplete(() {
-        _tabAnimating = false;
-      });
+      final distance = (i - currentTab).abs();
+      if (distance > 1) {
+        _tabController.jumpToPage(i);
+      } else {
+        _tabAnimating = true;
+        _tabController
+            .animateToPage(
+              i,
+              duration: Motion.duration(context, 280),
+              curve: Curves.easeOutCubic,
+            )
+            .whenComplete(() {
+          _tabAnimating = false;
+        });
+      }
     }
   }
 
