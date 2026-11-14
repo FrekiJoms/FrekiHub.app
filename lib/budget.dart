@@ -643,44 +643,35 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              'TOTAL BALANCE',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: .5),
-                                fontSize: 7,
-                                letterSpacing: 0.8,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Flexible(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.center,
-                                child: Text(
-                                  masked
-                                      ? walletMaskedAmount(d.currency)
-                                      : money(totalBalance, d.currency),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontFamily: 'Geist Mono',
-                                    fontSize: 15,
-                                    height: 1,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: -.3,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                      Text(
+                        'TOTAL BALANCE',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .5),
+                          fontSize: 7,
+                          letterSpacing: 0.8,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Center(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              masked
+                                  ? walletMaskedAmount(d.currency)
+                                  : money(totalBalance, d.currency),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontFamily: 'Geist Mono',
+                                fontSize: 15,
+                                height: 1,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -.3,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                       Semantics(
                         button: true,
                         label: masked ? 'Show amounts' : 'Hide amounts',
