@@ -574,11 +574,13 @@ class PillNavigation extends StatefulWidget {
   final int index;
   final ValueChanged<int> onChanged;
   final ValueChanged<String> onQuickAdd;
+  final PageController? tabController;
   const PillNavigation({
     super.key,
     required this.index,
     required this.onChanged,
     required this.onQuickAdd,
+    this.tabController,
   });
   @override
   State<PillNavigation> createState() => _PillNavigationState();
@@ -591,6 +593,7 @@ class _PillNavigationState extends State<PillNavigation>
   final track = GlobalKey();
   late final AnimationController motion;
   Rect? from, target;
+  List<Rect?> _tabRects = List<Rect?>.filled(4, null);
   OverlayEntry? menu;
   OverlayEntry? _tooltipEntry;
   int? hovered;
@@ -624,12 +627,17 @@ class _PillNavigationState extends State<PillNavigation>
   void initState() {
     super.initState();
     motion = AnimationController(vsync: this);
+    _attachController();
     WidgetsBinding.instance.addPostFrameCallback((_) => measure());
   }
 
   @override
   void didUpdateWidget(covariant PillNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.tabController != widget.tabController) {
+      _detachController();
+      _attachController();
+    }
     if (oldWidget.index != widget.index) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         measure();
@@ -637,6 +645,10 @@ class _PillNavigationState extends State<PillNavigation>
       });
     }
   }
+
+  void _attachController() {}
+
+  void _detachController() {}
 
   void _removeTooltip() {
     _tooltipTimer?.cancel();
@@ -670,7 +682,23 @@ class _PillNavigationState extends State<PillNavigation>
     _tooltipTimer = Timer(const Duration(milliseconds: 1800), _removeTooltip);
   }
 
+  Rect? _rectAtPage(double page) {
+    if (_tabRects.every((r) => r == null)) return target;
+    final p = page.clamp(0.0, (keys.length - 1).toDouble());
+    final i = p.floor().clamp(0, keys.length - 1);
+    final j = p.ceil().clamp(0, keys.length - 1);
+    final a = _tabRects[i] ?? _tabRects[j];
+    final b = _tabRects[j] ?? _tabRects[i];
+    if (a == null || b == null) return target;
+    return Rect.lerp(a, b, p - i);
+  }
+
   Rect? get current {
+    final controller = widget.tabController;
+    if (controller != null && controller.hasClients) {
+      final page = controller.page ?? widget.index.toDouble();
+      return _rectAtPage(page);
+    }
     if (target == null || from == null) return target;
     final t = Curves.easeOutBack.transform(motion.value.clamp(0.0, 1.0));
     return Rect.lerp(from, target, t);
@@ -679,19 +707,39 @@ class _PillNavigationState extends State<PillNavigation>
   void measure() {
     final parent = track.currentContext?.findRenderObject() as RenderBox?;
     if (!mounted || parent == null) return;
-    final selected = widget.index < keys.length
-        ? keys[widget.index].currentContext?.findRenderObject() as RenderBox?
+    final rects = List<Rect?>.filled(keys.length, null);
+    for (var i = 0; i < keys.length; i++) {
+      final box = keys[i].currentContext?.findRenderObject() as RenderBox?;
+      if (box != null) {
+        rects[i] = box.localToGlobal(Offset.zero, ancestor: parent) & box.size;
+      }
+    }
+    final next = (widget.index >= 0 && widget.index < rects.length)
+        ? rects[widget.index]
         : null;
-    final next = selected == null
-        ? null
-        : selected.localToGlobal(Offset.zero, ancestor: parent) & selected.size;
-    if (next == null || target == next) return;
+    final controllerDriven = widget.tabController != null && widget.tabController!.hasClients;
+    final changed = !_sameRects(_tabRects, rects) || target != next;
+    if (!changed) return;
     setState(() {
-      from = current ?? next;
-      target = next;
-      motion.duration = Motion.duration(context, 420);
-      motion.forward(from: 0);
+      _tabRects = rects;
+      if (controllerDriven) {
+        target = next;
+        from = next;
+      } else {
+        from = current ?? next;
+        target = next;
+        motion.duration = Motion.duration(context, 420);
+        motion.forward(from: 0);
+      }
     });
+  }
+
+  bool _sameRects(List<Rect?> a, List<Rect?> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   void _setPressed(int i, bool down) {
@@ -789,6 +837,7 @@ class _PillNavigationState extends State<PillNavigation>
   void dispose() {
     closeMenu();
     _removeTooltip();
+    _detachController();
     motion.dispose();
     super.dispose();
   }
@@ -870,33 +919,62 @@ class _PillNavigationState extends State<PillNavigation>
                   clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
-                    AnimatedBuilder(
-                      animation: motion,
-                      builder: (c, _) {
-                        final rect = current;
-                        if (rect == null) return const SizedBox.shrink();
-                        const underlineWidth = 14.0;
-                        const underlineHeight = 3.0;
-                        return Positioned(
-                          left: rect.left,
-                          width: rect.width,
-                          top: rect.bottom - 5,
-                          height: underlineHeight,
-                          child: IgnorePointer(
-                            child: Center(
-                              child: Container(
-                                width: underlineWidth,
-                                height: underlineHeight,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF34C759),
-                                  borderRadius: BorderRadius.circular(2),
+                    if (widget.tabController != null)
+                      AnimatedBuilder(
+                        animation: widget.tabController!,
+                        builder: (c, _) {
+                          final rect = current;
+                          if (rect == null) return const SizedBox.shrink();
+                          const underlineWidth = 14.0;
+                          const underlineHeight = 3.0;
+                          return Positioned(
+                            left: rect.left,
+                            width: rect.width,
+                            top: rect.bottom - 5,
+                            height: underlineHeight,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Container(
+                                  width: underlineWidth,
+                                  height: underlineHeight,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF34C759),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      )
+                    else
+                      AnimatedBuilder(
+                        animation: motion,
+                        builder: (c, _) {
+                          final rect = current;
+                          if (rect == null) return const SizedBox.shrink();
+                          const underlineWidth = 14.0;
+                          const underlineHeight = 3.0;
+                          return Positioned(
+                            left: rect.left,
+                            width: rect.width,
+                            top: rect.bottom - 5,
+                            height: underlineHeight,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Container(
+                                  width: underlineWidth,
+                                  height: underlineHeight,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF34C759),
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     Row(
                       children: List.generate(
                         labels.length,

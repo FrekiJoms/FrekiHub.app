@@ -413,6 +413,7 @@ class _AppShellState extends ConsumerState<AppShell>
                           constraints: const BoxConstraints(maxWidth: 560),
                           child: PillNavigation(
                             index: index <= 3 ? index : lastTab,
+                            tabController: _tabController,
                             onQuickAdd: (kind) => openQuickAdd(
                               c,
                               data,
