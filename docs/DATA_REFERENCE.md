@@ -96,7 +96,7 @@ An event has `id`, `time`, `action`, human-readable `title`, optional `location`
 | --- | --- |
 | `auto_clock_in` | Inserts missing session if no session is running; `sessionId`, `started`, `kind`, rule/place metadata |
 | `auto_clock_out` | Ends only matching still-running session at event time; `sessionId` |
-| `purchase` | Parses positive major-unit amount, inserts an expense or income using event ID/occurrence and saves a receipt; `kind` defaults to `expense` for older queued events; `amount`, `currency`, `merchant` (counterparty), `source` or `package`, optional reference/category |
+| `purchase` | Parses positive major-unit amount, inserts an expense or income using event ID/occurrence and saves a receipt; `kind` defaults to `expense` for older queued events; `amount`, `currency`, `merchant` (counterparty), `source` or `package`, optional reference/category. Duplicate alerts for the same transaction from different apps are combined into one entry, with all source apps recorded in `method` |
 | `rule_setting` | Applies only allowed `sound`/`theme` values |
 | `rule_toast` | Stores a pending top toast for Flutter consumption |
 | `location`, `location_exit`, `custom_log`, `error` | Log/metadata handling; no invented session or transaction |

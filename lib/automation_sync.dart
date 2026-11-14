@@ -168,6 +168,31 @@ abstract final class AutomationSync {
               await (db.select(db.entries)
                     ..where((e) => e.id.equals(id) | e.occurrence.equals(id)))
                   .getSingleOrNull();
+          final duplicate = existing == null
+              ? await (db.select(db.entries)
+                    ..where(
+                      (e) =>
+                          e.kind.equals(kind) &
+                          e.amount.equals(amount) &
+                          e.currency.equals(event['currency'] as String) &
+                          e.note.equals(event['merchant'] as String) &
+                          e.day.equals(dayKey(time)),
+                    ))
+                  .getSingleOrNull()
+              : null;
+          if (duplicate != null) {
+            final currentSource =
+                (event['source'] ?? event['package']) as String;
+            final sources = <String>{
+              ...duplicate.method.split(' + '),
+              currentSource,
+            }.where((s) => s.trim().isNotEmpty).toList();
+            await (db.update(db.entries)
+                  ..where((e) => e.id.equals(duplicate.id)))
+                .write(EntriesCompanion(method: Value(sources.join(' + '))));
+            acknowledged.add(id);
+            continue;
+          }
           await db
               .into(db.entries)
               .insert(
