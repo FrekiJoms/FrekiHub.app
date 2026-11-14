@@ -298,7 +298,7 @@ class _AppShellState extends ConsumerState<AppShell>
                           switchInCurve: Motion.curve,
                           switchOutCurve: Motion.curve,
                           transitionBuilder: (child, animation) {
-                            final incoming = child.key == ValueKey(index);
+                            final incoming = child.key == ValueKey(index >= 4 ? index : 'tabs');
                             return IgnorePointer(
                               ignoring: !incoming,
                               child: TickerMode(
@@ -321,17 +321,25 @@ class _AppShellState extends ConsumerState<AppShell>
                               ),
                             );
                           },
-                          child: KeyedSubtree(
-                            key: ValueKey(index),
-                            child: switch (index) {
-                              0 => TodayScreen(data: data),
-                              1 => MapScreen(data: data),
-                              2 => HistoryScreen(data: data),
-                              3 => BudgetScreen(data: data),
-                              5 => CalendarScreen(data: data),
-                              _ => SettingsScreen(data: data),
-                            },
-                          ),
+                          child: index >= 4
+                              ? KeyedSubtree(
+                                  key: ValueKey(index),
+                                  child: index == 5
+                                      ? CalendarScreen(data: data)
+                                      : SettingsScreen(data: data),
+                                )
+                              : KeyedSubtree(
+                                  key: const ValueKey('tabs'),
+                                  child: IndexedStack(
+                                    index: index,
+                                    children: [
+                                      TodayScreen(data: data),
+                                      MapScreen(data: data),
+                                      HistoryScreen(data: data),
+                                      BudgetScreen(data: data),
+                                    ],
+                                  ),
+                                ),
                         ),
                       ),
                     ),
