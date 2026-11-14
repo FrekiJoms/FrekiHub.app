@@ -77,7 +77,10 @@ class _AppShellState extends ConsumerState<AppShell>
   int? savedPage;
   Timer? automationTimer;
   bool startupReady = false;
-  // bottom tabs are kept mounted in an IndexedStack; no PageController needed
+  late final PageController _tabController = PageController(initialPage: 0);
+  bool _tabAnimating = false;
+  AppData? _tabsData;
+  List<Widget>? _tabPages;
   @override
   void initState() {
     super.initState();
@@ -144,6 +147,26 @@ class _AppShellState extends ConsumerState<AppShell>
     }
   }
 
+  List<Widget> _buildTabPages(AppData data) {
+    if (!identical(_tabsData, data) || _tabPages == null) {
+      _tabsData = data;
+      _tabPages = [
+        TodayScreen(data: data),
+        MapScreen(data: data),
+        HistoryScreen(data: data),
+        BudgetScreen(data: data),
+      ];
+    }
+    final active = index <= 3 ? index : lastTab;
+    return [
+      for (var i = 0; i < _tabPages!.length; i++)
+        _KeepAliveTab(
+          active: active == i,
+          child: _tabPages![i],
+        ),
+    ];
+  }
+
   void _goToTab(int i) {
     if (i < 0 || i > 3) return;
     final fromOverlay = index >= 4;
@@ -155,12 +178,25 @@ class _AppShellState extends ConsumerState<AppShell>
       index = i;
       lastTab = i;
     });
+    if (_tabController.hasClients) {
+      _tabAnimating = true;
+      _tabController
+          .animateToPage(
+            i,
+            duration: Motion.duration(context, 280),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+        _tabAnimating = false;
+      });
+    }
   }
 
   @override
   void dispose() {
     automationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -306,14 +342,22 @@ class _AppShellState extends ConsumerState<AppShell>
                   children: [
                     Positioned.fill(
                       child: ClipRect(
-                        child: IndexedStack(
-                          index: index <= 3 ? index : lastTab,
-                          children: [
-                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 0, child: TodayScreen(data: data)),
-                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 1, child: MapScreen(data: data)),
-                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 2, child: HistoryScreen(data: data)),
-                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 3, child: BudgetScreen(data: data)),
-                          ],
+                        child: PageView(
+                          controller: _tabController,
+                          physics: index >= 4
+                              ? const NeverScrollableScrollPhysics()
+                              : const PageScrollPhysics(),
+                          onPageChanged: (i) {
+                            if (_tabAnimating) return;
+                            final currentTab = index <= 3 ? index : lastTab;
+                            if (i == currentTab) return;
+                            setState(() {
+                              slideDirection = i > currentTab ? 1 : -1;
+                              index = i;
+                              lastTab = i;
+                            });
+                          },
+                          children: _buildTabPages(data),
                         ),
                       ),
                     ),
@@ -462,3 +506,24 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 }
 
+
+class _KeepAliveTab extends StatefulWidget {
+  final bool active;
+  final Widget child;
+  const _KeepAliveTab({required this.active, required this.child});
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return TickerMode(enabled: widget.active, child: widget.child);
+  }
+}
