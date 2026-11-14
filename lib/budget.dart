@@ -13,7 +13,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   bool masked = false;
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _totalCardKey = GlobalKey();
-  double _compactProgress = 0;
+  final ValueNotifier<double> _compactProgress = ValueNotifier<double>(0);
+  double _cardTopAtOffset0 = 0;
+  double _cardHeight = 0;
+  bool _cardMetricsReady = false;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -159,28 +162,44 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     super.initState();
     masked = widget.data.prefs['walletMasked'] == 'true';
     _scrollController.addListener(_updateCompactProgress);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
   }
 
-  void _updateCompactProgress() {
+  void _measureCard() {
     if (!mounted) return;
     final ctx = _totalCardKey.currentContext;
     final box = ctx?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final top = box.localToGlobal(Offset.zero).dy;
-    final height = box.size.height;
-    if (height <= 0) return;
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    _cardTopAtOffset0 = top + offset;
+    _cardHeight = box.size.height;
+    _cardMetricsReady = _cardHeight > 0;
+    _updateCompactProgress();
+  }
+
+  void _updateCompactProgress() {
+    if (!mounted || !_scrollController.hasClients) return;
+    if (!_cardMetricsReady) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+      return;
+    }
     final topEdge = MediaQuery.of(context).padding.top;
-    final hidden = ((topEdge - top) / height).clamp(0.0, 1.0);
+    final top = _cardTopAtOffset0 - _scrollController.offset;
+    final hidden = ((topEdge - top) / _cardHeight).clamp(0.0, 1.0);
     // Smoothly transform as the card becomes mostly hidden at the top (40% -> 75%).
     final progress = ((hidden - 0.4) / 0.35).clamp(0.0, 1.0);
-    if ((progress - _compactProgress).abs() > 0.01) {
-      setState(() => _compactProgress = progress);
+    if ((progress - _compactProgress.value).abs() > 0.01 ||
+        (progress == 0 && _compactProgress.value != 0) ||
+        (progress == 1 && _compactProgress.value != 1)) {
+      _compactProgress.value = progress;
     }
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _compactProgress.dispose();
     super.dispose();
   }
 
@@ -304,7 +323,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final totalBalance = accounts
         .where((a) => a.included)
         .fold<int>(0, (sum, a) => sum + a.balance);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _updateCompactProgress());
     return Stack(
       children: [
         PageBody(
@@ -633,10 +651,65 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           left: 72,
           right: 72,
           height: 48,
-          child: Builder(
-            builder: (context) {
+          child: ValueListenableBuilder<double>(
+            valueListenable: _compactProgress,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'TOTAL BALANCE',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .5),
+                    fontSize: 7,
+                    letterSpacing: 0.8,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Expanded(
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        masked
+                            ? walletMaskedAmount(d.currency)
+                            : money(totalBalance, d.currency),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Geist Mono',
+                          fontSize: 15,
+                          height: 1,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -.3,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Semantics(
+                  button: true,
+                  label: masked ? 'Show amounts' : 'Hide amounts',
+                  child: IconButton(
+                    tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                    onPressed: withFeedback(_toggleMasked),
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(32, 32),
+                      maximumSize: const Size(32, 32),
+                      padding: EdgeInsets.zero,
+                      backgroundColor: Colors.white.withValues(alpha: .08),
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: Icon(
+                      masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                      size: 15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            builder: (context, progress, child) {
               final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-              final t = reduce ? (_compactProgress >= 0.5 ? 1.0 : 0.0) : _compactProgress;
+              final t = reduce ? (progress >= 0.5 ? 1.0 : 0.0) : progress;
               final curved = Curves.easeOutCubic.transform(t);
               return IgnorePointer(
                 ignoring: t <= 0.01,
@@ -647,78 +720,27 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                     child: Transform.scale(
                       scale: 0.97 + (0.03 * curved),
                       alignment: Alignment.topCenter,
-                      child: Container(
-                        height: 48,
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [Color(0xff191b19), Color(0xff303630)],
+                      child: RepaintBoundary(
+                        child: Container(
+                          height: 48,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xff191b19), Color(0xff303630)],
+                            ),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: Colors.white.withValues(alpha: .06)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.16 * curved),
+                                blurRadius: 14,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
                           ),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.white.withValues(alpha: .06)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.16 * curved),
-                              blurRadius: 14,
-                              offset: const Offset(0, 5),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Text(
-                              'TOTAL BALANCE',
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: .5),
-                                fontSize: 7,
-                                letterSpacing: 0.8,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Expanded(
-                              child: Center(
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    masked
-                                        ? walletMaskedAmount(d.currency)
-                                        : money(totalBalance, d.currency),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'Geist Mono',
-                                      fontSize: 15,
-                                      height: 1,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: -.3,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Semantics(
-                              button: true,
-                              label: masked ? 'Show amounts' : 'Hide amounts',
-                              child: IconButton(
-                                tooltip: masked ? 'Show amounts' : 'Hide amounts',
-                                onPressed: withFeedback(_toggleMasked),
-                                visualDensity: VisualDensity.compact,
-                                style: IconButton.styleFrom(
-                                  minimumSize: const Size(32, 32),
-                                  maximumSize: const Size(32, 32),
-                                  padding: EdgeInsets.zero,
-                                  backgroundColor: Colors.white.withValues(alpha: .08),
-                                  foregroundColor: Colors.white,
-                                ),
-                                icon: Icon(
-                                  masked ? LucideIcons.eyeOff : LucideIcons.eye,
-                                  size: 15,
-                                ),
-                              ),
-                            ),
-                          ],
+                          child: child,
                         ),
                       ),
                     ),
