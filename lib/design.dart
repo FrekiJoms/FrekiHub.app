@@ -592,10 +592,10 @@ class _PillNavigationState extends State<PillNavigation>
   late final AnimationController motion;
   Rect? from, target;
   OverlayEntry? menu;
+  OverlayEntry? _tooltipEntry;
   int? hovered;
   final List<double> _press = List<double>.filled(4, 1.0);
   Timer? _tooltipTimer;
-  bool _showTooltip = false;
 
   static const labels = ['Home', 'Map', 'Sessions', 'Finance'];
   static const icons = [
@@ -630,13 +630,38 @@ class _PillNavigationState extends State<PillNavigation>
   void didUpdateWidget(covariant PillNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.index != widget.index) {
-      _tooltipTimer?.cancel();
-      setState(() => _showTooltip = true);
-      _tooltipTimer = Timer(const Duration(milliseconds: 900), () {
-        if (!mounted) return;
-        setState(() => _showTooltip = false);
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showNavTooltip());
     }
+  }
+
+  void _removeTooltip() {
+    _tooltipTimer?.cancel();
+    _tooltipTimer = null;
+    _tooltipEntry?.remove();
+    _tooltipEntry = null;
+  }
+
+  void _showNavTooltip() {
+    if (!mounted) return;
+    final selectedKey = widget.index < keys.length ? keys[widget.index] : null;
+    final itemBox = selectedKey?.currentContext?.findRenderObject() as RenderBox?;
+    final overlay = Overlay.maybeOf(context);
+    if (itemBox == null || !itemBox.hasSize || overlay == null) return;
+    _removeTooltip();
+    final center = itemBox.localToGlobal(Offset(itemBox.size.width / 2, 0));
+    final label = labels[widget.index];
+    _tooltipEntry = OverlayEntry(
+      builder: (c) => Positioned(
+        left: center.dx - 28,
+        top: center.dy - 34,
+        width: 56,
+        child: IgnorePointer(
+          child: _NavTooltip(label: label),
+        ),
+      ),
+    );
+    overlay.insert(_tooltipEntry!);
+    _tooltipTimer = Timer(const Duration(milliseconds: 900), _removeTooltip);
   }
 
   Rect? get current {
@@ -757,7 +782,7 @@ class _PillNavigationState extends State<PillNavigation>
   @override
   void dispose() {
     closeMenu();
-    _tooltipTimer?.cancel();
+    _removeTooltip();
     motion.dispose();
     super.dispose();
   }
@@ -848,71 +873,20 @@ class _PillNavigationState extends State<PillNavigation>
                         const underlineWidth = 14.0;
                         const underlineHeight = 3.0;
                         final underlineRect = Rect.fromCenter(
-                          center: Offset(rect.center.dx, rect.bottom - 3),
+                          center: Offset(rect.center.dx, rect.bottom - 2),
                           width: underlineWidth,
                           height: underlineHeight,
                         );
-                        final tooltipLeft = (rect.center.dx - 28).clamp(0.0, 220.0 - 56.0);
-                        return Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Positioned.fromRect(
-                              rect: underlineRect,
-                              child: IgnorePointer(
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF34C759),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
+                        return Positioned.fromRect(
+                          rect: underlineRect,
+                          child: IgnorePointer(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF34C759),
+                                borderRadius: BorderRadius.circular(2),
                               ),
                             ),
-                            Positioned(
-                              left: tooltipLeft,
-                              top: -30,
-                              width: 56,
-                              child: IgnorePointer(
-                                child: AnimatedOpacity(
-                                  opacity: _showTooltip ? 1 : 0,
-                                  duration: Motion.duration(c, 180),
-                                  curve: Curves.easeOut,
-                                  child: AnimatedSlide(
-                                    offset: _showTooltip ? Offset.zero : const Offset(0, 0.15),
-                                    duration: Motion.duration(c, 180),
-                                    curve: Curves.easeOut,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: scheme.surface.withValues(alpha: dark ? .92 : .96),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: scheme.onSurface.withValues(alpha: .08),
-                                        ),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: .12),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        labels[widget.index],
-                                        textAlign: TextAlign.center,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          color: scheme.onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         );
                       },
                     ),
@@ -945,7 +919,9 @@ class _PillNavigationState extends State<PillNavigation>
                                     child: AnimatedOpacity(
                                       duration: Motion.duration(c, 160),
                                       opacity: selected ? 1.0 : 0.72,
-                                      child: Icon(icons[i], size: 20, color: color),
+                                      child: Center(
+                                        child: Icon(icons[i], size: 20, color: color),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1176,4 +1152,71 @@ class _BounceFilterChipState extends State<BounceFilterChip> {
       },
     ),
   );
+}
+
+class _NavTooltip extends StatefulWidget {
+  final String label;
+  const _NavTooltip({required this.label});
+
+  @override
+  State<_NavTooltip> createState() => _NavTooltipState();
+}
+
+class _NavTooltipState extends State<_NavTooltip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    reverseDuration: const Duration(milliseconds: 180),
+  )..forward();
+  late final Timer _hide = Timer(const Duration(milliseconds: 720), () {
+    if (mounted) _c.reverse();
+  });
+
+  @override
+  void dispose() {
+    _hide.cancel();
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fade = CurvedAnimation(parent: _c, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
+    return FadeTransition(
+      opacity: fade,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+            .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic)),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+          decoration: BoxDecoration(
+            color: scheme.surface.withValues(alpha: dark ? .94 : .97),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: scheme.onSurface.withValues(alpha: .08)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .14),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: scheme.onSurface,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
