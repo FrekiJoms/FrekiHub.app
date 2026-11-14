@@ -292,31 +292,40 @@ class _AppShellState extends ConsumerState<AppShell>
                   children: [
                     Positioned.fill(
                       child: ClipRect(
+                        child: IndexedStack(
+                          index: index <= 3 ? index : lastTab,
+                          children: [
+                            TodayScreen(data: data),
+                            MapScreen(data: data),
+                            HistoryScreen(data: data),
+                            BudgetScreen(data: data),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        ignoring: index < 4,
                         child: AnimatedSwitcher(
                           duration: Motion.duration(c),
                           reverseDuration: Motion.duration(c, 200),
                           switchInCurve: Motion.curve,
                           switchOutCurve: Motion.curve,
                           transitionBuilder: (child, animation) {
-                            final incoming = child.key == ValueKey(index >= 4 ? index : 'tabs');
+                            final incoming = child.key != const ValueKey('none');
                             return IgnorePointer(
                               ignoring: !incoming,
-                              child: TickerMode(
-                                enabled: incoming,
-                                child: FadeTransition(
-                                  opacity: animation,
-                                  child: SlideTransition(
-                                    position: Tween<Offset>(
-                                      begin: Offset(
-                                        (incoming ? 1 : -1) *
-                                            slideDirection *
-                                            .12,
-                                        0,
-                                      ),
-                                      end: Offset.zero,
-                                    ).animate(animation),
-                                    child: child,
-                                  ),
+                              child: FadeTransition(
+                                opacity: animation,
+                                child: SlideTransition(
+                                  position: Tween<Offset>(
+                                    begin: Offset(
+                                      (incoming ? 1 : -1) * slideDirection * .12,
+                                      0,
+                                    ),
+                                    end: Offset.zero,
+                                  ).animate(animation),
+                                  child: child,
                                 ),
                               ),
                             );
@@ -328,19 +337,7 @@ class _AppShellState extends ConsumerState<AppShell>
                                       ? CalendarScreen(data: data)
                                       : SettingsScreen(data: data),
                                 )
-                              : KeyedSubtree(
-                                  key: const ValueKey('tabs'),
-                                  child: IndexedStack(
-                                    sizing: StackFit.expand,
-                                    index: index.clamp(0, 3),
-                                    children: [
-                                      TodayScreen(data: data),
-                                      MapScreen(data: data),
-                                      HistoryScreen(data: data),
-                                      BudgetScreen(data: data),
-                                    ],
-                                  ),
-                                ),
+                              : const SizedBox.shrink(key: ValueKey('none')),
                         ),
                       ),
                     ),
@@ -352,7 +349,7 @@ class _AppShellState extends ConsumerState<AppShell>
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 560),
                           child: PillNavigation(
-                            index: index,
+                            index: index <= 3 ? index : lastTab,
                             onQuickAdd: (kind) => openQuickAdd(
                               c,
                               data,
@@ -360,10 +357,11 @@ class _AppShellState extends ConsumerState<AppShell>
                               kind,
                             ),
                             onChanged: (i) {
-                              if (i == index) return;
+                              if (i == (index <= 3 ? index : lastTab)) return;
                               ActionFeedback.tap(transition: true);
                               setState(() {
-                                slideDirection = i > index ? 1 : -1;
+                                final currentTab = index <= 3 ? index : lastTab;
+                                slideDirection = i > currentTab ? 1 : -1;
                                 index = i;
                                 lastTab = i;
                               });
