@@ -651,13 +651,13 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                             Text(
                               'TOTAL BALANCE',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha: .55),
-                                fontSize: 9,
-                                letterSpacing: 1.4,
+                                color: Colors.white.withValues(alpha: .5),
+                                fontSize: 7,
+                                letterSpacing: 0.8,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 5),
                             Flexible(
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
