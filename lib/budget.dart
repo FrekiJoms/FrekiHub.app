@@ -335,6 +335,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               wallet: wallet,
               committed: committed,
               maskedOverride: masked,
+              onToggleMasked: _toggleMasked,
               totalCardKey: _totalCardKey,
               onPeriod: (next) =>
                   setState(() => period = DateTime(next.year, next.month)),

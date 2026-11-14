@@ -1,4 +1,4 @@
-part of 'screens.dart';
+﻿part of 'screens.dart';
 
 class WalletSection extends ConsumerStatefulWidget {
   final AppData data;
@@ -15,6 +15,7 @@ class WalletSection extends ConsumerStatefulWidget {
   final Map<String, int> committed;
   final bool? maskedOverride;
   final GlobalKey? totalCardKey;
+  final VoidCallback? onToggleMasked;
   const WalletSection({
     super.key,
     required this.data,
@@ -25,6 +26,7 @@ class WalletSection extends ConsumerStatefulWidget {
     this.committed = const {},
     this.maskedOverride,
     this.totalCardKey,
+    this.onToggleMasked,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -141,7 +143,14 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     );
   }
 
+  bool get _effectiveMasked => widget.maskedOverride ?? masked;
+
   void _toggleMasked() {
+    final external = widget.onToggleMasked;
+    if (external != null) {
+      external();
+      return;
+    }
     setState(() => masked = !masked);
     unawaited(
       ref
@@ -164,7 +173,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           account: account,
           entries: entries,
           currency: widget.data.currency,
-          masked: masked,
+          masked: _effectiveMasked,
           selected: widget.wallet == account.name,
           onEdit: () {
             Navigator.pop(sheet);
@@ -245,7 +254,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             liabilities: liabilities,
             count: included.length,
             currency: widget.data.currency,
-            masked: masked,
+            masked: _effectiveMasked,
             onToggle: _toggleMasked,
           ),
         ),
@@ -256,7 +265,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             wallet: widget.wallet,
             wallets: accounts.map((a) => a.name).toList(),
             currency: widget.data.currency,
-            masked: masked,
+            masked: _effectiveMasked,
             onPeriod: widget.onPeriod,
             onScope: widget.onWallet == null ? null : _scope,
           ),
@@ -282,7 +291,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             WalletView.rows => _WalletRows(
               accounts: accounts,
               currency: widget.data.currency,
-              masked: masked,
+              masked: _effectiveMasked,
               selected: widget.wallet,
               onOpen: _detail,
               onReorder: (names) async {
@@ -296,7 +305,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             WalletView.grid => _WalletGrid(
               accounts: accounts,
               currency: widget.data.currency,
-              masked: masked,
+              masked: _effectiveMasked,
               selected: widget.wallet,
               onOpen: _detail,
               onMenu: _menu,
@@ -305,7 +314,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
               key: ValueKey(accounts.map((a) => a.name).join('|')),
               accounts: accounts,
               currency: widget.data.currency,
-              masked: masked,
+              masked: _effectiveMasked,
               selected: widget.wallet,
               onOpen: _detail,
               onMenu: _menu,
@@ -436,7 +445,7 @@ class _WalletTotalCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'All wallets · all time, in $currency',
+              'All wallets Â· all time, in $currency',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: .5),
                 fontSize: 10,
@@ -599,7 +608,7 @@ class _WalletMonthCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'MONTH NET · ${scope.toUpperCase()}',
+                            'MONTH NET Â· ${scope.toUpperCase()}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -659,7 +668,7 @@ class _WalletMonthCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${DateFormat('MMM').format(period)} · ${last.day} days · ${(month.used * 100).round()}% of period elapsed',
+                  '${DateFormat('MMM').format(period)} Â· ${last.day} days Â· ${(month.used * 100).round()}% of period elapsed',
                   style: TextStyle(
                     fontSize: 12,
                     color: theme.colorScheme.onSurfaceVariant,
@@ -901,7 +910,7 @@ class _WalletToolbar extends StatelessWidget {
           child: Text(
             count <= 1
                 ? 'Add another wallet to separate your money.'
-                : 'Hold to rearrange · tap a card to open it.',
+                : 'Hold to rearrange Â· tap a card to open it.',
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -1021,7 +1030,7 @@ class _WalletRows extends StatelessWidget {
                   account.name == selected
                       ? 'Scoping Finance to this wallet'
                       : account.committed > 0
-                      ? '${account.included ? 'Included' : 'Excluded'} · ${masked ? 'planned' : '${money(account.committed, currency)} planned'}'
+                      ? '${account.included ? 'Included' : 'Excluded'} Â· ${masked ? 'planned' : '${money(account.committed, currency)} planned'}'
                       : account.included
                       ? 'Included in total'
                       : 'Excluded from total',
@@ -1338,7 +1347,7 @@ class _WalletDeckState extends State<_WalletDeck>
                 ),
                 Expanded(
                   child: Text(
-                    'Swipe any direction · ${accounts.length} cards',
+                    'Swipe any direction Â· ${accounts.length} cards',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -1544,11 +1553,11 @@ class _WalletDetail extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                '${entry.day} · ${entry.category}',
+                '${entry.day} Â· ${entry.category}',
                 style: const TextStyle(fontSize: 11),
               ),
               trailing: Text(
-                '${entry.kind == 'income' ? '+' : '−'}${money(entry.amount, currency)}',
+                '${entry.kind == 'income' ? '+' : 'âˆ’'}${money(entry.amount, currency)}',
                 style: TextStyle(
                   fontFamily: 'Geist Mono',
                   fontSize: 11,
