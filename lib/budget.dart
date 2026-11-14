@@ -12,7 +12,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   String? wallet;
   bool masked = false;
   final ScrollController _scrollController = ScrollController();
-  bool _showCompactBalance = false;
+  final GlobalKey _totalCardKey = GlobalKey();
+  double _compactProgress = 0;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -157,12 +158,24 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   void initState() {
     super.initState();
     masked = widget.data.prefs['walletMasked'] == 'true';
-    _scrollController.addListener(() {
-      final show = _scrollController.offset > 100;
-      if (show != _showCompactBalance && mounted) {
-        setState(() => _showCompactBalance = show);
-      }
-    });
+    _scrollController.addListener(_updateCompactProgress);
+  }
+
+  void _updateCompactProgress() {
+    if (!mounted) return;
+    final ctx = _totalCardKey.currentContext;
+    final box = ctx?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final top = box.localToGlobal(Offset.zero).dy;
+    final height = box.size.height;
+    if (height <= 0) return;
+    final topEdge = MediaQuery.of(context).padding.top;
+    final hidden = ((topEdge - top) / height).clamp(0.0, 1.0);
+    // Smoothly transform as the card becomes mostly hidden at the top (40% -> 75%).
+    final progress = ((hidden - 0.4) / 0.35).clamp(0.0, 1.0);
+    if ((progress - _compactProgress).abs() > 0.01) {
+      setState(() => _compactProgress = progress);
+    }
   }
 
   @override
@@ -291,6 +304,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final totalBalance = accounts
         .where((a) => a.included)
         .fold<int>(0, (sum, a) => sum + a.balance);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateCompactProgress());
     return Stack(
       children: [
         PageBody(
@@ -303,6 +317,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               wallet: wallet,
               committed: committed,
               maskedOverride: masked,
+              totalCardKey: _totalCardKey,
               onPeriod: (next) =>
                   setState(() => period = DateTime(next.year, next.month)),
               onWallet: (name) => setState(() => wallet = name),
@@ -618,85 +633,99 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           left: 72,
           right: 72,
           height: 48,
-          child: IgnorePointer(
-            ignoring: !_showCompactBalance,
-            child: AnimatedSlide(
-              offset: _showCompactBalance ? Offset.zero : const Offset(0, -0.2),
-              duration: const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(
-                opacity: _showCompactBalance ? 1 : 0,
-                duration: const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [Color(0xff191b19), Color(0xff303630)],
-                    ),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withValues(alpha: .06)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        'TOTAL BALANCE',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .5),
-                          fontSize: 7,
-                          letterSpacing: 0.8,
-                          fontWeight: FontWeight.w600,
+          child: Builder(
+            builder: (context) {
+              final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+              final t = reduce ? (_compactProgress >= 0.5 ? 1.0 : 0.0) : _compactProgress;
+              final curved = Curves.easeOutCubic.transform(t);
+              return IgnorePointer(
+                ignoring: t <= 0.01,
+                child: Opacity(
+                  opacity: curved,
+                  child: Transform.translate(
+                    offset: Offset(0, (1 - curved) * -8),
+                    child: Transform.scale(
+                      scale: 0.97 + (0.03 * curved),
+                      alignment: Alignment.topCenter,
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xff191b19), Color(0xff303630)],
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: Colors.white.withValues(alpha: .06)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.16 * curved),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
                         ),
-                      ),
-                      Expanded(
-                        child: Center(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              masked
-                                  ? walletMaskedAmount(d.currency)
-                                  : money(totalBalance, d.currency),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'Geist Mono',
-                                fontSize: 15,
-                                height: 1,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Text(
+                              'TOTAL BALANCE',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .5),
+                                fontSize: 7,
+                                letterSpacing: 0.8,
                                 fontWeight: FontWeight.w600,
-                                letterSpacing: -.3,
                               ),
                             ),
-                          ),
+                            Expanded(
+                              child: Center(
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Text(
+                                    masked
+                                        ? walletMaskedAmount(d.currency)
+                                        : money(totalBalance, d.currency),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'Geist Mono',
+                                      fontSize: 15,
+                                      height: 1,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -.3,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Semantics(
+                              button: true,
+                              label: masked ? 'Show amounts' : 'Hide amounts',
+                              child: IconButton(
+                                tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                                onPressed: withFeedback(_toggleMasked),
+                                visualDensity: VisualDensity.compact,
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(32, 32),
+                                  maximumSize: const Size(32, 32),
+                                  padding: EdgeInsets.zero,
+                                  backgroundColor: Colors.white.withValues(alpha: .08),
+                                  foregroundColor: Colors.white,
+                                ),
+                                icon: Icon(
+                                  masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                                  size: 15,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      Semantics(
-                        button: true,
-                        label: masked ? 'Show amounts' : 'Hide amounts',
-                        child: IconButton(
-                          tooltip: masked ? 'Show amounts' : 'Hide amounts',
-                          onPressed: withFeedback(_toggleMasked),
-                          visualDensity: VisualDensity.compact,
-                          style: IconButton.styleFrom(
-                            minimumSize: const Size(32, 32),
-                            maximumSize: const Size(32, 32),
-                            padding: EdgeInsets.zero,
-                            backgroundColor: Colors.white.withValues(alpha: .08),
-                            foregroundColor: Colors.white,
-                          ),
-                          icon: Icon(
-                            masked ? LucideIcons.eyeOff : LucideIcons.eye,
-                            size: 15,
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ],

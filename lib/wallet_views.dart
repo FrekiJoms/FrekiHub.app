@@ -14,6 +14,7 @@ class WalletSection extends ConsumerStatefulWidget {
   /// Planned outflows for the selected month, keyed by wallet.
   final Map<String, int> committed;
   final bool? maskedOverride;
+  final GlobalKey? totalCardKey;
   const WalletSection({
     super.key,
     required this.data,
@@ -23,6 +24,7 @@ class WalletSection extends ConsumerStatefulWidget {
     this.onWallet,
     this.committed = const {},
     this.maskedOverride,
+    this.totalCardKey,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -235,14 +237,17 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _WalletTotalCard(
-          total: total,
-          assets: assets,
-          liabilities: liabilities,
-          count: included.length,
-          currency: widget.data.currency,
-          masked: masked,
-          onToggle: _toggleMasked,
+        KeyedSubtree(
+          key: widget.totalCardKey,
+          child: _WalletTotalCard(
+            total: total,
+            assets: assets,
+            liabilities: liabilities,
+            count: included.length,
+            currency: widget.data.currency,
+            masked: masked,
+            onToggle: _toggleMasked,
+          ),
         ),
         if (widget.month != null) ...[
           const SizedBox(height: 10),
