@@ -624,13 +624,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             child: IgnorePointer(
               ignoring: !_showCompactBalance,
               child: Positioned(
-                top: 40,
-                left: 0,
-                right: 0,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                top: 16,
+                left: 72,
+                right: 72,
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
@@ -704,7 +703,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
         ),
       ),
-    ),
       ],
     );
   }
