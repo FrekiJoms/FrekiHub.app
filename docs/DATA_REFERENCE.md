@@ -78,9 +78,13 @@ The exact saved keys are visible in `pref` call sites. These are the important f
 | `calendarSelected`, `calendarView`, `dayPanel` | Exported calendar selection/view; legacy day-sheet extent retained for backup compatibility, no longer used by the shared drawer |
 | `mapPeriod`, `mapDate`, `mapFrom`, `mapUntil`, `mapTrace` | Saved map view preferences |
 | `mapContext` | Separately encoded last viewed map runtime observations |
+| `walletOrder`, `walletView`, `walletMasked` | Shared wallet card order, rows/multi/stack view and amount mask |
+| `wallet:METHOD:style`, `wallet:METHOD:image`, `wallet:METHOD:scale`, `wallet:METHOD:dx`, `wallet:METHOD:dy`, `wallet:METHOD:include` | Per-wallet card preset/uploaded art, artwork framing and summary inclusion |
 | `currentPage` | Current target string for rule navigation conditions |
 | `purchaseNotice:EVENT_ID` | Pending post-commit receipt JSON; remove after posting succeeds |
 | `ruleToast:EVENT_ID` | Pending Flutter toast; consume during shell reconciliation |
+
+`wallet:METHOD:image` values are absolute device paths. JSON export keeps `wallet:METHOD:style` so the chosen design survives, but omits image-path preferences because a device-local file cannot be restored elsewhere. The artwork itself is not part of the backup.
 
 `RuleCatalog.snapshot` exports generic saved preferences under `settings.KEY` as strings, excluding `automation`, receipt payloads and toast outboxes. Explicit fields such as `settings.sound` override that generic representation with their validated type. Register meaningful new feature fields/types/hints explicitly; generic string access is not a substitute for a clear observable API.
 

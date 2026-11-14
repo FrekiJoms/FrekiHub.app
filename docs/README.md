@@ -12,6 +12,7 @@ For a new agent session, read [AGENTS.md](../AGENTS.md), [AGENT.md](../AGENT.md)
 | --- | --- |
 | [App documentation](APP_DOCUMENTATION.md) | Product behavior, every page, architecture, source map and feature integration |
 | [Data reference](DATA_REFERENCE.md) | Tables, money/date rules, preferences, events and backup contracts |
+| [Wallet cards](WALLET_CARDS.md) | Agila reference analysis, Finance wallet behavior, card artwork, stack order and persistence |
 | [Android runtime](ANDROID_RUNTIME.md) | Method channel, services, queues, permissions, notification delivery and closed-app behavior |
 | [Development](DEVELOPMENT.md) | Setup, checks, targeted test routing, device testing and troubleshooting |
 | [Application audit](APPLICATION_AUDIT.md) | Current evidence, page-by-page review, unresolved findings and verification gaps |

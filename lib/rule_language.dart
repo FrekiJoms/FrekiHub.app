@@ -80,6 +80,7 @@ abstract final class RuleCatalog {
     'budget.currency': 'Display currency',
     'budget.transaction_count': 'Recorded transaction count',
     'budget.rule_count': 'Budget planner rule count',
+    'budget.wallet_count': 'Saved payment method wallet count',
     'budget.invalid_projection_count':
         'Planner occurrences exceeding supported amount limits this month',
     'budget.last.amount': 'Last transaction amount',
@@ -186,6 +187,7 @@ abstract final class RuleCatalog {
       'budget.currency': data.currency,
       'budget.transaction_count': data.entries.length,
       'budget.rule_count': data.rules.length,
+      'budget.wallet_count': data.walletMethods.length,
       'budget.invalid_projection_count': project(
         data,
         DateTime(now.year, now.month),

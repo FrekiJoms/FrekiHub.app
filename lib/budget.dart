@@ -259,6 +259,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       title: 'FINANCE',
       subtitle: 'Your money, clearly',
       children: [
+        WalletSection(data: d),
         Surface(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Row(

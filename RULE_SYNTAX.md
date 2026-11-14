@@ -132,6 +132,8 @@ The authoritative field catalog is `RuleCatalog.fields` in `lib/rule_language.da
 
 `budget.balance` is numeric: all-time recorded income minus expenses minus savings, in major units of the selected display currency. It matches Home's balance pill, preserves negative balances and excludes other currencies and unrecorded plans. Unlike `budget.net`, it is not restricted to the current month. It supports completion and numeric comparisons, for example `target == app { if (budget.balance < 100) { app.toast("Balance below 100"); } }`. Android evaluates this field from the last reconciled Flutter snapshot; closed-app queued purchases do not update it until imported.
 
+`budget.wallet_count` is numeric: wallets available in the selected display currency. It counts saved payment methods plus any method still referenced by a transaction in that currency, so it can exceed the Settings payment-method count. It does not include methods that appear only in other currencies. Card design, order and masking preferences are UI settings and do not change the count.
+
 `data.get("settings.someNewPreference")` reads any exported saved preference. Generic preferences are strings, so compare against double-quoted values. For example `data.get("settings.clockFormat") == "12"`. Internal automation programs and pending receipt/toast transport are excluded. New saved settings automatically appear in completion; new feature data must be registered in the shared catalog/snapshot.
 
 ## Conditions

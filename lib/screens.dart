@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:drift/drift.dart' hide Column;
@@ -41,6 +42,8 @@ part 'calendar.dart';
 part 'map.dart';
 part 'history.dart';
 part 'budget.dart';
+part 'wallets.dart';
+part 'wallet_views.dart';
 part 'settings.dart';
 part 'forms.dart';
 part 'pickers.dart';

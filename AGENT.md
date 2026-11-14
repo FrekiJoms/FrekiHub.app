@@ -30,7 +30,7 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 | --- | --- | --- |
 | Navigation, glass, transitions, selectors | App documentation | `main.dart`, `design.dart`, `components.dart`, `sheets.dart`, `controls.dart`, `pickers.dart` |
 | Clock, session editing, history | App documentation + data reference | `today.dart`, `flip_clock.dart`, `history.dart`, `forms.dart`, `data.dart` |
-| Finance math/planner | Data reference | `budget.dart`, `data.dart`, `forms.dart` |
+| Finance math/planner/wallet cards | Data reference + wallet cards | `budget.dart`, `wallets.dart`, `wallet_views.dart`, `data.dart`, `forms.dart` |
 | Calendar | App documentation | `calendar.dart`, `screens.dart`, `data.dart` |
 | Map/located records | App documentation + data reference | `map.dart`, `map_records.dart`, `watchMapLogs` in `data.dart` |
 | Rule syntax/completion | Rule syntax + Android runtime | `rule_language.dart`, `rule_editor.dart`, `syntax_builder.dart`, `RuleProgram.kt` |

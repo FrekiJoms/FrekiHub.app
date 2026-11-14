@@ -65,6 +65,8 @@ The list has its own bounded vertical scrolling viewport. The table uses separat
 
 Finance shows selected-month income, expenses, savings, net, safe-to-spend, elapsed-month progress, savings goal, category charts, planner rules and a combined expected/actual timeline. All totals and finance projections use the selected display currency. Existing records keep their own currency; selecting a currency does not convert values.
 
+The top block separates money by payment method as wallet cards. Each wallet shows its own all-time balance for the display currency; the dark summary card shows the combined balance of included wallets, plus assets, owed and the wallet count. Wallets can be viewed as rows, a multi-column card grid or a swipeable stack. Swiping a stack card in any direction flies it along the gesture and sends it to the back; rows can be dragged, and the shared order is saved so the same card returns to the front after a restart. Cards can be included or excluded from the total, masked together, and given a built-in or uploaded full-card design. Wallets are derived from saved payment methods and transactions, not a separate account balance, and do not connect to a bank. See [Wallet cards](WALLET_CARDS.md).
+
 Transactions store `income`, `expense` or `savings`, amount, currency, category, payment method, note and optional planner occurrence identity. Planner rules are the `rules` database table, not the Settings automation JSON. They support fixed or percentage bases, quantity, once/daily/weekly/monthly cadence, start/end dates, reorder and duplicate actions.
 
 `project` calculates occurrences. Monthly plans clamp their anchor day to a shorter month's last day. Percentage bases are actual income, expenses or non-negative income minus expenses in the occurrence month. A completed occurrence is linked by a unique `ruleId:yyyy-MM-dd` transaction key. Removing the transaction makes that occurrence actionable again. Skip/cancel preferences affect one occurrence, not future repeats.
@@ -157,6 +159,7 @@ Activity rows, Map markers/selection and activity count/latest-action observable
 | `lib/controls.dart`, `lib/pickers.dart` | Custom choice sheets/selectors and wheel date/time pickers |
 | `lib/today.dart`, `lib/flip_clock.dart` | Home, analog clock and elapsed split-flap display |
 | `lib/history.dart`, `lib/calendar.dart`, `lib/budget.dart` | Sessions, calendar and Finance pages |
+| `lib/wallets.dart`, `lib/wallet_views.dart` | Wallet balances/artwork and Finance card views, stack gestures and design sheets |
 | `lib/map.dart`, `lib/map_records.dart` | Map UI, filters, selection, freshness and range parsing |
 | `lib/settings.dart`, `lib/forms.dart` | Settings, list management, backup/reset, session/entry/planner forms |
 | `lib/logs.dart` | Dedicated activity log drawer and expandable record metadata |

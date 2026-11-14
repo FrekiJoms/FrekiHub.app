@@ -73,21 +73,23 @@ int parseMoney(String value, String currency) {
   return result.toInt();
 }
 
+String moneySymbol(String currency) =>
+    {
+      'PHP': '₱',
+      'USD': '\$',
+      'EUR': '€',
+      'GBP': '£',
+      'JPY': '¥',
+      'KRW': '₩',
+      'KWD': 'KD ',
+    }[currency] ??
+    '$currency ';
+
 String money(int minor, String currency) {
   final digits = currencyDigits[currency] ?? 2;
   final scale = pow(10, digits).toInt();
   final absolute = minor.abs();
-  final symbol =
-      {
-        'PHP': '₱',
-        'USD': '\$',
-        'EUR': '€',
-        'GBP': '£',
-        'JPY': '¥',
-        'KRW': '₩',
-        'KWD': 'KD ',
-      }[currency] ??
-      '$currency ';
+  final symbol = moneySymbol(currency);
   return '${minor < 0 ? '−' : ''}$symbol${NumberFormat('#,##0').format(absolute ~/ scale)}${digits == 0 ? '' : '.${(absolute % scale).toString().padLeft(digits, '0')}'}';
 }
 
@@ -95,6 +97,17 @@ String editableMoney(int minor, String currency) {
   final digits = currencyDigits[currency] ?? 2;
   final scale = pow(10, digits).toInt();
   return '${minor ~/ scale}${digits == 0 ? '' : '.${(minor.abs() % scale).toString().padLeft(digits, '0')}'}';
+}
+
+/// Card images live on this device; portable backups keep the design choice but
+/// not an absolute path that would be wrong after restoring elsewhere.
+bool walletImagePreference(String key) =>
+    key.startsWith('wallet:') && key.endsWith(':image');
+
+/// Saved methods can be blank in older imports; those movements belong to cash.
+String walletMethodName(String method) {
+  final value = method.trim();
+  return value.isEmpty ? 'Cash' : value;
 }
 
 class Sessions extends Table {
@@ -484,7 +497,10 @@ class AppDatabase extends _$AppDatabase {
         'sessions': d.sessions.map((s) => s.toJson()).toList(),
         'entries': d.entries.map((e) => e.toJson()).toList(),
         'rules': d.rules.map((r) => r.toJson()).toList(),
-        'preferences': d.prefs,
+        'preferences': {
+          for (final entry in d.prefs.entries)
+            if (!walletImagePreference(entry.key)) entry.key: entry.value,
+        },
         'activityLogs': (await customSelect(
           'SELECT * FROM activity_logs ORDER BY time',
         ).get()).map((r) => r.data).toList(),
@@ -715,6 +731,57 @@ class AppData {
   ]);
   List<String> get methods =>
       list('methods', ['Cash', 'GCash', 'Maya', 'Bank', 'Card']);
+
+  /// Wallets are the saved payment methods plus any method still referenced by
+  /// a transaction, so separated balances always add up to [balance].
+  List<String> get walletMethods {
+    final names = <String>{...methods};
+    for (final e in entries.where((e) => e.currency == currency)) {
+      names.add(walletMethodName(e.method));
+    }
+    return names.toList();
+  }
+
+  /// One pass over the current currency's ledger, keyed by payment method.
+  Map<String, int> get walletBalances {
+    final result = <String, int>{for (final name in walletMethods) name: 0};
+    for (final e in entries.where((e) => e.currency == currency)) {
+      final name = walletMethodName(e.method);
+      result.update(
+        name,
+        (value) => value + (e.kind == 'income' ? e.amount : -e.amount),
+        ifAbsent: () => e.kind == 'income' ? e.amount : -e.amount,
+      );
+    }
+    return result;
+  }
+
+  int walletBalance(String method) => walletBalances[method] ?? 0;
+
+  List<Entry> walletEntries(String method) => entries
+      .where(
+        (e) => e.currency == currency && walletMethodName(e.method) == method,
+      )
+      .toList();
+
+  /// Saved order first, then new or previously unlisted methods by importance.
+  List<String> orderedWalletNames(Iterable<String> stored) {
+    final balances = walletBalances;
+    final remaining = <String, int>{...balances};
+    final result = <String>[];
+    for (final name in stored) {
+      if (remaining.remove(name) != null) result.add(name);
+    }
+    final rest = remaining.keys.toList()
+      ..sort((a, b) {
+        final byBalance = (remaining[b] ?? 0).abs().compareTo(
+          (remaining[a] ?? 0).abs(),
+        );
+        return byBalance != 0 ? byBalance : a.compareTo(b);
+      });
+    return [...result, ...rest];
+  }
+
   List<String> list(String key, List<String> fallback) {
     try {
       final values = List<String>.from(jsonDecode(prefs[key]!) as List);
