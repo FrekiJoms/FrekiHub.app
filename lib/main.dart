@@ -70,7 +70,7 @@ class AppShell extends ConsumerStatefulWidget {
 }
 
 class _AppShellState extends ConsumerState<AppShell>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, TickerProviderStateMixin {
   int index = 0;
   int lastTab = 0;
   double slideDirection = 1;
@@ -79,6 +79,11 @@ class _AppShellState extends ConsumerState<AppShell>
   Timer? automationTimer;
   bool startupReady = false;
   late final PageController _tabController = PageController(initialPage: 0);
+  late final AnimationController _jumpFadeController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 180),
+    value: 1.0,
+  );
   bool _tabAnimating = false;
   bool _pageScrolling = false;
   final ValueNotifier<bool> _swiping = ValueNotifier<bool>(false);
@@ -180,6 +185,7 @@ class _AppShellState extends ConsumerState<AppShell>
             child: _DeferredTab(
               tabIndex: 1,
               activeTab: _activeTab,
+              delay: const Duration(milliseconds: 250),
               builder: () => MapScreen(data: data),
             ),
           ),
@@ -188,14 +194,24 @@ class _AppShellState extends ConsumerState<AppShell>
           child: _KeepAliveTab(
             tabIndex: 2,
             activeTab: _activeTab,
-            child: HistoryScreen(data: data),
+            child: _DeferredTab(
+              tabIndex: 2,
+              activeTab: _activeTab,
+              delay: const Duration(milliseconds: 120),
+              builder: () => HistoryScreen(data: data),
+            ),
           ),
         ),
         RepaintBoundary(
           child: _KeepAliveTab(
             tabIndex: 3,
             activeTab: _activeTab,
-            child: BudgetScreen(data: data),
+            child: _DeferredTab(
+              tabIndex: 3,
+              activeTab: _activeTab,
+              delay: const Duration(milliseconds: 120),
+              builder: () => BudgetScreen(data: data),
+            ),
           ),
         ),
       ];
@@ -203,30 +219,51 @@ class _AppShellState extends ConsumerState<AppShell>
     return _tabPages!;
   }
 
-  void _goToTab(int i) {
+  Future<void> _goToTab(int i) async {
     if (i < 0 || i > 3) return;
     final fromOverlay = index >= 4;
     final currentTab = index <= 3 ? index : lastTab;
     if (!fromOverlay && i == currentTab) return;
     ActionFeedback.tap(transition: true);
+    final distance = (i - currentTab).abs();
+    _swiping.value = true;
+
+    if (!_tabController.hasClients) {
+      if (!mounted) return;
+      setState(() {
+        slideDirection = i > currentTab ? 1 : -1;
+        index = i;
+        lastTab = i;
+      });
+      _activeTab.value = i;
+      _swiping.value = false;
+      return;
+    }
+
+    if (!mounted) return;
     setState(() {
       slideDirection = i > currentTab ? 1 : -1;
       index = i;
       lastTab = i;
     });
-    if (_tabController.hasClients) {
-      final distance = (i - currentTab).abs();
-      _tabAnimating = true;
-      final ms = (280 + (distance - 1) * 80).clamp(280, 420);
-      _tabController
-          .animateToPage(
-            i,
-            duration: Motion.duration(context, ms),
-            curve: Curves.easeOutCubic,
-          )
-          .whenComplete(() {
-        _tabAnimating = false;
-      });
+    _activeTab.value = i;
+
+    _tabAnimating = true;
+    try {
+      if (distance <= 1) {
+        await _tabController.animateToPage(
+          i,
+          duration: Motion.duration(context, 250),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        await _jumpFadeController.reverse(from: 1.0);
+        _tabController.jumpToPage(i);
+        await _jumpFadeController.forward(from: 0.0);
+      }
+    } finally {
+      _tabAnimating = false;
+      _swiping.value = false;
     }
   }
 
@@ -236,6 +273,7 @@ class _AppShellState extends ConsumerState<AppShell>
     WidgetsBinding.instance.removeObserver(this);
     _tabController.removeListener(_onPageScroll);
     _tabController.dispose();
+    _jumpFadeController.dispose();
     _swiping.dispose();
     _activeTab.dispose();
     super.dispose();
@@ -389,35 +427,41 @@ class _AppShellState extends ConsumerState<AppShell>
                   children: [
                     Positioned.fill(
                       child: ClipRect(
-                        child: NotificationListener<ScrollNotification>(
-                          onNotification: (n) {
-                            if (n.depth != 0) return false;
-                            if (n is ScrollStartNotification) {
-                              _swiping.value = true;
-                            } else if (n is ScrollEndNotification) {
-                              _swiping.value = false;
-                              final settled = _tabController.hasClients
-                                  ? (_tabController.page?.round() ?? lastTab)
-                                  : lastTab;
-                              final currentTab = index <= 3 ? index : lastTab;
-                              if (settled != currentTab && !_tabAnimating) {
-                                setState(() {
-                                  slideDirection =
-                                      settled > currentTab ? 1 : -1;
-                                  index = settled;
-                                  lastTab = settled;
-                                });
+                        child: FadeTransition(
+                          opacity: CurvedAnimation(
+                            parent: _jumpFadeController,
+                            curve: Curves.easeOut,
+                          ),
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (n) {
+                              if (n.depth != 0) return false;
+                              if (n is ScrollStartNotification) {
+                                _swiping.value = true;
+                              } else if (n is ScrollEndNotification) {
+                                _swiping.value = false;
+                                final settled = _tabController.hasClients
+                                    ? (_tabController.page?.round() ?? lastTab)
+                                    : lastTab;
+                                final currentTab = index <= 3 ? index : lastTab;
+                                if (settled != currentTab && !_tabAnimating) {
+                                  setState(() {
+                                    slideDirection =
+                                        settled > currentTab ? 1 : -1;
+                                    index = settled;
+                                    lastTab = settled;
+                                  });
+                                }
                               }
-                            }
-                            return false;
-                          },
-                          child: PageView(
-                            controller: _tabController,
-                            physics: index >= 4
-                                ? const NeverScrollableScrollPhysics()
-                                : const ClampingScrollPhysics(),
-                            onPageChanged: (_) {},
-                            children: _buildTabPages(data),
+                              return false;
+                            },
+                            child: PageView(
+                              controller: _tabController,
+                              physics: index >= 4
+                                  ? const NeverScrollableScrollPhysics()
+                                  : const ClampingScrollPhysics(),
+                              onPageChanged: (_) {},
+                              children: _buildTabPages(data),
+                            ),
                           ),
                         ),
                       ),
@@ -604,10 +648,12 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
 class _DeferredTab extends StatefulWidget {
   final int tabIndex;
   final ValueListenable<int> activeTab;
+  final Duration delay;
   final Widget Function() builder;
   const _DeferredTab({
     required this.tabIndex,
     required this.activeTab,
+    required this.delay,
     required this.builder,
   });
 
@@ -639,7 +685,7 @@ class _DeferredTabState extends State<_DeferredTab> {
   void _check() {
     if (_child != null || !mounted) return;
     if (widget.activeTab.value == widget.tabIndex) {
-      _timer ??= Timer(const Duration(milliseconds: 250), () {
+      _timer ??= Timer(widget.delay, () {
         _timer = null;
         if (mounted && _child == null) {
           setState(() => _child = widget.builder());
