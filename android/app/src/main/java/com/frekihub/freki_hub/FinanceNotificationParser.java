@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 /** Conservative local parser for selected apps' transaction notifications. */
 public final class FinanceNotificationParser {
-    private static final String CURRENCY = "(?:US\\$|PHP|USD|EUR|GBP|JPY|KRW|KWD|KD|₱|\\$|€|£|¥|₩)";
+    private static final String CURRENCY = "(?:US\\$|USD|PHP|Php|P|EUR|GBP|JPY|KRW|KWD|KD|₱|\\$|€|£|¥|₩)";
     private static final String NUMBER = "(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\\.[0-9]{1,3})?";
     private static final Pattern PREFIX_AMOUNT = Pattern.compile(
             "(?i)(?<![\\p{L}\\p{N}])(" + CURRENCY + ")\\s*[:#-]?\\s*(" + NUMBER + ")(?![0-9.,])");
@@ -17,11 +17,11 @@ public final class FinanceNotificationParser {
     private static final Pattern REJECT = Pattern.compile(
             "(?i)\\b(?:otp|one[\\s-]?time password|verification code|failed|failure|declined|rejected|unsuccessful|pending|processing|reversed|cancelled|canceled|payment request|request to pay|promo(?:tional)?|promotion(?:al)?|limited time offer)\\b");
     private static final Pattern INCOMING = Pattern.compile(
-            "(?i)\\b(?:received|credited|credit alert|deposit(?:ed)?|salary|cash[\\s-]?in|cashback|refund(?:ed)?|reimbursed|reimbursement|payout|remittance|top[\\s-]?up|incoming transfer|money received|funds received|account funded|funds added|paid you|paid into your account|paid to your account|transfer from|credit to your account)\\b");
+            "(?i)\\b(?:received|credited|credit alert|deposit(?:ed)?|salary|cash[\\s-]?in|cashback|refund(?:ed)?|reimbursed|reimbursement|payout|remittance|top[\\s-]?up|incoming transfer|money received|funds received|account funded|funds added|paid you|paid into your account|paid to your account|transfer from|credit to your account|you received|received money|transfer received|received transfer|cash in successful|successfully received)\\b");
     private static final Pattern HARD_OUTGOING = Pattern.compile(
-            "(?i)\\b(?:debited|deducted|debit alert|purchased|purchase(?: successful| of)|withdrawn|withdrawal|cash[\\s-]?out|sent to|transferred to|transfer to|payment to|charged at|spent|bought|paid at|paid to (?!your account))\\b");
+            "(?i)\\b(?:debited|deducted|debit alert|purchased|purchase(?: successful| of)|withdrawn|withdrawal|cash[\\s-]?out|sent to|transferred to|transfer to|payment to|charged at|spent|bought|paid at|paid to (?!your account)|you sent|you have sent|successfully sent|sent successfully)\\b");
     private static final Pattern OUTGOING = Pattern.compile(
-            "(?i)\\b(?:paid|purchased|purchase(?: successful| of)|payment successful|successful payment|debited|deducted|sent|spent|charged|withdrawn|withdrawal|cash[\\s-]?out|transferred to|transfer to|payment to|bought)\\b");
+            "(?i)\\b(?:paid|purchased|purchase(?: successful| of)|payment successful|successful payment|debited|deducted|sent|spent|charged|withdrawn|withdrawal|cash[\\s-]?out|transferred to|transfer to|payment to|bought|you sent|you have sent|successfully sent|successfully transferred|transfer successful|transfer completed|sent successfully|cash out|money sent)\\b");
     private static final Pattern COMPLETED_PAYMENT = Pattern.compile(
             "(?i)\\bpayment\\b.{0,60}\\b(?:successful|succeeded|completed|confirmed|processed)\\b|\\b(?:successful|succeeded|completed|confirmed|processed)\\b.{0,60}\\bpayment\\b");
     private static final Pattern INCOME_SOURCE = Pattern.compile(
@@ -59,13 +59,15 @@ public final class FinanceNotificationParser {
         boolean incoming = INCOMING.matcher(text).find();
         boolean hardOutgoing = HARD_OUTGOING.matcher(text).find();
         boolean outgoing = OUTGOING.matcher(text).find() || COMPLETED_PAYMENT.matcher(text).find();
+
         if (incoming && hardOutgoing) return null; // Conflicting direction; do not guess.
         if (!incoming && !outgoing) return null;
         String kind = incoming ? "income" : "expense";
 
+
         Map<String, String> amounts = new LinkedHashMap<>();
-        collectAmounts(PREFIX_AMOUNT.matcher(text), true, amounts);
-        collectAmounts(SUFFIX_AMOUNT.matcher(text), false, amounts);
+        collectAmounts(PREFIX_AMOUNT.matcher(text), true, amounts, text);
+        collectAmounts(SUFFIX_AMOUNT.matcher(text), false, amounts, text);
         if (amounts.size() != 1) return null;
         Map.Entry<String, String> amount = amounts.entrySet().iterator().next();
         String[] parts = amount.getKey().split(":", 2);
@@ -86,8 +88,11 @@ public final class FinanceNotificationParser {
         return new ParsedTransaction(kind, value, currency, counterparty);
     }
 
-    private static void collectAmounts(Matcher matcher, boolean currencyFirst, Map<String, String> amounts) {
+    private static void collectAmounts(Matcher matcher, boolean currencyFirst, Map<String, String> amounts, String text) {
         while (matcher.find()) {
+            int start = matcher.start();
+            String prefix = text.substring(Math.max(0, start - 24), start).toLowerCase();
+            if (prefix.contains("balance") || prefix.contains("bal.")) continue;
             String token = matcher.group(currencyFirst ? 1 : 2);
             String value = matcher.group(currencyFirst ? 2 : 1).replace(",", "");
             String currency = currency(token);
@@ -97,7 +102,7 @@ public final class FinanceNotificationParser {
 
     private static String currency(String token) {
         return switch (token.toUpperCase(Locale.ROOT)) {
-            case "PHP", "₱" -> "PHP";
+            case "PHP", "Php", "P", "₱" -> "PHP";
             case "USD", "US$", "$" -> "USD";
             case "EUR", "€" -> "EUR";
             case "GBP", "£" -> "GBP";
@@ -120,6 +125,7 @@ public final class FinanceNotificationParser {
         Matcher matcher = pattern.matcher(text);
         if (!matcher.find()) return fallback;
         String value = matcher.group(1).trim().replaceAll("\\s+", " ");
+        value = value.replaceAll("(?i)\\s+(?:on|at)\\s+\\d.*$", "").trim();
         value = value.replaceAll("(?i)\\s+(?:reference|ref|transaction|id)\\b.*$", "").trim();
         return value.isEmpty() ? fallback : value;
     }

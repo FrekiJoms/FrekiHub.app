@@ -4,7 +4,7 @@
 
 Source fix: the native listener now recognizes explicit incoming and outgoing transaction language, scans title/body/summary/expanded lines/messaging-style text from selected apps, accepts supported currency markers before or after one unambiguous amount, and skips malformed, promotional, pending/failed or direction-conflicting alerts. Income is carried through the existing durable queue and committed as `income`; old queued `purchase` events without a kind remain expenses. Enabling detection now requests Android notification-listener access; saved-entry notification permission remains separate and optional. Entry/receipt delivery still waits for Flutter reconciliation and database commit.
 
-Verification: the standalone production parser check passed **21 cases**. Android `:app:compileDebugKotlin` passed without packaging an APK. `flutter analyze` reports no issues, `flutter test test/transaction_notification_test.dart` passes 4 checks including detected income import/receipt retry/rollback, and `dart format` was applied. `git diff --check` passed. Actual notification-listener access, app-specific notification layouts and foreground reconciliation remain phone verification gaps.
+Verification: the standalone production parser check passed **25 cases**. Android `:app:compileDebugKotlin` passed without packaging an APK. `flutter analyze` reports no issues, `flutter test test/transaction_notification_test.dart` passes 4 checks including detected income import/receipt retry/rollback, and `dart format` was applied. `git diff --check` passed. Actual notification-listener access, app-specific notification layouts and foreground reconciliation remain phone verification gaps.
 
 ## Log deletion — 2026-10-06
 

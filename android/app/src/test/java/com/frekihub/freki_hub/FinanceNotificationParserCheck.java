@@ -49,6 +49,16 @@ public final class FinanceNotificationParserCheck {
         rejected("PHP 100.00 received and PHP 20.00 debited");
         rejected("PHP 100.00 received from Ana and PHP 80.00 received from Bo");
         rejected("Promotional cashback received: PHP 25.00");
-        System.out.println("21 finance notification parser checks passed");
+
+        // E-wallet style notifications with balance text.
+        expect("You have sent PHP50.00 of GCash to JUAN DELA CRUZ 09262243647 on 02-21-2021 10:10 PM. Your new balance is PHP550.88. Ref. No. 12345678",
+                "expense", "50.00", "PHP", "JUAN DELA CRUZ 09262243647");
+        expect("You received PHP 1,000.00 from ANA. Your new balance is PHP 2,500.00.",
+                "income", "1000.00", "PHP", "ANA");
+        expect("Money sent successfully. You sent P250.00 to MARIA. New balance: P1,750.00",
+                "expense", "250.00", "PHP", "MARIA");
+        expect("Transfer successful! You received P500 from PEDRO. Available balance P1,000.00",
+                "income", "500", "PHP", "PEDRO");
+        System.out.println("25 finance notification parser checks passed");
     }
 }
