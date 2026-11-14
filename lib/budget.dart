@@ -613,22 +613,31 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
           ),
       ],
         ),
-        if (_showCompactBalance)
-          Positioned(
-            top: 24,
-            left: 0,
-            right: 0,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        AnimatedSlide(
+          offset: _showCompactBalance ? Offset.zero : const Offset(0, -0.15),
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          child: AnimatedOpacity(
+            opacity: _showCompactBalance ? 1 : 0,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            child: IgnorePointer(
+              ignoring: !_showCompactBalance,
+              child: Positioned(
+                top: 40,
+                left: 0,
+                right: 0,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [Color(0xff191b19), Color(0xff303630)],
                   ),
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: Colors.white.withValues(alpha: .06)),
                 ),
                 child: Row(
@@ -693,6 +702,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               ),
             ),
           ),
+        ),
+      ),
+    ),
       ],
     );
   }
