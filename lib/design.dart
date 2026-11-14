@@ -624,13 +624,17 @@ class _PillNavigationState extends State<PillNavigation>
   void initState() {
     super.initState();
     motion = AnimationController(vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => measure());
   }
 
   @override
   void didUpdateWidget(covariant PillNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.index != widget.index) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showNavTooltip());
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        measure();
+        _showNavTooltip();
+      });
     }
   }
 
@@ -791,7 +795,6 @@ class _PillNavigationState extends State<PillNavigation>
 
   @override
   Widget build(BuildContext c) {
-    WidgetsBinding.instance.addPostFrameCallback((_) => measure());
     final scheme = Theme.of(c).colorScheme;
     final dark = Theme.of(c).brightness == Brightness.dark;
     return Semantics(
