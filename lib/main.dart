@@ -79,29 +79,18 @@ class _AppShellState extends ConsumerState<AppShell>
   bool startupReady = false;
   late final PageController _tabController = PageController(initialPage: 0);
   bool _tabAnimating = false;
-  bool _pagerScrolling = false;
   AppData? _tabsData;
   List<Widget>? _tabPages;
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _tabController.addListener(_onPagerScroll);
     automationTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (startupReady &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(reconcile());
       }
     });
-  }
-
-  void _onPagerScroll() {
-    if (!_tabController.hasClients) return;
-    final page = _tabController.page ?? _tabController.initialPage.toDouble();
-    final scrolling = (page - page.roundToDouble()).abs() > 0.001;
-    if (scrolling != _pagerScrolling && mounted) {
-      setState(() => _pagerScrolling = scrolling);
-    }
   }
 
   Future<void> reconcile() async {
@@ -169,15 +158,11 @@ class _AppShellState extends ConsumerState<AppShell>
       ];
     }
     final active = index <= 3 ? index : lastTab;
-    final showReal = !_pagerScrolling;
     return [
       for (var i = 0; i < _tabPages!.length; i++)
         _KeepAliveTab(
-          active: active == i && showReal,
-          child: _SwipePageFrame(
-            real: active == i && showReal,
-            child: _tabPages![i],
-          ),
+          active: active == i,
+          child: _tabPages![i],
         ),
     ];
   }
@@ -216,7 +201,6 @@ class _AppShellState extends ConsumerState<AppShell>
   void dispose() {
     automationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    _tabController.removeListener(_onPagerScroll);
     _tabController.dispose();
     super.dispose();
   }
@@ -550,45 +534,4 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
   }
 }
 
-class _SwipePageFrame extends StatelessWidget {
-  final bool real;
-  final Widget child;
-  const _SwipePageFrame({required this.real, required this.child});
 
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Visibility(
-          visible: !real,
-          maintainState: false,
-          maintainAnimation: false,
-          maintainSize: false,
-          child: const _SwipePlaceholder(),
-        ),
-        Visibility(
-          visible: real,
-          maintainState: true,
-          maintainAnimation: false,
-          maintainSize: false,
-          maintainInteractivity: false,
-          child: child,
-        ),
-      ],
-    );
-  }
-}
-
-class _SwipePlaceholder extends StatelessWidget {
-  const _SwipePlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return ColoredBox(
-      color: scheme.surfaceContainerLowest,
-      child: const SizedBox.expand(),
-    );
-  }
-}
