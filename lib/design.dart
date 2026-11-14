@@ -599,6 +599,9 @@ class _PillNavigationState extends State<PillNavigation>
   int? hovered;
   final List<double> _press = List<double>.filled(4, 1.0);
   Timer? _tooltipTimer;
+  int? _lastIndex;
+  // ignore: prefer_final_fields
+  bool _forceUnderlineAnimation = false;
 
   static const labels = ['Home', 'Map', 'Sessions', 'Finance'];
   static const icons = [
@@ -695,12 +698,17 @@ class _PillNavigationState extends State<PillNavigation>
 
   Rect? get current {
     final controller = widget.tabController;
+    if (_forceUnderlineAnimation) {
+      if (target == null || from == null) return target;
+      final t = Curves.easeOutCubic.transform(motion.value.clamp(0.0, 1.0));
+      return Rect.lerp(from, target, t);
+    }
     if (controller != null && controller.hasClients) {
       final page = controller.page ?? widget.index.toDouble();
       return _rectAtPage(page);
     }
     if (target == null || from == null) return target;
-    final t = Curves.easeOutBack.transform(motion.value.clamp(0.0, 1.0));
+    final t = Curves.easeOutCubic.transform(motion.value.clamp(0.0, 1.0));
     return Rect.lerp(from, target, t);
   }
 
@@ -722,13 +730,21 @@ class _PillNavigationState extends State<PillNavigation>
     if (!changed) return;
     setState(() {
       _tabRects = rects;
-      if (controllerDriven) {
+      if (_forceUnderlineAnimation) {
+        final prev = (_lastIndex != null && _lastIndex! >= 0 && _lastIndex! < rects.length)
+            ? rects[_lastIndex!]
+            : (from ?? target ?? next);
+        from = prev ?? next;
+        target = next;
+        motion.duration = Motion.duration(context, 320);
+        motion.forward(from: 0);
+      } else if (controllerDriven) {
         target = next;
         from = next;
       } else {
         from = current ?? next;
         target = next;
-        motion.duration = Motion.duration(context, 420);
+        motion.duration = Motion.duration(context, 320);
         motion.forward(from: 0);
       }
     });
@@ -919,62 +935,36 @@ class _PillNavigationState extends State<PillNavigation>
                   clipBehavior: Clip.none,
                   alignment: Alignment.center,
                   children: [
-                    if (widget.tabController != null)
-                      AnimatedBuilder(
-                        animation: widget.tabController!,
-                        builder: (c, _) {
-                          final rect = current;
-                          if (rect == null) return const SizedBox.shrink();
-                          const underlineWidth = 14.0;
-                          const underlineHeight = 3.0;
-                          return Positioned(
-                            left: rect.left,
-                            width: rect.width,
-                            top: rect.bottom - 5,
-                            height: underlineHeight,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: Container(
-                                  width: underlineWidth,
-                                  height: underlineHeight,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF34C759),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        motion,
+                        if (widget.tabController != null) widget.tabController!,
+                      ]),
+                      builder: (c, _) {
+                        final rect = current;
+                        if (rect == null) return const SizedBox.shrink();
+                        const underlineWidth = 14.0;
+                        const underlineHeight = 3.0;
+                        return Positioned(
+                          left: rect.left,
+                          width: rect.width,
+                          top: rect.bottom - 5,
+                          height: underlineHeight,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Container(
+                                width: underlineWidth,
+                                height: underlineHeight,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF34C759),
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      )
-                    else
-                      AnimatedBuilder(
-                        animation: motion,
-                        builder: (c, _) {
-                          final rect = current;
-                          if (rect == null) return const SizedBox.shrink();
-                          const underlineWidth = 14.0;
-                          const underlineHeight = 3.0;
-                          return Positioned(
-                            left: rect.left,
-                            width: rect.width,
-                            top: rect.bottom - 5,
-                            height: underlineHeight,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: Container(
-                                  width: underlineWidth,
-                                  height: underlineHeight,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF34C759),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
+                    ),
                     Row(
                       children: List.generate(
                         labels.length,
