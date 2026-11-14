@@ -589,19 +589,18 @@ class _PillNavigationState extends State<PillNavigation>
   final keys = List.generate(4, (_) => GlobalKey());
   final optionKeys = List.generate(5, (_) => GlobalKey());
   final track = GlobalKey();
-  late final motion = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 250),
-  );
+  late final AnimationController motion;
   Rect? from, target;
   OverlayEntry? menu;
   int? hovered;
+  final List<double> _press = List<double>.filled(4, 1.0);
+
   static const labels = ['Home', 'Map', 'Sessions', 'Finance'];
   static const icons = [
     LucideIcons.house,
     LucideIcons.map,
     LucideIcons.table2,
-    LucideIcons.wallet,
+    LucideIcons.walletCards,
   ];
   static const actions = ['session', 'expense', 'income', 'savings', 'rule'];
   static const actionLabels = [
@@ -619,20 +618,16 @@ class _PillNavigationState extends State<PillNavigation>
     LucideIcons.slidersHorizontal,
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    motion = AnimationController(vsync: this);
+  }
+
   Rect? get current {
     if (target == null || from == null) return target;
-    final leading = Motion.curve.transform((motion.value / .7).clamp(0.0, 1.0));
-    final trailing = Motion.curve.transform(
-      ((motion.value - .22) / .78).clamp(0.0, 1.0),
-    );
-    final rightward = target!.center.dx >= from!.center.dx;
-    double mix(double a, double b, double t) => a + (b - a) * t;
-    return Rect.fromLTRB(
-      mix(from!.left, target!.left, rightward ? trailing : leading),
-      mix(from!.top, target!.top, leading),
-      mix(from!.right, target!.right, rightward ? leading : trailing),
-      mix(from!.bottom, target!.bottom, leading),
-    );
+    final t = Curves.easeOutBack.transform(motion.value.clamp(0.0, 1.0));
+    return Rect.lerp(from, target, t);
   }
 
   void measure() {
@@ -644,13 +639,18 @@ class _PillNavigationState extends State<PillNavigation>
     final next = selected == null
         ? null
         : selected.localToGlobal(Offset.zero, ancestor: parent) & selected.size;
-    if (target == next) return;
+    if (next == null || target == next) return;
     setState(() {
       from = current ?? next;
       target = next;
-      motion.duration = Motion.duration(context);
+      motion.duration = Motion.duration(context, 420);
       motion.forward(from: 0);
     });
+  }
+
+  void _setPressed(int i, bool down) {
+    if (!mounted) return;
+    setState(() => _press[i] = down ? 0.9 : 1.0);
   }
 
   void closeMenu() {
@@ -749,6 +749,8 @@ class _PillNavigationState extends State<PillNavigation>
   @override
   Widget build(BuildContext c) {
     WidgetsBinding.instance.addPostFrameCallback((_) => measure());
+    final scheme = Theme.of(c).colorScheme;
+    final dark = Theme.of(c).brightness == Brightness.dark;
     return Semantics(
       label: 'Navigation. Hold the center and drag to add.',
       customSemanticsActions: {
@@ -764,10 +766,11 @@ class _PillNavigationState extends State<PillNavigation>
             widget.onQuickAdd('rule'),
       },
       child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onLongPressStart: (d) {
           final box = track.currentContext!.findRenderObject() as RenderBox;
           final local = box.globalToLocal(d.globalPosition);
-          if ((local.dx - box.size.width / 2).abs() <= 36) openMenu();
+          if ((local.dx - box.size.width / 2).abs() <= 34) openMenu();
         },
         onLongPressMoveUpdate: (d) {
           if (menu != null) updateMenu(d.globalPosition);
@@ -780,82 +783,125 @@ class _PillNavigationState extends State<PillNavigation>
           closeMenu();
           if (selection != null) widget.onQuickAdd(actions[selection]);
         },
-        child: Chrome(
-          child: Stack(
-            key: track,
-            children: [
-              AnimatedBuilder(
-                animation: motion,
-                builder: (c, _) {
-                  final rect = current;
-                  return rect == null
-                      ? const SizedBox.shrink()
-                      : Positioned.fromRect(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? .34 : .14),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? .20 : .08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: GlassContainer(
+              useOwnLayer: true,
+              shape: const LiquidRoundedSuperellipse(borderRadius: 28),
+              settings: const LiquidGlassSettings(blur: 18, thickness: 18),
+              padding: EdgeInsets.zero,
+              child: Container(
+                key: track,
+                height: 46,
+                width: 220,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  color: scheme.surface.withValues(alpha: dark ? .52 : .62),
+                  border: Border.all(
+                    color: (dark ? Colors.white : Colors.white)
+                        .withValues(alpha: dark ? .12 : .55),
+                    width: 0.8,
+                  ),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedBuilder(
+                      animation: motion,
+                      builder: (c, _) {
+                        final rect = current;
+                        if (rect == null) return const SizedBox.shrink();
+                        return Positioned.fromRect(
                           rect: rect,
                           child: IgnorePointer(
-                            child: DecoratedBox(
+                            child: AnimatedContainer(
+                              duration: Motion.duration(c, 180),
+                              curve: Curves.easeOutCubic,
                               decoration: BoxDecoration(
-                                color: Theme.of(c).colorScheme.onSurface
-                                    .withValues(alpha: .09),
-                                borderRadius: BorderRadius.circular(32),
+                                borderRadius: BorderRadius.circular(20),
+                                color: dark
+                                    ? Colors.white.withValues(alpha: .14)
+                                    : Colors.white.withValues(alpha: .72),
+                                border: Border.all(
+                                  color: dark
+                                      ? Colors.white.withValues(alpha: .14)
+                                      : Colors.white.withValues(alpha: .85),
+                                  width: 0.6,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: (dark ? Colors.white : scheme.primary)
+                                        .withValues(alpha: dark ? .06 : .10),
+                                    blurRadius: 10,
+                                    spreadRadius: 0,
+                                  ),
+                                ],
                               ),
                             ),
                           ),
                         );
-                },
-              ),
-              Row(
-                children: List.generate(
-                  labels.length,
-                  (i) => Expanded(
-                    child: Semantics(
-                      selected: widget.index == i,
-                      button: true,
-                      label: labels[i],
-                      child: InkWell(
-                        key: keys[i],
-                        borderRadius: BorderRadius.circular(32),
-                        onTap: () => widget.onChanged(i),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 12,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                icons[i],
-                                size: 20,
-                                color: widget.index == i
-                                    ? Theme.of(c).colorScheme.onSurface
-                                    : Theme.of(c).colorScheme.onSurfaceVariant,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                labels[i],
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: widget.index == i
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: widget.index == i
-                                      ? Theme.of(c).colorScheme.onSurface
-                                      : Theme.of(c)
-                                            .colorScheme
-                                            .onSurfaceVariant,
+                      },
+                    ),
+                    Row(
+                      children: List.generate(
+                        labels.length,
+                        (i) {
+                          final selected = widget.index == i;
+                          final color = selected
+                              ? scheme.onSurface
+                              : scheme.onSurfaceVariant.withValues(alpha: .82);
+                          return Expanded(
+                            child: Semantics(
+                              selected: selected,
+                              button: true,
+                              label: labels[i],
+                              child: GestureDetector(
+                                behavior: HitTestBehavior.opaque,
+                                onTapDown: (_) => _setPressed(i, true),
+                                onTapCancel: () => _setPressed(i, false),
+                                onTapUp: (_) => _setPressed(i, false),
+                                onTap: () => widget.onChanged(i),
+                                child: SizedBox(
+                                  key: keys[i],
+                                  height: 38,
+                                  child: AnimatedScale(
+                                    scale: _press[i],
+                                    duration: Motion.duration(c, 120),
+                                    curve: Curves.easeOutCubic,
+                                    child: AnimatedOpacity(
+                                      duration: Motion.duration(c, 160),
+                                      opacity: selected ? 1.0 : 0.72,
+                                      child: Icon(icons[i], size: 20, color: color),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
