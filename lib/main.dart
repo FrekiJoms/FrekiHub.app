@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -77,8 +77,7 @@ class _AppShellState extends ConsumerState<AppShell>
   int? savedPage;
   Timer? automationTimer;
   bool startupReady = false;
-  late final PageController _tabController = PageController(initialPage: 0);
-  bool _tabAnimating = false;
+  // bottom tabs are kept mounted in an IndexedStack; no PageController needed
   @override
   void initState() {
     super.initState();
@@ -145,7 +144,7 @@ class _AppShellState extends ConsumerState<AppShell>
     }
   }
 
-  void _goToTab(int i, {bool animate = true}) {
+  void _goToTab(int i) {
     if (i < 0 || i > 3) return;
     final fromOverlay = index >= 4;
     final currentTab = index <= 3 ? index : lastTab;
@@ -156,25 +155,12 @@ class _AppShellState extends ConsumerState<AppShell>
       index = i;
       lastTab = i;
     });
-    if (animate && _tabController.hasClients) {
-      _tabAnimating = true;
-      _tabController
-          .animateToPage(
-            i,
-            duration: Motion.duration(context, 320),
-            curve: Curves.easeOutCubic,
-          )
-          .whenComplete(() => _tabAnimating = false);
-    } else if (_tabController.hasClients) {
-      _tabController.jumpToPage(i);
-    }
   }
 
   @override
   void dispose() {
     automationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -320,38 +306,13 @@ class _AppShellState extends ConsumerState<AppShell>
                   children: [
                     Positioned.fill(
                       child: ClipRect(
-                        child: PageView(
-                          controller: _tabController,
-                          physics: index >= 4
-                              ? const NeverScrollableScrollPhysics()
-                              : const PageScrollPhysics(parent: ClampingScrollPhysics()),
-                          onPageChanged: (i) {
-                            if (_tabAnimating) return;
-                            if (i == (index <= 3 ? index : lastTab)) return;
-                            setState(() {
-                              final currentTab = index <= 3 ? index : lastTab;
-                              slideDirection = i > currentTab ? 1 : -1;
-                              index = i;
-                              lastTab = i;
-                            });
-                          },
+                        child: IndexedStack(
+                          index: index <= 3 ? index : lastTab,
                           children: [
-                            _KeepAlivePage(
-                              active: (index <= 3 ? index : lastTab) == 0,
-                              child: TodayScreen(data: data),
-                            ),
-                            _KeepAlivePage(
-                              active: (index <= 3 ? index : lastTab) == 1,
-                              child: MapScreen(data: data),
-                            ),
-                            _KeepAlivePage(
-                              active: (index <= 3 ? index : lastTab) == 2,
-                              child: HistoryScreen(data: data),
-                            ),
-                            _KeepAlivePage(
-                              active: (index <= 3 ? index : lastTab) == 3,
-                              child: BudgetScreen(data: data),
-                            ),
+                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 0, child: TodayScreen(data: data)),
+                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 1, child: MapScreen(data: data)),
+                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 2, child: HistoryScreen(data: data)),
+                            TickerMode(enabled: (index <= 3 ? index : lastTab) == 3, child: BudgetScreen(data: data)),
                           ],
                         ),
                       ),
@@ -501,26 +462,3 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 }
 
-class _KeepAlivePage extends StatefulWidget {
-  final bool active;
-  final Widget child;
-  const _KeepAlivePage({required this.active, required this.child});
-
-  @override
-  State<_KeepAlivePage> createState() => _KeepAlivePageState();
-}
-
-class _KeepAlivePageState extends State<_KeepAlivePage>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-    return TickerMode(
-      enabled: widget.active,
-      child: widget.child,
-    );
-  }
-}
