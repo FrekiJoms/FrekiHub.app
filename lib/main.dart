@@ -570,9 +570,9 @@ class _SwipePageFrame extends StatelessWidget {
         Visibility(
           visible: real,
           maintainState: true,
-          maintainAnimation: true,
+          maintainAnimation: false,
           maintainSize: false,
-          maintainInteractivity: true,
+          maintainInteractivity: false,
           child: child,
         ),
       ],
