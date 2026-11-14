@@ -663,15 +663,17 @@ class _PillNavigationState extends State<PillNavigation>
     _tooltipEntry = null;
   }
 
-  void _showNavTooltip() {
+  void _showNavTooltip([int? index]) {
     if (!mounted) return;
-    final selectedKey = widget.index < keys.length ? keys[widget.index] : null;
-    final itemBox = selectedKey?.currentContext?.findRenderObject() as RenderBox?;
+    final i = index ?? widget.index;
+    if (i < 0 || i >= keys.length) return;
+    final selectedKey = keys[i];
+    final itemBox = selectedKey.currentContext?.findRenderObject() as RenderBox?;
     final overlay = Overlay.maybeOf(context);
     if (itemBox == null || !itemBox.hasSize || overlay == null) return;
     _removeTooltip();
     final center = itemBox.localToGlobal(Offset(itemBox.size.width / 2, 0));
-    final label = labels[widget.index];
+    final label = labels[i];
     _tooltipEntry = OverlayEntry(
       builder: (c) => Positioned(
         left: center.dx - 80,
@@ -986,7 +988,10 @@ class _PillNavigationState extends State<PillNavigation>
                                 onTapDown: (_) => _setPressed(i, true),
                                 onTapCancel: () => _setPressed(i, false),
                                 onTapUp: (_) => _setPressed(i, false),
-                                onTap: () => widget.onChanged(i),
+                                onTap: () {
+                                  _showNavTooltip(i);
+                                  widget.onChanged(i);
+                                },
                                 child: SizedBox(
                                   key: keys[i],
                                   height: 38,
