@@ -316,10 +316,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       }
       return _timelineDesc ? -cmp : cmp;
     });
-    final days = timelineRows.map((e) => e.day).toSet().toList()..sort();
-    if (_timelineDesc && _timelineSort == 'date') {
-      days.sort((a, b) => b.compareTo(a));
-    }
     final accounts = walletAccounts(widget.data);
     final totalBalance = accounts
         .where((a) => a.included)
@@ -664,27 +660,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               LucideIcons.wallet,
             ),
           )
-        else if (_timelineSort == 'date')
-          ...days.map((day) {
-            final items = timelineRows.where((e) => e.day == day).toList();
-            return Surface(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('EEE, d MMMM').format(calendarDate(day)),
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                  ),
-                  const SizedBox(height: 6),
-                  for (var i = 0; i < items.length; i++) ...[
-                    _TimelineRow(item: items[i], currency: d.currency),
-                    if (i != items.length - 1)
-                      Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
-                  ],
-                ],
-              ),
-            );
-          })
         else
           Surface(
             child: Column(
