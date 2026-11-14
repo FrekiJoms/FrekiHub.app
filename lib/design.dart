@@ -366,7 +366,7 @@ class SizeTransitionPanel extends StatelessWidget {
 }
 
 class PageBody extends StatelessWidget {
-  final String title, subtitle;
+  final String? title, subtitle;
   final List<Widget> children;
   final Widget? action;
   final bool compactHeader;
@@ -374,8 +374,8 @@ class PageBody extends StatelessWidget {
   final Widget? leading;
   const PageBody({
     super.key,
-    required this.title,
-    required this.subtitle,
+    this.title,
+    this.subtitle,
     required this.children,
     this.action,
     this.compactHeader = false,
@@ -387,16 +387,19 @@ class PageBody extends StatelessWidget {
     builder: (c, width) {
       final inset = width < 380 ? 16.0 : 24.0;
       final horizontal = math.max(inset, (width - 720) / 2);
-      final header = Entrance(
-        child: compactHeader
+      final hasHeader =
+          (title?.isNotEmpty ?? false) || (subtitle?.isNotEmpty ?? false);
+      final header = hasHeader
+          ? Entrance(
+              child: compactHeader
             ? Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 56),
                 child: Column(
                   children: [
-                    PageTitle(title),
+                    PageTitle(title ?? ""),
                     const SizedBox(height: 4),
                     Text(
-                      subtitle,
+                      subtitle ?? "",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 11,
@@ -415,7 +418,7 @@ class PageBody extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            subtitle,
+                            subtitle ?? "",
                             style: TextStyle(
                               fontSize: 12,
                               height: 1.4,
@@ -429,10 +432,11 @@ class PageBody extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  PageTitle(title),
+                  PageTitle(title ?? ""),
                 ],
               ),
-      );
+      )
+          : const SizedBox.shrink();
       final content = <Widget>[
         if (leading != null)
           Padding(padding: const EdgeInsets.only(bottom: 12), child: leading),
@@ -461,7 +465,7 @@ class PageBody extends StatelessWidget {
                       Rect.fromLTWH(bounds.left, bounds.top, bounds.width, 28),
                     ),
                 child: ListView(
-                  key: PageStorageKey(title),
+                   key: PageStorageKey(title ?? 'page'),
                   controller: scrollController,
                   padding: EdgeInsets.fromLTRB(
                     horizontal,
@@ -477,15 +481,17 @@ class PageBody extends StatelessWidget {
         );
       }
       return ListView(
-        key: PageStorageKey(title),
+        key: PageStorageKey(title ?? 'page'),
         controller: scrollController,
         padding: EdgeInsets.fromLTRB(
           horizontal,
-          80,
+          hasHeader ? 80 : 16,
           horizontal,
           126 + MediaQuery.paddingOf(c).bottom,
         ),
-        children: [header, const SizedBox(height: 16), ...content],
+        children: hasHeader
+            ? [header, const SizedBox(height: 16), ...content]
+            : [...content],
       );
     },
   );
