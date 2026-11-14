@@ -103,6 +103,9 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
 
   Future<void> toggle(String key, bool value) async {
     ActionFeedback.tap();
+    final label = key == 'purchaseScanning'
+        ? 'Finance notification detection'
+        : 'Location conditions';
     await guarded(
       context,
       () async {
@@ -111,15 +114,19 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
           await ref.read(databaseProvider).readAll(),
         );
         if (key == 'purchaseScanning' && value && mounted) {
-          await PermissionHints.request<bool>(
-            context,
-            'receiptNotificationPermission',
-          );
+          final access = await AutomationSync.status();
+          if (!mounted) return;
+          if (access['notifications'] != true) {
+            await PermissionHints.request<void>(
+              context,
+              'notificationPermission',
+            );
+            if (!mounted) return;
+          }
           await refresh();
         }
       },
-      success:
-          '${key == 'purchaseScanning' ? 'Purchase scanning' : 'Location conditions'} ${value ? 'enabled' : 'disabled'}',
+      success: '$label ${value ? 'enabled' : 'disabled'}',
       successIcon: value ? DataAction.enabled.icon : DataAction.disabled.icon,
     );
   }
@@ -304,7 +311,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
         context,
         StatefulBuilder(
           builder: (c, change) => PanelContent(
-            header: PanelHeading(title: 'Scan selected payment apps'),
+            header: PanelHeading(title: 'Scan selected finance apps'),
             footer: AppButton(
               label: 'Save selected apps',
               onPressed: () async {
@@ -317,7 +324,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                     await ref.read(databaseProvider).readAll(),
                   );
                   if (c.mounted) {
-                    dataToast(c, 'Payment app selection', DataAction.saved);
+                    dataToast(c, 'Finance app selection', DataAction.saved);
                     Navigator.pop(c);
                   }
                 });
@@ -734,16 +741,17 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
         const SizedBox(height: 20),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Detect purchases'),
+          title: const Text('Detect Finance transactions'),
           subtitle: const Text(
-            'Clear purchase notifications become Budget expenses',
+            'Recognized expense and income alerts become '
+            'editable Finance entries',
           ),
           value: data.prefs['purchaseScanning'] == 'true',
           onChanged: (v) => toggle('purchaseScanning', v),
         ),
         OutlinedButton(
           onPressed: withFeedback(() => apps(data)),
-          child: const Text('Choose payment apps'),
+          child: const Text('Choose finance apps'),
         ),
         if (status['notifications'] != true)
           OutlinedButton(
@@ -773,7 +781,9 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
           ),
         const SizedBox(height: 8),
         const Text(
-          'Only selected apps are scanned. No OTPs or unrelated notification text are stored. Amounts, merchant labels and locations are used only when available; unclear messages are skipped.',
+          'Only selected apps are scanned. OTPs and unrelated alerts are skipped. '
+          'Clear transaction amounts and available sender or merchant labels '
+          'are used; unclear messages are skipped.',
           style: TextStyle(fontSize: 12),
         ),
       ],

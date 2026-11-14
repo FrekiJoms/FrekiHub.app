@@ -14,13 +14,13 @@ The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 
 | `ZoneReceiver` | Receives geofence enter/exit and evaluates the owning rule |
 | `LocationLogJob` | Persisted approximately fifteen-minute location/recheck and rule-refresh job |
 | `AutomationBootReceiver` | Reconfigures after boot/package/time/timezone/exact-alarm access broadcasts |
-| `PurchaseListener` | Reads selected apps' payment notifications and queues structured purchases |
+| `PurchaseListener` | Reads selected apps' finance notifications and queues structured expense/income entries |
 | `RuleProgram` | Interprets bounded conditions/actions with native context overrides |
 | `RuleNotifications`, `RuleNotificationReceiver` | Alarm state, next occurrence and reminder posting |
 | `TransactionNotifications` | Post-commit Finance receipt and tap destination |
 | `NotificationSoundSettings` | Notification channel settings and sound observations |
 
-SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, `runtime_events` and bounded `runtime_events_N` segments. Session state stores current ID/start/kind/note and pending native clock-out ID/end. Automation stores config, separate snapshot, legacy queued events during migration, last position/purchase, active rule, inside states and branch/cooldown state. Reminder storage holds each schedule's definition/fingerprint/token/due/sent/limit/exact state. None directly modifies Flutter's Drift tables.
+SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, `runtime_events` and bounded `runtime_events_N` segments. Session state stores current ID/start/kind/note and pending native clock-out ID/end. Automation stores config, separate snapshot, legacy queued events during migration, last position/finance-notification fingerprint, active rule, inside states and branch/cooldown state. Reminder storage holds each schedule's definition/fingerprint/token/due/sent/limit/exact state. None directly modifies Flutter's Drift tables.
 
 ## What works with Flutter closed
 
@@ -32,18 +32,18 @@ SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, 
 | Periodic location log | Persisted JobScheduler job | Approximate interval, not exact tracking; queued until imported |
 | Time/device conditional rule | Native refresh during jobs/events/config changes | Sampled evaluation; short time windows can be missed |
 | Scheduled reminder | AlarmManager + native receiver | Exact access or inexact fallback; posting/channel permission still required |
-| Purchase detection | NotificationListenerService | Only selected apps/recognized formats; queues a structured purchase |
-| Finance expense save and receipt | No immediate closed-Flutter database commit | Import/commit/confirmation on opening, resume or foreground reconciliation |
+| Finance transaction detection | NotificationListenerService | Only selected apps/recognized formats; queues a structured expense or income |
+| Finance transaction save and receipt | No immediate closed-Flutter database commit | Import/commit/confirmation on opening, resume or foreground reconciliation |
 | Rule toast/theme/sound update | Native event only | Flutter displays/applies during reconciliation |
 
 These are **local system notifications**, not FCM/server push. Force-stop is different from leaving the UI or removing it from Recents. Do not promise activity while force-stopped; reopening restores/configures future work. Xiaomi power management and individual permissions require actual device verification.
 
 ## Permission boundaries
 
-The manifest declares internet/network state, fine/coarse/background location, notification posting, exact alarms, boot and foreground/special-use service permissions. The purchase listener is guarded by notification-listener binding permission; geofences use Play services location 21.4.0.
+The manifest declares internet/network state, fine/coarse/background location, notification posting, exact alarms, boot and foreground/special-use service permissions. Finance notification detection is guarded by notification-listener binding permission; geofences use Play services location 21.4.0.
 
 - Location rules require precise location and background access; enabling OS location is separate from permission grants.
-- Purchase scanning requires notification-listener access plus explicit package selection. This differs from permission to post FrekiHub notifications.
+- Finance notification detection requires notification-listener access plus explicit app selection. This differs from permission to post FrekiHub's saved-entry confirmations.
 - Android 13+ notification posting uses its own permission prompt.
 - Exact reminder scheduling checks Alarms & reminders access and falls back to inexact alarms if denied/revoked.
 - Cross-app session confirmation requires Android Display over other apps access; it is opt-in and checked before each overlay. Android/system or protected surfaces can control whether overlays appear.
@@ -92,17 +92,19 @@ With exact access, scheduling uses `setExactAndAllowWhileIdle`; otherwise `setAn
 
 Channel creation does not replace an existing user's Android sound choice. Sound observations return a URI or `silent`; low-importance channels report silent. Reminders and financial receipts use private visibility. Receipts supply a generic public lock-screen version; do not assume OS settings always hide all metadata.
 
-## Purchase detection and confirmation
+## Finance notification detection and confirmation
 
-`PurchaseListener` ignores FrekiHub's own notifications, disabled scanning and unselected apps. It rejects OTPs, failed/refunded/credited/promotional requests and requires recognized payment/debit success text. One unambiguous PHP/₱/USD/EUR/GBP amount is accepted with validated grouping/decimal syntax. This is regex parsing, not LLM inference.
+`PurchaseListener` ignores FrekiHub's own notifications, disabled scanning and unselected apps. Enabling detection requests notification-listener access; selecting apps is a separate required step. Permission to post FrekiHub's saved-entry confirmation is optional and separate. The listener reads notification title/body, summary, expanded text lines and messaging-style text, then passes the combined text to the local `FinanceNotificationParser`.
 
-Deduplication uses package plus reference if available, otherwise notification key/post time, with a two-minute recent-update fingerprint guard. Merchant extraction is best effort; neither item identity nor actual merchant coordinates are guaranteed. A recent device sample may be attached; it is the sampled device position, not a merchant lookup.
+The parser accepts clear incoming activity (received, credited, deposits, salary, cash-in, refunds and similar explicit terms) as income, and clear outgoing activity (paid, purchased, successful payment, debited, sent and similar terms) as an expense. It skips OTPs, failed/pending/reversed requests, promotional text, unclear direction, malformed values and ambiguous multiple amounts. A single explicit amount may use a currency before or after the amount: PHP/₱, USD/$, EUR/€, GBP/£, JPY/¥, KRW/₩ or KWD/KD. Grouping and currency precision are validated. This is bounded local text parsing, not LLM inference; arbitrary alerts and amounts without a supported currency are not imported.
 
-The native event queues without writing SQLite. Flutter imports a regular expense and durable pending receipt in one transaction. Confirmation then shows amount, merchant/item, date, source, available location and reference. A tap sends destination `budget`, which opens the Finance bottom tab. Delivery failure retains the receipt for later foreground retry. Replaying the same purchase does not recreate the receipt after it has been successfully posted.
+Deduplication uses package plus reference if available, otherwise notification key/post time, with a two-minute recent-update fingerprint guard that includes transaction kind. Counterparty extraction is best effort; neither item identity nor actual merchant coordinates are guaranteed. A recent device sample may be attached; it is the sampled device position, not a merchant lookup.
+
+The native event queues without writing SQLite. Flutter imports a regular expense or income and durable pending receipt in one transaction. Confirmation then shows type, amount, counterparty, date, source app, available location and reference. A tap sends destination `budget`, which opens the Finance bottom tab. Delivery failure retains the receipt for later foreground retry. Replaying the same transaction does not recreate its receipt after it has been successfully posted.
 
 ## Method-channel reference
 
-App-owned permission entry points use the shared Flutter hint before requesting session/receipt/reminder notifications, precise/background location, notification-listener purchase access, exact alarms or overlays. `permissionStatus` reports those existing grants; `permissionSettings` accepts only the corresponding known method keys and opens the appropriate Android page. Explicit management still explains the feature when already granted. Cancellation leaves the OS untouched. The native cross-app overlay hint continues using its existing native renderer while Flutter is closed.
+App-owned permission entry points use the shared Flutter hint before requesting session/receipt/reminder notifications, precise/background location, notification-listener access for selected finance apps, exact alarms or overlays. `permissionStatus` reports those existing grants; `permissionSettings` accepts only the corresponding known method keys and opens the appropriate Android page. Explicit management still explains the feature when already granted. Cancellation leaves the OS untouched. The native cross-app overlay hint continues using its existing native renderer while Flutter is closed.
 
 `cacheSession` commits the running ID/start/kind/note independently of notification access and rejects an already pending end for the same ID. Flutter caches before the optional notification hint, then starts the foreground timer only after acceptance or when notifications are already allowed. Declining leaves SQLite and native rule session context active; it does not imply a visible notification. No permission is automatically granted.
 

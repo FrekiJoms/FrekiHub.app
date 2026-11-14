@@ -96,13 +96,13 @@ An event has `id`, `time`, `action`, human-readable `title`, optional `location`
 | --- | --- |
 | `auto_clock_in` | Inserts missing session if no session is running; `sessionId`, `started`, `kind`, rule/place metadata |
 | `auto_clock_out` | Ends only matching still-running session at event time; `sessionId` |
-| `purchase` | Parses positive major-unit amount, inserts expense using event ID/occurrence and saves a receipt; `amount`, `currency`, `merchant`, `source` or `package`, optional reference/category |
+| `purchase` | Parses positive major-unit amount, inserts an expense or income using event ID/occurrence and saves a receipt; `kind` defaults to `expense` for older queued events; `amount`, `currency`, `merchant` (counterparty), `source` or `package`, optional reference/category |
 | `rule_setting` | Applies only allowed `sound`/`theme` values |
 | `rule_toast` | Stores a pending top toast for Flutter consumption |
 | `location`, `location_exit`, `custom_log`, `error` | Log/metadata handling; no invented session or transaction |
 | `scheduled_notification`, `conditional_notification` | Records successful native reminder action when logging is enabled during import |
 
-Native automatic session IDs can be pending before SQLite has the session. Reconciliation handles a notification clock-out arriving around that start. Imported purchase IDs and unique occurrences prevent duplicate expenses. Generic insert logs are replaced with native event logs to preserve precise timestamps and position provenance. Logging may be off without disabling a purchase or session action.
+Native automatic session IDs can be pending before SQLite has the session. Reconciliation handles a notification clock-out arriving around that start. Imported transaction IDs and unique occurrences prevent duplicate Finance entries. Old `purchase` events without `kind` remain expenses; new income and expense events use separate ID prefixes. Generic insert logs are replaced with native event logs to preserve precise timestamps and position provenance. Logging may be off without disabling a purchase or session action.
 
 Cross-app confirmed endings add an optional `pendingNote` beside native `pendingId`/`pendingEnd`. Flutter writes that note only to the captured still-running record and ends it in the same transaction; replay cannot alter an already-ended note. Legacy payloads without a note preserve existing text. Queued automatic starts receive the note/end after import. All pending fields clear only after database commit.
 

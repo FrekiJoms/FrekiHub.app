@@ -1,5 +1,11 @@
 # FrekiHub application audit
 
+## Finance notification expense/income detection — 2026-10-07
+
+Source fix: the native listener now recognizes explicit incoming and outgoing transaction language, scans title/body/summary/expanded lines/messaging-style text from selected apps, accepts supported currency markers before or after one unambiguous amount, and skips malformed, promotional, pending/failed or direction-conflicting alerts. Income is carried through the existing durable queue and committed as `income`; old queued `purchase` events without a kind remain expenses. Enabling detection now requests Android notification-listener access; saved-entry notification permission remains separate and optional. Entry/receipt delivery still waits for Flutter reconciliation and database commit.
+
+Verification: the standalone production parser check passed **21 cases**. Android `:app:compileDebugKotlin` passed without packaging an APK. `flutter analyze` reports no issues, `flutter test test/transaction_notification_test.dart` passes 4 checks including detected income import/receipt retry/rollback, and `dart format` was applied. `git diff --check` passed. Actual notification-listener access, app-specific notification layouts and foreground reconciliation remain phone verification gaps.
+
 ## Log deletion — 2026-10-06
 
 Both expanded Activity and Map timeline rows expose the shared `LogDeleteButton`. Confirmation precedes the transaction; cancellation stays quiet, pending commits use the existing action skeleton and successful deletion acknowledges once. The deletion removes only the raw log, refreshes Map markers/selection and typed count/latest observables, and leaves source sessions/Finance records intact. Internal ID-only preferences prevent native replay from recreating deleted logs and survive backup/restore while remaining outside rule snapshots/completion.
@@ -148,7 +154,7 @@ Passing automated tests shows their covered cases pass; it does not establish th
 | Today | Isolated timer digits, split-flap/reduced-motion behavior, native chronometer, guarded clock controls, midnight refresh | Native service delivery/HyperIsland and cold reopen need phone tests; manual one-per-day behavior differs from other write paths |
 | Map | Full interval query, freshness validation, named categories, grouped records, selected chronological trace, debounced context and unchanged-row skip | Long-history cost, very large grouped badges, offline recovery and short-screen overlays need further work/testing |
 | Sessions | Phone list, bounded scrolling/table, stable sort, custom filters, width preferences, confirmed bulk delete | Saved-rule banner now describes all automation accurately; individual Run/Stop state remains in Settings |
-| Finance | Integer money, currency isolation, occurrence uniqueness, expected/actual timeline, post-commit receipts | Closed-Flutter purchases are queued until reconciliation; long timeline/charts need device profiling |
+| Finance | Integer money, currency isolation, occurrence uniqueness, expected/actual timeline, post-commit receipts | Closed-Flutter expenses and income are queued until reconciliation; long timeline/charts need device profiling |
 | Calendar | Real session/entry agenda, date indexing, four views, draggable month collapse, shared two-position day drawer | Starts at today/month on remount; DST-sensitive date navigation and enlarged/short layouts need broader tests |
 | Settings | Shared custom selectors/sheets, separate notification sounds, backup/reset confirmation and error handling | OS permission/channel flows unverified; unbounded export can exceed restore's size limit |
 | Logs / automation sheets | Opt-in logging, completion, parser diagnostics, target scoping, paused Save and Run/Stop, sampled native context | Log UI caps 1,000 rows; not every edit/delete/action is logged; native queue is unbounded |
@@ -174,7 +180,7 @@ Resolved in source: Release tasks require external owner credentials and never s
 
 ### F02 — Finance has no immediate closed-Flutter commit
 
-Priority: medium, product expectation gap. `PurchaseListener` queues structured JSON; only `AutomationSync._reconcile` inserts Drift expenses and durable receipts. A payment detected with Flutter closed will not appear as a committed Finance entry or generate its saved confirmation until reconciliation. Accurate documentation resolves the misleading claim, not the implementation gap. A future native/shared database writer requires an explicit migration/concurrency design.
+Priority: medium, product expectation gap. `PurchaseListener` queues structured JSON; only `AutomationSync._reconcile` inserts Drift expenses/income and durable receipts. A transaction detected with Flutter closed will not appear as a committed Finance entry or generate its saved confirmation until reconciliation. Accurate documentation resolves the misleading claim, not the implementation gap. A future native/shared database writer requires an explicit migration/concurrency design.
 
 ### F03 — Native timer failure handling added
 

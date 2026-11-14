@@ -24,18 +24,21 @@ object TransactionNotifications {
         val id = receipt["id"] as? String ?: return false
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Saved transactions", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Confirmation after detected purchases are saved to Finance"
+            description = "Confirmation after detected Finance entries are saved"
         })
         val open = PendingIntent.getActivity(context, 92,
             Intent(context, MainActivity::class.java).putExtra("openPage", "budget").addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         fun builder() = Notification.Builder(context, CHANNEL)
+        val kind = if (receipt["kind"] == "income") "Income" else "Expense"
+        val counterparty = if (kind == "Income") "Source" else "Merchant / item"
         val details = buildString {
             append("Added to Finance and saved\n")
+            append("Type: $kind\n")
             append("Amount: ${receipt["amount"]}\n")
-            append("Merchant / item: ${receipt["merchant"]}\n")
+            append("$counterparty: ${receipt["merchant"]}\n")
             append("Date: ${receipt["date"]}\n")
-            append("Payment app: ${receipt["source"]}\n")
+            append("Source app: ${receipt["source"]}\n")
             append("Location: ${receipt["location"]}")
             val reference = receipt["reference"] as? String
             if (!reference.isNullOrBlank()) append("\nReference: $reference")
@@ -45,7 +48,7 @@ object TransactionNotifications {
         val notification = builder().setSmallIcon(R.drawable.ic_transaction)
             .setContentTitle(receipt["title"] as? String ?: "Transaction saved")
             .setContentText("${receipt["amount"]} · ${receipt["merchant"]}")
-            .setSubText("Finance · Expense")
+            .setSubText("Finance · $kind")
             .setStyle(Notification.BigTextStyle().bigText(details))
             .setWhen((receipt["time"] as? Number)?.toLong() ?: System.currentTimeMillis())
             .setShowWhen(true).setAutoCancel(true).setOnlyAlertOnce(true)

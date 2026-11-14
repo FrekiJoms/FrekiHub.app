@@ -54,6 +54,7 @@ void main() {
     await AutomationSync.reconcile(db);
     final data = await db.readAll();
     expect(data.entries.single.category, 'Food');
+    expect(data.entries.single.kind, 'expense');
     expect(data.entries.single.amount, 9950);
     expect(data.prefs['sound'], 'true');
     expect(data.prefs['ruleToast:rule:toast'], 'Rule matched');
@@ -131,6 +132,65 @@ void main() {
     expect(receipts.length, 1);
     expect((await db.readAll()).entries.length, 1);
   });
+
+  test(
+    'Detected income imports as Finance income and confirms after commit',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      var queued = true;
+      final receipts = <Map<String, dynamic>>[];
+      const event = {
+        'id': 'income:wallet.app:ref-income-123',
+        'action': 'purchase',
+        'kind': 'income',
+        'time': 1790902800000,
+        'amount': '2500.00',
+        'currency': 'PHP',
+        'merchant': 'Ana',
+        'source': 'Wallet app',
+        'package': 'wallet.app',
+        'reference': 'ref-income-123',
+        'title': 'Received income · Ana',
+      };
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(NativeSession.channel, (call) async {
+            switch (call.method) {
+              case 'automationEvents':
+                return jsonEncode(queued ? [event] : []);
+              case 'pending':
+                return null;
+              case 'automationAck':
+                queued = false;
+                return null;
+              case 'automationConfig':
+                return null;
+              case 'transactionSaved':
+                expect((await db.readAll()).entries.single.kind, 'income');
+                receipts.add(Map<String, dynamic>.from(call.arguments as Map));
+                return true;
+              default:
+                throw StateError('Unexpected ${call.method}');
+            }
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(NativeSession.channel, null),
+      );
+
+      await AutomationSync.reconcile(db);
+
+      final data = await db.readAll();
+      expect(data.entries.single.kind, 'income');
+      expect(data.entries.single.amount, 250000);
+      expect(data.entries.single.note, 'Ana');
+      expect(receipts.single['kind'], 'income');
+      expect(receipts.single['merchant'], 'Ana');
+      await AutomationSync.reconcile(db);
+      expect((await db.readAll()).entries.length, 1);
+      expect(receipts.length, 1);
+    },
+  );
 
   test('Rolled-back purchase never confirms or acknowledges a save', () async {
     final db = AppDatabase.forTesting(NativeDatabase.memory());

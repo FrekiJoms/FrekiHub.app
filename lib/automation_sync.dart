@@ -145,6 +145,11 @@ abstract final class AutomationSync {
         } else if (action == 'rule_toast') {
           await db.pref('ruleToast:$id', event['title']);
         } else if (action == 'purchase') {
+          final kind = event['kind'] as String? ?? 'expense';
+          if (kind != 'expense' && kind != 'income') {
+            acknowledged.add(id);
+            continue;
+          }
           int amount;
           try {
             amount = parseMoney(
@@ -169,7 +174,7 @@ abstract final class AutomationSync {
                 Entry(
                   id: id,
                   day: dayKey(time),
-                  kind: 'expense',
+                  kind: kind,
                   amount: amount,
                   currency: event['currency'] as String,
                   category: event['category'] as String? ?? 'Other',
@@ -186,6 +191,7 @@ abstract final class AutomationSync {
               jsonEncode({
                 'id': id,
                 'title': 'Transaction saved',
+                'kind': kind,
                 'amount': money(amount, event['currency'] as String),
                 'merchant': merchant,
                 'time': event['time'],

@@ -70,11 +70,12 @@ abstract final class PermissionHints {
       icon: LucideIcons.mapPin,
     ),
     'notificationPermission': PermissionHintSpec(
-      title: 'Detect purchases from your apps',
-      intro: 'Turn selected payment alerts into queued purchases.',
-      benefit: 'Use your selected payment apps',
-      detail: 'Android grants notification access. FrekiHub filters purchase alerts from the payment apps you select.',
-      control: 'OTPs and unrelated notification text are not stored. Purchases are saved to Finance when FrekiHub imports them.',
+      title: 'Detect Finance transactions from your apps',
+      intro:
+          'Read selected finance alerts for clear expense and income activity.',
+      benefit: 'Use your selected finance apps',
+      detail: 'Android grants notification access. FrekiHub checks only alerts from the finance apps you select and skips unclear messages.',
+      control: 'OTPs and unrelated alert text are not stored. Clear transactions are queued locally and saved to Finance when FrekiHub imports them.',
       next: 'Select FrekiHub on the next screen and allow notification access.',
       action: 'Allow notification access',
       icon: LucideIcons.creditCard,

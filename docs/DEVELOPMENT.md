@@ -63,13 +63,14 @@ flutter analyze
 | Committed data-action feedback | `test/data_feedback_test.dart` (in-memory session save/edit/delete, cancellation, notice surviving form dismissal, pending/failed operations never announcing success) |
 | Top error pills/form validation | `test/toast_test.dart` (replacement, expiry, dismissal, narrow 2× text, reduced motion, invalid transaction and syntax diagnostics) |
 | Activity storage/backup/native session import | `test/activity_test.dart`; `test/record_location_test.dart` covers opt-in foreground capture, session/Finance positions, failed/denied fixes, backdating, Finance updates, rollback and trigger migration |
-| Purchase receipts/settings/toast replay and rollback | `test/transaction_notification_test.dart` |
+| Finance notification expense/income import, saved receipts and rollback | `test/transaction_notification_test.dart`; native parser matching is checked by `FinanceNotificationParserCheck.java` |
 | Compiler/typed fields/targets/schedules | `test/rule_language_test.dart` |
 | Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, completion and saved enabled flags) |
 | Position freshness/full-range query/map catalog | `test/map_records_test.dart` |
 | Shared loading placeholders | `test/skeleton_test.dart` (unchanged value geometry, reduced-motion static state, pulse disposal, semantics, blocked placeholder interaction, save guards and log loading); preserve `test/startup_test.dart` |
 | Compact map toolbar/record selection/trace/recovery | `test/map_screen_test.dart` (inline mode/arrow navigation, advanced custom date/time controls, disabled Custom arrows, late location camera fitting, unlocated logs, top alignment, centered vertical tool rail, horizontal legend scrolling, narrow/enlarged text, landscape, zoom, selection/trace and tile retry) |
 | Native local reminder clock calculation | `android/app/src/test/java/com/frekihub/freki_hub/RuleNotificationScheduleCheck.java` |
+| Native finance notification parser | `android/app/src/test/java/com/frekihub/freki_hub/FinanceNotificationParserCheck.java` |
 
 Example targeted run:
 
@@ -78,6 +79,16 @@ flutter test test/rule_language_test.dart test/rule_editor_test.dart
 ```
 
 The Java reminder check is a standalone main method with ten clock assertions, not a standard JUnit suite automatically executed by `flutter test`. It needs compiled Kotlin production classes and the matching Kotlin/JVM classpath; do not claim it ran unless explicitly compiled/executed. Temporary native-check artifacts from earlier sessions are disposable and are not a reproducible checked-in build script.
+
+The finance parser check is a pure Java standalone main method and can run without Android classes or a device:
+
+```powershell
+New-Item -ItemType Directory -Force .tmp/finance-notification-parser | Out-Null
+javac -encoding UTF-8 -d .tmp/finance-notification-parser android/app/src/main/java/com/frekihub/freki_hub/FinanceNotificationParser.java android/app/src/test/java/com/frekihub/freki_hub/FinanceNotificationParserCheck.java
+if ($LASTEXITCODE -eq 0) { java -cp .tmp/finance-notification-parser com.frekihub.freki_hub.FinanceNotificationParserCheck }
+```
+
+Keep these outputs under ignored `.tmp`; standalone parser checks do not verify Android notification delivery or permission state.
 
 Widget tests use in-memory Drift and fake native channel responses. Map tests inject memory tiles; they do not verify live Geoapify availability. Use `tester.runAsync` for real asynchronous setup when necessary and `addTearDown(db.close)` for database cleanup outside the widget fake clock. A hanging test cleanup does not prove the app startup is hung.
 
@@ -139,7 +150,7 @@ Use the actual connected device ID. Confirm the tool reports a successful attach
 
 Flutter's [hot reload guide](https://docs.flutter.dev/tools/hot-reload) describes reload limits; the [performance guide](https://docs.flutter.dev/perf/ui-performance) explains physical-device/profile-mode measurement. Prefer this loop over reinstalling for every UI edit. Keep normal feature documentation and commit/push delivery; avoid repeated broad tests without new evidence.
 
-The focused device checklist covers cold open/reopen/Retry, light/dark and enlarged text, reduced motion, selector/wheel cancel/confirm, long-press quick add, active-service clock-out, HyperIsland fallback, notification permission denial/retry, sound settings, location-off behavior, enter/exit radius, periodic samples, daily/weekday reminders, purchase listener formats, map network failure and backup/reset. Force-stop must be tested separately from normal closing; it intentionally suspends background execution until reopening.
+The focused device checklist covers cold open/reopen/Retry, light/dark and enlarged text, reduced motion, selector/wheel cancel/confirm, long-press quick add, active-service clock-out, HyperIsland fallback, notification permission denial/retry, sound settings, location-off behavior, enter/exit radius, periodic samples, daily/weekday reminders, selected-app notification-listener access, real expense/income alert formats and delayed Finance reconciliation, map network failure and backup/reset. Force-stop must be tested separately from normal closing; it intentionally suspends background execution until reopening.
 
 ### Geoapify map configuration
 

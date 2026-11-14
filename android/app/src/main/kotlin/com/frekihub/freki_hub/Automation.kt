@@ -155,20 +155,43 @@ class PurchaseListener : NotificationListenerService() {
         val apps = config.optJSONArray("apps") ?: return
         if ((0 until apps.length()).none { apps.getString(it) == sbn.packageName }) return
         val extras = sbn.notification.extras
-        val text = listOf(extras.getCharSequence(Notification.EXTRA_TITLE), extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT)).filterNotNull().joinToString(" ")
-        if (Regex("(?i)otp|one.time.password|verification.code|failed|declined|refunded|cashback|promo|received|credited|payment request").containsMatchIn(text)) return
-        if (!Regex("(?i)\\b(paid|purchased|purchase successful|payment successful|debited)\\b").containsMatchIn(text)) return
-        val amounts = Regex("(?i)(PHP|₱|USD|EUR|GBP)\\s*([0-9][0-9,]*(?:\\.[0-9]{1,2})?)(?![0-9.,])").findAll(text).toList()
-        if (amounts.size != 1) return
-        val amount = amounts.first(); if (!Regex("(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\\.[0-9]{1,2})?").matches(amount.groupValues[2])) return; val currency = if (amount.groupValues[1] == "₱") "PHP" else amount.groupValues[1].uppercase()
+        val textParts = mutableListOf<String>()
+        listOf(
+            Notification.EXTRA_TITLE,
+            Notification.EXTRA_TEXT,
+            Notification.EXTRA_BIG_TEXT,
+            Notification.EXTRA_SUB_TEXT,
+            Notification.EXTRA_SUMMARY_TEXT,
+        ).forEach { key -> extras.getCharSequence(key)?.toString()?.let(textParts::add) }
+        extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)?.forEach { textParts.add(it.toString()) }
+        extras.getParcelableArray("android.messages")?.forEach { message ->
+            (message as? Bundle)?.getCharSequence("text")?.toString()?.let(textParts::add)
+        }
+        val text = textParts.map(String::trim).filter(String::isNotEmpty).distinct().joinToString(" ")
+        val transaction = FinanceNotificationParser.parse(text) ?: return
         val reference = Regex("(?i)(?:reference|ref|transaction)(?:\\s*(?:no|number|id))?[.:#\\s]+([A-Z0-9-]{6,})").find(text)?.groupValues?.get(1)
+        val idPrefix = if (transaction.kind == "income") "income" else "purchase"
         val id = sbn.packageName + ":" + (reference ?: (sbn.key + ":" + sbn.postTime))
-        val merchant = Regex("(?i)\\b(?:at|to)\\s+([^.!\\n]{2,80})").find(text)?.groupValues?.get(1)?.split(Regex("(?i)\\s+(?:reference|ref|transaction)\\b"))?.first()?.trim() ?: "Item not specified"
-        val fingerprint = sbn.key + ":" + currency + ":" + amount.groupValues[2] + ":" + merchant
+        val counterparty = transaction.counterparty
+        val fingerprint = sbn.key + ":" + transaction.kind + ":" + transaction.currency + ":" + transaction.amount + ":" + counterparty
         val previous = JSONObject(Automation.prefs(this).getString("lastPurchase", "{}")!!)
         if (previous.optString("fingerprint") == fingerprint && System.currentTimeMillis() - previous.optLong("time") < 120000) return
         Automation.prefs(this).edit().putString("lastPurchase", JSONObject().put("fingerprint", fingerprint).put("time", System.currentTimeMillis()).toString()).commit()
-        val event = JSONObject(Automation.prefs(this).getString("lastLocation", "{}")!!).put("id", "purchase:$id").put("time", sbn.postTime).put("action", "purchase").put("title", if (merchant == "Item not specified") "Purchased · item not specified" else "Purchased at $merchant").put("merchant", merchant).put("amount", amount.groupValues[2].replace(",", "")).put("currency", currency).put("package", sbn.packageName).put("reference", reference ?: "")
+        val eventTitle = when (transaction.kind) {
+            "income" -> if (counterparty == "Not specified") "Received income" else "Received income · $counterparty"
+            else -> if (counterparty == "Item not specified") "Purchased · item not specified" else "Purchased at $counterparty"
+        }
+        val event = JSONObject(Automation.prefs(this).getString("lastLocation", "{}")!!)
+            .put("id", "$idPrefix:$id")
+            .put("time", sbn.postTime)
+            .put("action", "purchase")
+            .put("kind", transaction.kind)
+            .put("title", eventTitle)
+            .put("merchant", counterparty)
+            .put("amount", transaction.amount)
+            .put("currency", transaction.currency)
+            .put("package", sbn.packageName)
+            .put("reference", reference ?: "")
         if (System.currentTimeMillis() - event.optLong("locationTime", 0) > 120000) { event.remove("lat"); event.remove("lng"); event.put("location", "Location unavailable") }
         val sourceName = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }; event.put("source", sourceName); Automation.emit(this, event)
     }
