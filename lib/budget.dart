@@ -19,6 +19,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   bool _cardMetricsReady = false;
   String _timelineSort = 'date'; // date | amount | type
   bool _timelineDesc = false;
+  bool _historyExpanded = true;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -589,63 +590,71 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _scopeTag(c),
-              const SizedBox(width: 4),
-              Builder(
-                builder: (anchor) => IconButton(
-                  tooltip: 'Sort',
-                  visualDensity: VisualDensity.compact,
-                  onPressed: withFeedback(() async {
-                    final current = '${_timelineSort}_${_timelineDesc ? 'desc' : 'asc'}';
-                    final value = await showChoiceMenu<String>(
-                      anchor,
-                      choices: const {
-                        'date_asc': 'Date (oldest first)',
-                        'date_desc': 'Date (newest first)',
-                        'amount_asc': 'Amount (low to high)',
-                        'amount_desc': 'Amount (high to low)',
-                        'type_asc': 'Type',
-                        'type_desc': 'Type (reverse)',
-                      },
-                      selected: current,
-                    );
-                    if (value == null) return;
-                    final parts = value.split('_');
-                    setState(() {
-                      _timelineSort = parts[0];
-                      _timelineDesc = parts[1] == 'desc';
-                    });
-                  }),
-                  icon: Icon(
-                    _timelineDesc ? LucideIcons.arrowDownWideNarrow : LucideIcons.arrowUpNarrowWide,
-                    size: 16,
+              if (_historyExpanded) ...[
+                const SizedBox(width: 4),
+                Builder(
+                  builder: (anchor) => IconButton(
+                    tooltip: 'Sort',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: withFeedback(() async {
+                      final current = '${_timelineSort}_${_timelineDesc ? 'desc' : 'asc'}';
+                      final value = await showChoiceMenu<String>(
+                        anchor,
+                        choices: const {
+                          'date_asc': 'Date (oldest first)',
+                          'date_desc': 'Date (newest first)',
+                          'amount_asc': 'Amount (low to high)',
+                          'amount_desc': 'Amount (high to low)',
+                          'type_asc': 'Type',
+                          'type_desc': 'Type (reverse)',
+                        },
+                        selected: current,
+                      );
+                      if (value == null) return;
+                      final parts = value.split('_');
+                      setState(() {
+                        _timelineSort = parts[0];
+                        _timelineDesc = parts[1] == 'desc';
+                      });
+                    }),
+                    icon: Icon(
+                      _timelineDesc ? LucideIcons.arrowDownWideNarrow : LucideIcons.arrowUpNarrowWide,
+                      size: 16,
+                    ),
                   ),
                 ),
+              ],
+              IconButton(
+                tooltip: _historyExpanded ? 'Minimize' : 'Expand',
+                visualDensity: VisualDensity.compact,
+                onPressed: withFeedback(() => setState(() => _historyExpanded = !_historyExpanded)),
+                icon: Icon(_historyExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
               ),
             ],
           ),
         ),
-        if (timelineRows.isEmpty)
-          Surface(
-            child: EmptyState(
-              'A clean slate.',
-              wallet == null
-                  ? 'Add a transaction or a planner rule.'
-                  : 'No activity for $wallet this month.',
-              LucideIcons.wallet,
-            ),
-          )
-        else
-          Surface(
-            child: Column(
-              children: [
-                for (var i = 0; i < timelineRows.length; i++) ...[
-                  _TimelineRow(item: timelineRows[i], currency: d.currency, showDay: true),
-                  if (i != timelineRows.length - 1)
-                    Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
-                ],
-              ],
-            ),
-          ),
+        if (_historyExpanded)
+          (timelineRows.isEmpty
+              ? Surface(
+                  child: EmptyState(
+                    'A clean slate.',
+                    wallet == null
+                        ? 'Add a transaction or a planner rule.'
+                        : 'No activity for $wallet this month.',
+                    LucideIcons.wallet,
+                  ),
+                )
+              : Surface(
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < timelineRows.length; i++) ...[
+                        _TimelineRow(item: timelineRows[i], currency: d.currency, showDay: true),
+                        if (i != timelineRows.length - 1)
+                          Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
+                      ],
+                    ],
+                  ),
+                )),
       ],
         ),
         Positioned(

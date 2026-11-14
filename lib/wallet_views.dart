@@ -533,7 +533,7 @@ class _TotalMetric extends StatelessWidget {
   );
 }
 
-class _WalletMonthCard extends StatelessWidget {
+class _WalletMonthCard extends StatefulWidget {
   final FinanceMonth month;
   final String? wallet;
   final List<String> wallets;
@@ -551,21 +551,29 @@ class _WalletMonthCard extends StatelessWidget {
     required this.onScope,
   });
 
-  String get scope => wallet ?? 'All wallets';
+  @override
+  State<_WalletMonthCard> createState() => _WalletMonthCardState();
+}
+
+class _WalletMonthCardState extends State<_WalletMonthCard> {
+  bool _expanded = true;
+
+  String get scope => widget.wallet ?? 'All wallets';
 
   @override
   Widget build(BuildContext c) {
+    final month = widget.month;
     final period = month.period;
     final last = DateTime(period.year, period.month + 1, 0);
-    final amount = masked
-        ? walletMaskedAmount(currency)
-        : money(month.net, currency);
-    final safe = masked
-        ? walletMaskedAmount(currency)
-        : money(month.safe, currency);
+    final amount = widget.masked
+        ? walletMaskedAmount(widget.currency)
+        : money(month.net, widget.currency);
+    final safe = widget.masked
+        ? walletMaskedAmount(widget.currency)
+        : money(month.safe, widget.currency);
     final theme = Theme.of(c);
     return Surface(
-      padding: const EdgeInsets.fromLTRB(6, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(6, 4, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -573,10 +581,10 @@ class _WalletMonthCard extends StatelessWidget {
             children: [
               IconButton(
                 tooltip: 'Previous month',
-                onPressed: onPeriod == null
+                onPressed: widget.onPeriod == null
                     ? null
                     : withFeedback(
-                        () => onPeriod!(
+                        () => widget.onPeriod!(
                           DateTime(period.year, period.month - 1),
                         ),
                       ),
@@ -591,22 +599,48 @@ class _WalletMonthCard extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Next month',
-                onPressed: onPeriod == null
+                onPressed: widget.onPeriod == null
                     ? null
                     : withFeedback(
-                        () => onPeriod!(
+                        () => widget.onPeriod!(
                           DateTime(period.year, period.month + 1),
                         ),
                       ),
                 icon: const Icon(LucideIcons.chevronRight),
               ),
+              IconButton(
+                tooltip: _expanded ? 'Minimize month card' : 'Expand month card',
+                onPressed: withFeedback(() => setState(() => _expanded = !_expanded)),
+                icon: Icon(_expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
+              ),
             ],
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
+          if (!_expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 0, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Month net · $scope',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  ),
+                  Text(
+                    amount,
+                    style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                 Row(
                   children: [
                     Expanded(
@@ -684,11 +718,11 @@ class _WalletMonthCard extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Semantics(
-                    button: onScope != null,
+                    button: widget.onScope != null,
                     label: 'Finance scope, currently $scope',
                     child: InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: onScope,
+                      onTap: widget.onScope,
                       child: Container(
                         constraints: const BoxConstraints(maxWidth: 230),
                         padding: const EdgeInsets.symmetric(
@@ -751,7 +785,7 @@ class _WalletMonthCard extends StatelessWidget {
                 Text(
                   month.commitments == 0
                       ? 'No remaining planned expenses or savings for $scope in ${DateFormat('MMMM').format(period)}.'
-                      : 'After ${money(month.commitments, currency)} in remaining planned expenses and savings for $scope.',
+                      : 'After ${money(month.commitments, widget.currency)} in remaining planned expenses and savings for $scope.',
                   style: TextStyle(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontSize: 12,
@@ -776,19 +810,19 @@ class _WalletMonthCard extends StatelessWidget {
                             width: width,
                             child: _MonthMetric(
                               label: value.$1,
-                              value: masked
-                                  ? walletMaskedAmount(currency)
-                                  : money(value.$2, currency),
+                              value: widget.masked
+                                  ? walletMaskedAmount(widget.currency)
+                                  : money(value.$2, widget.currency),
                             ),
                           ),
                       ],
                     );
                   },
                 ),
-                if (wallets.length > 1 && onScope != null) ...[
+                if (widget.wallets.length > 1 && widget.onScope != null) ...[
                   const SizedBox(height: 12),
                   Text(
-                    wallet == null
+                    widget.wallet == null
                         ? 'Tap the scope chip to read one wallet only. Cards below stay separate.'
                         : 'Charts, planner and timeline below follow $scope. Tap a card to open it.',
                     style: TextStyle(
