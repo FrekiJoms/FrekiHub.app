@@ -652,16 +652,18 @@ class _PillNavigationState extends State<PillNavigation>
     final label = labels[widget.index];
     _tooltipEntry = OverlayEntry(
       builder: (c) => Positioned(
-        left: center.dx - 28,
-        top: center.dy - 34,
-        width: 56,
+        left: center.dx - 80,
+        top: center.dy - 36,
+        width: 160,
         child: IgnorePointer(
-          child: _NavTooltip(label: label),
+          child: Center(
+            child: _NavTooltip(label: label),
+          ),
         ),
       ),
     );
     overlay.insert(_tooltipEntry!);
-    _tooltipTimer = Timer(const Duration(milliseconds: 900), _removeTooltip);
+    _tooltipTimer = Timer(const Duration(milliseconds: 1800), _removeTooltip);
   }
 
   Rect? get current {
@@ -872,18 +874,20 @@ class _PillNavigationState extends State<PillNavigation>
                         if (rect == null) return const SizedBox.shrink();
                         const underlineWidth = 14.0;
                         const underlineHeight = 3.0;
-                        final underlineRect = Rect.fromCenter(
-                          center: Offset(rect.center.dx, rect.bottom - 2),
-                          width: underlineWidth,
+                        return Positioned(
+                          left: rect.left,
+                          width: rect.width,
+                          top: rect.bottom - 5,
                           height: underlineHeight,
-                        );
-                        return Positioned.fromRect(
-                          rect: underlineRect,
                           child: IgnorePointer(
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF34C759),
-                                borderRadius: BorderRadius.circular(2),
+                            child: Center(
+                              child: Container(
+                                width: underlineWidth,
+                                height: underlineHeight,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF34C759),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
                               ),
                             ),
                           ),
@@ -1166,10 +1170,10 @@ class _NavTooltipState extends State<_NavTooltip>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 160),
-    reverseDuration: const Duration(milliseconds: 180),
+    duration: const Duration(milliseconds: 180),
+    reverseDuration: const Duration(milliseconds: 220),
   )..forward();
-  late final Timer _hide = Timer(const Duration(milliseconds: 720), () {
+  late final Timer _hide = Timer(const Duration(milliseconds: 1400), () {
     if (mounted) _c.reverse();
   });
 
@@ -1185,34 +1189,37 @@ class _NavTooltipState extends State<_NavTooltip>
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fade = CurvedAnimation(parent: _c, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
-    return FadeTransition(
-      opacity: fade,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
-            .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic)),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          decoration: BoxDecoration(
-            color: scheme.surface.withValues(alpha: dark ? .94 : .97),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: scheme.onSurface.withValues(alpha: .08)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .14),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+    return Material(
+      type: MaterialType.transparency,
+      child: FadeTransition(
+        opacity: fade,
+        child: SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
+              .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic)),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: dark ? .94 : .97),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: scheme.onSurface.withValues(alpha: .08)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: .14),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              widget.label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              softWrap: false,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
               ),
-            ],
-          ),
-          child: Text(
-            widget.label,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: scheme.onSurface,
             ),
           ),
         ),
