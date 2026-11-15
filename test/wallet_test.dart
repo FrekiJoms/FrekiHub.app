@@ -396,8 +396,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Plan'));
     await tester.pumpAndSettle();
+    final planSheet = find.byType(PanelContent);
     expect(find.text('Plan · GCash'), findsOneWidget);
-    expect(find.text('Rent'), findsOneWidget);
+    expect(
+      find.descendant(of: planSheet, matching: find.text('Rent')),
+      findsOneWidget,
+    );
     expect(find.text('Allowance'), findsNothing);
     Navigator.of(tester.element(find.text('Plan · GCash'))).pop();
     await tester.pumpAndSettle();
@@ -433,10 +437,13 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('GCASH'), findsOneWidget);
+    final gcashCard = find.byWidgetPredicate(
+      (w) => w is WalletCard && w.account.name == 'GCash',
+    );
+    expect(gcashCard, findsOneWidget);
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('GCASH')),
+      tester.getCenter(gcashCard),
     );
     await gesture.moveBy(const Offset(-120, 0));
     await tester.pump();
@@ -450,6 +457,9 @@ void main() {
 
     final saved = await tester.runAsync(() => db.readAll());
     expect(jsonDecode(saved!.prefs['walletOrder']!), ['Maya', 'GCash']);
-    expect(find.text('MAYA'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((w) => w is WalletCard && w.account.name == 'Maya'),
+      findsOneWidget,
+    );
   });
 }

@@ -586,18 +586,20 @@ class WalletCard extends StatelessWidget {
                         SizedBox(width: 7 * f),
                       ],
                       Expanded(
-                        child: Text(
-                          account.name.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: ink,
-                            fontSize: 10.5 * f,
-                            height: 1,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 1.1 * f,
-                          ),
-                        ),
+                        child: hasImage
+                            ? const SizedBox.shrink()
+                            : Text(
+                                account.name.toUpperCase(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: ink,
+                                  fontSize: 10.5 * f,
+                                  height: 1,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.1 * f,
+                                ),
+                              ),
                       ),
                       if (showMenu)
                         Semantics(
