@@ -348,4 +348,39 @@ target == settings_page {
       throwsFormatException,
     );
   });
+
+  test('notifications.sms_enabled exposes boolean metadata, snapshot state and type validation', () {
+    expect(RuleCatalog.fields, contains('notifications.sms_enabled'));
+    expect(RuleCatalog.booleanFields, contains('notifications.sms_enabled'));
+    expect(
+      RuleCatalog.snapshot(
+        AppData([], [], [], {}),
+      )['notifications.sms_enabled'],
+      false,
+    );
+    expect(
+      RuleCatalog.snapshot(
+        AppData([], [], [], {'smsScanning': 'true'}),
+      )['notifications.sms_enabled'],
+      true,
+    );
+    expect(
+      RuleCatalog.snapshot(
+        AppData([], [], [], {'smsScanning': 'false'}),
+      )['notifications.sms_enabled'],
+      false,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == notifications { if (notifications.sms_enabled == true) { log("SMS enabled"); } }',
+      ),
+      returnsNormally,
+    );
+    expect(
+      () => RuleCompiler.compile(
+        'target == notifications { if (notifications.sms_enabled == "true") { log("Wrong type"); } }',
+      ),
+      throwsFormatException,
+    );
+  });
 }

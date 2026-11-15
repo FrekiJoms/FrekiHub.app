@@ -157,7 +157,9 @@ void main() {
         dated('f', '2030-02-01', 'expense', 9999, 'GCash'),
       ],
       const [],
-      {'methods': jsonEncode(['Cash', 'GCash'])},
+      {
+        'methods': jsonEncode(['Cash', 'GCash']),
+      },
     );
     expect(scopedData.savingsByWallet, {'GCash': 10000});
     expect(
@@ -210,7 +212,9 @@ void main() {
           position: 1,
         ),
       ],
-      {'methods': jsonEncode(['Cash', 'GCash'])},
+      {
+        'methods': jsonEncode(['Cash', 'GCash']),
+      },
     );
     final period = DateTime(2030, 1);
     final planned = project(scopedData, period, DateTime(2030, 1, 31));
@@ -237,11 +241,10 @@ void main() {
     expect(gcash.safe, 45000);
 
     expect(walletCommitments(planned), {'GCash': 20000, 'Cash': 7000});
-    final accounts = walletAccounts(
-      scopedData,
-      ['GCash', 'Cash'],
-      walletCommitments(planned),
-    );
+    final accounts = walletAccounts(scopedData, [
+      'GCash',
+      'Cash',
+    ], walletCommitments(planned));
     expect(accounts.first.committed, 20000);
     expect(accounts.last.committed, 7000);
   });
@@ -368,11 +371,22 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MONTH NET · GCASH'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('SAVED · GCASH'), 300);
+
+    await tester.ensureVisible(find.text('Savings'));
+    await tester.tap(find.text('Savings'));
+    await tester.pumpAndSettle();
+    expect(find.text('SAVED · GCASH'), findsOneWidget);
     expect(find.textContaining('from this wallet'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Plan for GCash.'), 300);
+    Navigator.of(tester.element(find.text('SAVED · GCASH'))).pop();
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Plan'));
+    await tester.tap(find.text('Plan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Plan · GCash'), findsOneWidget);
     expect(find.text('Rent'), findsOneWidget);
     expect(find.text('Allowance'), findsNothing);
+    Navigator.of(tester.element(find.text('Plan · GCash'))).pop();
     await tester.pumpAndSettle();
   });
 

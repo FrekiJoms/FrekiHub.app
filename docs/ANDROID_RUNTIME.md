@@ -20,7 +20,7 @@ The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 
 | `TransactionNotifications` | Post-commit Finance receipt and tap destination |
 | `NotificationSoundSettings` | Notification channel settings and sound observations |
 
-SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, `runtime_events` and bounded `runtime_events_N` segments. Session state stores current ID/start/kind/note and pending native clock-out ID/end. Automation stores config, separate snapshot, legacy queued events during migration, last position/finance-notification fingerprint, active rule, inside states and branch/cooldown state. Reminder storage holds each schedule's definition/fingerprint/token/due/sent/limit/exact state. None directly modifies Flutter's Drift tables.
+SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, `runtime_events` and bounded `runtime_events_N` segments. Session state stores current ID/start/kind/note and pending native clock-out ID/end. Automation stores config, separate snapshot, legacy queued events during migration, `smsLastScan`, last position/finance-notification fingerprint, active rule, inside states and branch/cooldown state. Reminder storage holds each schedule's definition/fingerprint/token/due/sent/limit/exact state. None directly modifies Flutter's Drift tables.
 
 ## What works with Flutter closed
 
@@ -43,7 +43,7 @@ These are **local system notifications**, not FCM/server push. Force-stop is dif
 The manifest declares internet/network state, fine/coarse/background location, notification posting, exact alarms, boot and foreground/special-use service permissions. Finance notification detection is guarded by notification-listener binding permission; geofences use Play services location 21.4.0.
 
 - Location rules require precise location and background access; enabling OS location is separate from permission grants.
-- Finance notification detection requires notification-listener access plus explicit app selection. This differs from permission to post FrekiHub's saved-entry confirmations.
+- Finance notification detection requires notification-listener access plus explicit app selection. Optional SMS transaction scanning requires `READ_SMS` permission and the `smsScanning` toggle. Both differ from permission to post FrekiHub's saved-entry confirmations.
 - Android 13+ notification posting uses its own permission prompt.
 - Exact reminder scheduling checks Alarms & reminders access and falls back to inexact alarms if denied/revoked.
 - Cross-app session confirmation requires Android Display over other apps access; it is opt-in and checked before each overlay. Android/system or protected surfaces can control whether overlays appear.
@@ -118,6 +118,7 @@ Channel name: `frekihub/session`. Most payloads are maps or JSON strings; confir
 | `automationEvents`, `automationAck`, `automationStatus` | At most 200 queued events per JSON batch, committed-prefix IDs, access plus pending_count/logging_paused/timer_available map |
 | `locationPermission`, `backgroundPermission`, `currentLocation` | Precise access prompt, OS app settings, current-position JSON or platform error |
 | `notificationPermission`, `notificationApps` | Notification-listener settings, installed launcher app name/package maps |
+| `smsPermission`, `smsScan` | `READ_SMS` permission prompt; background inbox scan advancing `smsLastScan` when `smsScanning` is enabled |
 | `transactionSaved`, `purchaseDestination` | Receipt map → post result, consume `budget` tap destination |
 | `receiptNotificationsAllowed`, `receiptNotificationPermission` | Posting status/prompt for saved confirmations |
 | `reminderPermission`, `exactReminderPermission`, `reminderStatus` | Posting prompt, exact-access settings/check, enabled/exact map |

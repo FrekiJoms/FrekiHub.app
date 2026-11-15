@@ -393,50 +393,52 @@ class PageBody extends StatelessWidget {
       final header = hasHeader
           ? Entrance(
               child: compactHeader
-            ? Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 56),
-                child: Column(
-                  children: [
-                    PageTitle(title ?? ""),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle ?? "",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Theme.of(c).colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 56),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
+                  ? Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 56),
+                      child: Column(
+                        children: [
+                          PageTitle(title ?? ""),
+                          const SizedBox(height: 4),
+                          Text(
                             subtitle ?? "",
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 12,
-                              height: 1.4,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
                               color: Theme.of(c).colorScheme.onSurfaceVariant,
                             ),
                           ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(right: 56),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  subtitle ?? "",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.4,
+                                    fontWeight: FontWeight.w500,
+                                    color: Theme.of(c)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              ?action,
+                            ],
+                          ),
                         ),
-                        ?action,
+                        const SizedBox(height: 12),
+                        PageTitle(title ?? ""),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  PageTitle(title ?? ""),
-                ],
-              ),
-      )
+            )
           : const SizedBox.shrink();
       final content = <Widget>[
         if (leading != null)
@@ -466,7 +468,7 @@ class PageBody extends StatelessWidget {
                       Rect.fromLTWH(bounds.left, bounds.top, bounds.width, 28),
                     ),
                 child: ListView(
-                   key: PageStorageKey(title ?? 'page'),
+                  key: PageStorageKey(title ?? 'page'),
                   controller: scrollController,
                   padding: EdgeInsets.fromLTRB(
                     horizontal,
@@ -603,7 +605,6 @@ class _PillNavigationState extends State<PillNavigation>
   final List<double> _press = List<double>.filled(4, 1.0);
   Timer? _tooltipTimer;
   int? _lastIndex;
-  // ignore: prefer_final_fields
   bool _forceUnderlineAnimation = false;
 
   static const labels = ['Home', 'Map', 'Sessions', 'Finance'];
@@ -632,32 +633,32 @@ class _PillNavigationState extends State<PillNavigation>
   @override
   void initState() {
     super.initState();
-    motion = AnimationController(vsync: this);
-    _attachController();
+    motion = AnimationController(vsync: this)
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed &&
+            _forceUnderlineAnimation &&
+            mounted) {
+          setState(() => _forceUnderlineAnimation = false);
+        }
+      });
     WidgetsBinding.instance.addPostFrameCallback((_) => measure());
   }
 
   @override
   void didUpdateWidget(covariant PillNavigation oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tabController != widget.tabController) {
-      _detachController();
-      _attachController();
-    }
     if (oldWidget.index != widget.index) {
+      _lastIndex = oldWidget.index;
+      _forceUnderlineAnimation =
+          widget.index >= 0 &&
+          oldWidget.index >= 0 &&
+          (widget.index - oldWidget.index).abs() > 1;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         measure();
         _showNavTooltip();
       });
     }
   }
-
-  void _attachController() {}
-
-  void _detachController() {}
-
-  // ignore: unused_element
-  void _onTabScroll() {}
 
   void _removeTooltip() {
     _tooltipTimer?.cancel();
@@ -671,7 +672,8 @@ class _PillNavigationState extends State<PillNavigation>
     final i = index ?? widget.index;
     if (i < 0 || i >= keys.length) return;
     final selectedKey = keys[i];
-    final itemBox = selectedKey.currentContext?.findRenderObject() as RenderBox?;
+    final itemBox =
+        selectedKey.currentContext?.findRenderObject() as RenderBox?;
     final overlay = Overlay.maybeOf(context);
     if (itemBox == null || !itemBox.hasSize || overlay == null) return;
     _removeTooltip();
@@ -683,9 +685,7 @@ class _PillNavigationState extends State<PillNavigation>
         top: center.dy - 36,
         width: 160,
         child: IgnorePointer(
-          child: Center(
-            child: _NavTooltip(label: label),
-          ),
+          child: Center(child: _NavTooltip(label: label)),
         ),
       ),
     );
@@ -733,13 +733,20 @@ class _PillNavigationState extends State<PillNavigation>
     final next = (widget.index >= 0 && widget.index < rects.length)
         ? rects[widget.index]
         : null;
-    final controllerDriven = widget.tabController != null && widget.tabController!.hasClients;
-    final changed = !_sameRects(_tabRects, rects) || target != next;
+    final controllerDriven =
+        widget.tabController != null && widget.tabController!.hasClients;
+    final changed =
+        !_sameRects(_tabRects, rects) ||
+        target != next ||
+        _forceUnderlineAnimation;
     if (!changed) return;
     setState(() {
       _tabRects = rects;
       if (_forceUnderlineAnimation) {
-        final prev = (_lastIndex != null && _lastIndex! >= 0 && _lastIndex! < rects.length)
+        final prev =
+            (_lastIndex != null &&
+                _lastIndex! >= 0 &&
+                _lastIndex! < rects.length)
             ? rects[_lastIndex!]
             : (from ?? target ?? next);
         from = prev ?? next;
@@ -861,7 +868,6 @@ class _PillNavigationState extends State<PillNavigation>
   void dispose() {
     closeMenu();
     _removeTooltip();
-    _detachController();
     motion.dispose();
     super.dispose();
   }
@@ -921,7 +927,8 @@ class _PillNavigationState extends State<PillNavigation>
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
             child: ValueListenableBuilder<bool>(
-              valueListenable: widget.swiping ?? const AlwaysStoppedAnimation(false),
+              valueListenable:
+                  widget.swiping ?? const AlwaysStoppedAnimation(false),
               builder: (context, swiping, child) => GlassContainer(
                 useOwnLayer: true,
                 shape: const LiquidRoundedSuperellipse(borderRadius: 28),
@@ -940,8 +947,9 @@ class _PillNavigationState extends State<PillNavigation>
                   borderRadius: BorderRadius.circular(28),
                   color: scheme.surface.withValues(alpha: dark ? .52 : .62),
                   border: Border.all(
-                    color: (dark ? Colors.white : Colors.white)
-                        .withValues(alpha: dark ? .12 : .55),
+                    color: (dark ? Colors.white : Colors.white).withValues(
+                      alpha: dark ? .12 : .55,
+                    ),
                     width: 0.8,
                   ),
                 ),
@@ -981,48 +989,49 @@ class _PillNavigationState extends State<PillNavigation>
                       },
                     ),
                     Row(
-                      children: List.generate(
-                        labels.length,
-                        (i) {
-                          final selected = widget.index == i;
-                          final color = selected
-                              ? scheme.onSurface
-                              : scheme.onSurfaceVariant.withValues(alpha: .82);
-                          return Expanded(
-                            child: Semantics(
-                              selected: selected,
-                              button: true,
-                              label: labels[i],
-                              child: GestureDetector(
-                                behavior: HitTestBehavior.opaque,
-                                onTapDown: (_) => _setPressed(i, true),
-                                onTapCancel: () => _setPressed(i, false),
-                                onTapUp: (_) => _setPressed(i, false),
-                                onTap: () {
-                                  _showNavTooltip(i);
-                                  widget.onChanged(i);
-                                },
-                                child: SizedBox(
-                                  key: keys[i],
-                                  height: 38,
-                                  child: AnimatedScale(
-                                    scale: _press[i],
-                                    duration: Motion.duration(c, 120),
-                                    curve: Curves.easeOutCubic,
-                                    child: AnimatedOpacity(
-                                      duration: Motion.duration(c, 160),
-                                      opacity: selected ? 1.0 : 0.72,
-                                      child: Center(
-                                        child: Icon(icons[i], size: 20, color: color),
+                      children: List.generate(labels.length, (i) {
+                        final selected = widget.index == i;
+                        final color = selected
+                            ? scheme.onSurface
+                            : scheme.onSurfaceVariant.withValues(alpha: .82);
+                        return Expanded(
+                          child: Semantics(
+                            selected: selected,
+                            button: true,
+                            label: labels[i],
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTapDown: (_) => _setPressed(i, true),
+                              onTapCancel: () => _setPressed(i, false),
+                              onTapUp: (_) => _setPressed(i, false),
+                              onTap: () {
+                                _showNavTooltip(i);
+                                widget.onChanged(i);
+                              },
+                              child: SizedBox(
+                                key: keys[i],
+                                height: 38,
+                                child: AnimatedScale(
+                                  scale: _press[i],
+                                  duration: Motion.duration(c, 120),
+                                  curve: Curves.easeOutCubic,
+                                  child: AnimatedOpacity(
+                                    duration: Motion.duration(c, 160),
+                                    opacity: selected ? 1.0 : 0.72,
+                                    child: Center(
+                                      child: Icon(
+                                        icons[i],
+                                        size: 20,
+                                        color: color,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      }),
                     ),
                   ],
                 ),
@@ -1277,20 +1286,28 @@ class _NavTooltipState extends State<_NavTooltip>
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final fade = CurvedAnimation(parent: _c, curve: Curves.easeOut, reverseCurve: Curves.easeIn);
+    final fade = CurvedAnimation(
+      parent: _c,
+      curve: Curves.easeOut,
+      reverseCurve: Curves.easeIn,
+    );
     return Material(
       type: MaterialType.transparency,
       child: FadeTransition(
         opacity: fade,
         child: SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero)
-              .animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic)),
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.2),
+            end: Offset.zero,
+          ).animate(CurvedAnimation(parent: _c, curve: Curves.easeOutCubic)),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: scheme.surface.withValues(alpha: dark ? .94 : .97),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: scheme.onSurface.withValues(alpha: .08)),
+              border: Border.all(
+                color: scheme.onSurface.withValues(alpha: .08),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: .14),

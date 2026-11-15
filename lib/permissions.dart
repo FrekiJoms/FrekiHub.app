@@ -80,7 +80,7 @@ abstract final class PermissionHints {
       icon: LucideIcons.messageSquare,
     ),
     'notificationPermission': PermissionHintSpec(
-      title: 'Detect Finance transactions from your apps',
+      title: 'Detect Finance transactions',
       intro:
           'Read selected finance alerts for clear expense and income activity.',
       benefit: 'Use your selected finance apps',

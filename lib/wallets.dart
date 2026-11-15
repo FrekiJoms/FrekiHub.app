@@ -359,7 +359,7 @@ Map<String, int> walletCommitments(Iterable<Projection> planned) {
   return result;
 }
 
-String walletMaskedAmount(String currency) => '${moneySymbol(currency)}******';
+String walletMaskedAmount(String currency) => '${moneySymbol(currency)}••••••';
 
 String walletImageFolder() => 'wallet-cards';
 
@@ -569,7 +569,7 @@ class WalletCard extends StatelessWidget {
                             Text(
                               account.included
                                   ? 'BALANCE'
-                                  : 'BALANCE ┬╖ EXCLUDED',
+                                  : 'BALANCE · EXCLUDED',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -650,10 +650,7 @@ class WalletCard extends StatelessWidget {
               position: DecorationPosition.foreground,
               decoration: BoxDecoration(
                 borderRadius: border,
-                border: Border.all(
-                  color: theme.colorScheme.primary,
-                  width: 2,
-                ),
+                border: Border.all(color: theme.colorScheme.primary, width: 2),
               ),
               child: card,
             )
@@ -722,6 +719,7 @@ const String _mastercardSvg = r"""<svg width="250" height="65" viewBox="0 0 250 
 <path d="M79.2794 24.5C79.2795 29.097 77.9863 33.6014 75.5474 37.4982C73.1086 41.395 69.6226 44.5269 65.4879 46.5361C61.3532 48.5453 56.7365 49.3507 52.1658 48.8601C47.595 48.3695 43.2544 46.6028 39.6403 43.7619C42.5563 41.469 44.9136 38.5439 46.5346 35.2073C48.1555 31.8706 48.9978 28.2095 48.9978 24.5C48.9978 20.7905 48.1555 17.1293 46.5346 13.7927C44.9136 10.4561 42.5563 7.53102 39.6403 5.2381C43.2544 2.39721 47.595 0.630508 52.1658 0.13992C56.7365 -0.350668 61.3532 0.454661 65.4879 2.46386C69.6226 4.47305 73.1086 7.60503 75.5474 11.5018C77.9863 15.3986 79.2795 19.903 79.2794 24.5Z" fill="#F79E1B"/>
 <path d="M76.942 39.6816V38.8929H77.26V38.7322H76.4501V38.8929H76.7682V39.6816H76.942ZM78.5144 39.6816V38.7307H78.2661L77.9806 39.3848L77.695 38.7307H77.4465V39.6816H77.6219V38.9643L77.8896 39.5827H78.0714L78.3392 38.9628V39.6816H78.5144Z" fill="#F79E1B"/>
 </svg>""";
+
 class _WalletNetwork extends StatelessWidget {
   final String network;
   final Color color;

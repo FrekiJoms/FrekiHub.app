@@ -24,6 +24,7 @@ abstract final class AutomationSync {
       await NativeSession.channel.invokeMethod('smsScan');
     } catch (_) {}
   }
+
   static Map<String, dynamic> config(AppData data) {
     Map<String, dynamic> stored = {};
     try {
@@ -73,9 +74,12 @@ abstract final class AutomationSync {
   }
 
   static Future<bool> _reconcile(AppDatabase db) async {
-    try {
-      await scanSms();
-    } catch (_) {}
+    final prefs = await db.readPreferences();
+    if (prefs['smsScanning'] == 'true') {
+      try {
+        await scanSms();
+      } catch (_) {}
+    }
     final source =
         await NativeSession.channel.invokeMethod<String>('automationEvents') ??
         '[]';
@@ -85,7 +89,6 @@ abstract final class AutomationSync {
     final acknowledged = <String>[];
     final pending = await NativeSession.pending();
     if (events.isEmpty && pending == null) {
-      final prefs = await db.readPreferences();
       await deliverReceipts(db, prefs);
       final stored = config(AppData([], [], [], prefs));
       if ((stored['rules'] as List? ?? []).any(
@@ -97,9 +100,7 @@ abstract final class AutomationSync {
       }
       return false;
     }
-    final data = await db.readAll();
-    var cachedSample =
-        int.tryParse(data.prefs['locationSampleTime'] ?? '') ?? 0;
+    var cachedSample = int.tryParse(prefs['locationSampleTime'] ?? '') ?? 0;
     await db.transaction(() async {
       if (pending != null) {
         await NativeSession.applyPending(db, pending);
@@ -178,8 +179,7 @@ abstract final class AutomationSync {
                     ..where((e) => e.id.equals(id) | e.occurrence.equals(id)))
                   .getSingleOrNull();
           final duplicate = existing == null
-              ? await (db.select(db.entries)
-                    ..where(
+              ? await (db.select(db.entries)..where(
                       (e) =>
                           e.kind.equals(kind) &
                           e.amount.equals(amount) &
@@ -187,7 +187,7 @@ abstract final class AutomationSync {
                           e.note.equals(event['merchant'] as String) &
                           e.day.equals(dayKey(time)),
                     ))
-                  .getSingleOrNull()
+                    .getSingleOrNull()
               : null;
           if (duplicate != null) {
             final currentSource =
@@ -246,7 +246,7 @@ abstract final class AutomationSync {
             event['sessionId'] == pending['id']) {
           await NativeSession.applyPending(db, pending);
         }
-        if (data.prefs['activityLogging'] == 'true') {
+        if (prefs['activityLogging'] == 'true') {
           if (action == 'auto_clock_in') {
             await db.customStatement('DELETE FROM activity_logs WHERE id = ?', [
               'session_start:${event['sessionId']}',
@@ -262,18 +262,20 @@ abstract final class AutomationSync {
         acknowledged.add(id);
       }
     });
-    await deliverReceipts(db, await db.readPreferences());
+    final postData = await db.readAll();
+    await deliverReceipts(db, postData.prefs);
     if (pending != null) {
-      final saved = await (db.select(
-        db.sessions,
-      )..where((s) => s.id.equals(pending['id'] as String))).getSingleOrNull();
+      final pendingId = pending['id'] as String;
+      final saved = postData.sessions
+          .where((s) => s.id == pendingId)
+          .firstOrNull;
       // Its queued clock-in can be in a later batch. Keep the end until committed.
       if (saved?.ended != null) await NativeSession.acknowledge();
     }
     if (acknowledged.isNotEmpty) {
       await NativeSession.channel.invokeMethod('automationAck', acknowledged);
     }
-    await configure(await db.readAll());
+    await configure(postData);
     return events.length >= 200;
   }
 

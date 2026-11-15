@@ -102,7 +102,7 @@ public final class FinanceNotificationParser {
 
     private static String currency(String token) {
         return switch (token.toUpperCase(Locale.ROOT)) {
-            case "PHP", "Php", "P", "₱" -> "PHP";
+            case "PHP", "P", "₱" -> "PHP";
             case "USD", "US$", "$" -> "USD";
             case "EUR", "€" -> "EUR";
             case "GBP", "£" -> "GBP";

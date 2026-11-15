@@ -236,4 +236,79 @@ void main() {
     expect(notices, 0);
     expect(acknowledgements, 0);
   });
+
+  test(
+    'Reconciliation invokes smsScan only when smsScanning is enabled',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      var smsScans = 0;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+        switch (call.method) {
+          case 'smsScan':
+            smsScans++;
+            return 0;
+          case 'automationEvents':
+            return '[]';
+          case 'pending':
+          case 'automationConfig':
+            return null;
+          default:
+            return null;
+        }
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+      );
+
+      await AutomationSync.reconcile(db);
+      expect(smsScans, 0);
+
+      await db.pref('smsScanning', false);
+      await AutomationSync.reconcile(db);
+      expect(smsScans, 0);
+
+      await db.pref('smsScanning', true);
+      await AutomationSync.reconcile(db);
+      expect(smsScans, 1);
+    },
+  );
+
+  test('Reconciliation invokes smsScan only when smsScanning is enabled', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    var smsScans = 0;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+      switch (call.method) {
+        case 'smsScan':
+          smsScans++;
+          return 0;
+        case 'automationEvents':
+          return '[]';
+        case 'pending':
+        case 'automationConfig':
+          return null;
+        default:
+          return null;
+      }
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+    );
+
+    await AutomationSync.reconcile(db);
+    expect(smsScans, 0);
+
+    await db.pref('smsScanning', false);
+    await AutomationSync.reconcile(db);
+    expect(smsScans, 0);
+
+    await db.pref('smsScanning', true);
+    await AutomationSync.reconcile(db);
+    expect(smsScans, 1);
+  });
 }

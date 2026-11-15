@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -130,16 +130,7 @@ class _AppShellState extends ConsumerState<AppShell>
         'purchaseDestination',
       );
       if (destination == 'budget' && mounted) {
-        setState(() {
-          slideDirection = index > 3 ? -1 : 1;
-          index = 3;
-          lastTab = 3;
-        });
-      }
-      final pending = await NativeSession.pending();
-      if (pending != null) {
-        await NativeSession.applyPending(ref.read(databaseProvider), pending);
-        await NativeSession.acknowledge();
+        unawaited(_goToTab(3));
       }
     } catch (e) {
       if (mounted) {
@@ -445,8 +436,9 @@ class _AppShellState extends ConsumerState<AppShell>
                                 final currentTab = index <= 3 ? index : lastTab;
                                 if (settled != currentTab && !_tabAnimating) {
                                   setState(() {
-                                    slideDirection =
-                                        settled > currentTab ? 1 : -1;
+                                    slideDirection = settled > currentTab
+                                        ? 1
+                                        : -1;
                                     index = settled;
                                     lastTab = settled;
                                   });
@@ -475,7 +467,8 @@ class _AppShellState extends ConsumerState<AppShell>
                           switchInCurve: Motion.curve,
                           switchOutCurve: Motion.curve,
                           transitionBuilder: (child, animation) {
-                            final incoming = child.key != const ValueKey('none');
+                            final incoming =
+                                child.key != const ValueKey('none');
                             return IgnorePointer(
                               ignoring: !incoming,
                               child: FadeTransition(
@@ -483,7 +476,9 @@ class _AppShellState extends ConsumerState<AppShell>
                                 child: SlideTransition(
                                   position: Tween<Offset>(
                                     begin: Offset(
-                                      (incoming ? 1 : -1) * slideDirection * .12,
+                                      (incoming ? 1 : -1) *
+                                          slideDirection *
+                                          .12,
                                       0,
                                     ),
                                     end: Offset.zero,
@@ -613,7 +608,6 @@ class _AppShellState extends ConsumerState<AppShell>
   }
 }
 
-
 class _KeepAliveTab extends StatefulWidget {
   final int tabIndex;
   final ValueListenable<int> activeTab;
@@ -714,5 +708,3 @@ class _DeferredTabState extends State<_DeferredTab> {
     );
   }
 }
-
-

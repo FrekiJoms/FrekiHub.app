@@ -12,6 +12,7 @@ abstract final class RuleCatalog {
     'activity_logs.enabled',
     'location.enabled',
     'notifications.purchases_enabled',
+    'notifications.sms_enabled',
     'notifications.enabled',
     'notifications.exact_allowed',
     'device.charging',
@@ -119,6 +120,7 @@ abstract final class RuleCatalog {
     'location.enabled': 'Location conditions enabled',
     'location.name': 'Last sampled place name',
     'notifications.purchases_enabled': 'Purchase detection enabled',
+    'notifications.sms_enabled': 'SMS transaction scanning enabled',
     'notifications.enabled': 'Android notifications permitted',
     'notifications.exact_allowed': 'Precise reminder scheduling permitted',
     'notifications.schedule_count': 'Active notification schedules',
@@ -254,6 +256,7 @@ abstract final class RuleCatalog {
       'location.name': data.prefs['locationName'] ?? '',
       'notifications.purchases_enabled':
           data.prefs['purchaseScanning'] == 'true',
+      'notifications.sms_enabled': data.prefs['smsScanning'] == 'true',
       'app.page': data.prefs['currentPage'] ?? 'session_page',
       'app.foreground': true,
       for (final pref in data.prefs.entries.where(

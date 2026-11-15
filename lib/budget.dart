@@ -1,4 +1,4 @@
-﻿part of 'screens.dart';
+part of 'screens.dart';
 
 class BudgetScreen extends ConsumerStatefulWidget {
   final AppData data;
@@ -30,7 +30,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${p.day} Â· ${p.error == null ? money(p.amount, widget.data.currency) : 'Amount needs review'}',
+            '${p.day} · ${p.error == null ? money(p.amount, widget.data.currency) : 'Amount needs review'}',
           ),
           if (p.error != null) Text(p.error!),
           const SizedBox(height: 20),
@@ -171,9 +171,39 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       _timelineSort = 'date';
     }
     _timelineDesc = widget.data.prefs['financeHistoryDesc'] == 'true';
-    _monthCardExpanded = widget.data.prefs['financeMonthCardExpanded'] != 'false';
+    _monthCardExpanded =
+        widget.data.prefs['financeMonthCardExpanded'] != 'false';
     _scrollController.addListener(_updateCompactProgress);
     WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
+  }
+
+  @override
+  void didUpdateWidget(covariant BudgetScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data.prefs['walletMasked'] !=
+        widget.data.prefs['walletMasked']) {
+      masked = widget.data.prefs['walletMasked'] == 'true';
+    }
+    if (oldWidget.data.prefs['financeHistoryExpanded'] !=
+        widget.data.prefs['financeHistoryExpanded']) {
+      _historyExpanded = widget.data.prefs['financeHistoryExpanded'] != 'false';
+    }
+    if (oldWidget.data.prefs['financeHistorySort'] !=
+        widget.data.prefs['financeHistorySort']) {
+      final nextSort = widget.data.prefs['financeHistorySort'] ?? 'date';
+      _timelineSort = const {'date', 'amount', 'type'}.contains(nextSort)
+          ? nextSort
+          : 'date';
+    }
+    if (oldWidget.data.prefs['financeHistoryDesc'] !=
+        widget.data.prefs['financeHistoryDesc']) {
+      _timelineDesc = widget.data.prefs['financeHistoryDesc'] == 'true';
+    }
+    if (oldWidget.data.prefs['financeMonthCardExpanded'] !=
+        widget.data.prefs['financeMonthCardExpanded']) {
+      _monthCardExpanded =
+          widget.data.prefs['financeMonthCardExpanded'] != 'false';
+    }
   }
 
   void _measureCard() {
@@ -182,7 +212,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final box = ctx?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
     final top = box.localToGlobal(Offset.zero).dy;
-    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+    final offset = _scrollController.hasClients
+        ? _scrollController.offset
+        : 0.0;
     _cardTopAtOffset0 = top + offset;
     _cardHeight = box.size.height;
     _cardMetricsReady = _cardHeight > 0;
@@ -247,9 +279,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final savingsEntries = d.savingsByWallet.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final breakdown = <String, int>{};
-    for (final e in d.scopedEntries(wallet: wallet, month: month).where(
-      (e) => e.kind == 'expense',
-    )) {
+    for (final e
+        in d
+            .scopedEntries(wallet: wallet, month: month)
+            .where((e) => e.kind == 'expense')) {
       breakdown.update(
         e.category,
         (v) => v + e.amount,
@@ -260,43 +293,46 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       ..sort((a, b) => b.value.compareTo(a.value));
     final rules =
         (wallet == null
-              ? d.rules.where((r) => r.currency == d.currency)
-              : d.rules.where(
-                  (r) =>
-                      r.currency == d.currency &&
-                      walletMethodName(r.method) == wallet,
-                ))
+                ? d.rules.where((r) => r.currency == d.currency)
+                : d.rules.where(
+                    (r) =>
+                        r.currency == d.currency &&
+                        walletMethodName(r.method) == wallet,
+                  ))
             .toList()
           ..sort((a, b) => a.position.compareTo(b.position));
     final timelineRows = <_TimelineItem>[];
     for (final e in d.scopedEntries(wallet: wallet, month: month)) {
-      timelineRows.add(_TimelineItem(
-        day: e.day,
-        title: e.note.isEmpty ? e.category : e.note,
-        detail: 'Actual Â· ${e.category} Â· ${e.method}',
-        amount: e.amount,
-        kind: e.kind,
-        planned: false,
-        status: 'actual',
-        onTap: () => panel(
-          c,
-          EntryForm(data: d, day: e.day, kind: e.kind, entry: e),
+      timelineRows.add(
+        _TimelineItem(
+          day: e.day,
+          title: e.note.isEmpty ? e.category : e.note,
+          detail: 'Actual · ${e.category} · ${e.method}',
+          amount: e.amount,
+          kind: e.kind,
+          planned: false,
+          status: 'actual',
+          onTap: () =>
+              panel(c, EntryForm(data: d, day: e.day, kind: e.kind, entry: e)),
         ),
-      ));
+      );
     }
     for (final p in planned) {
       if (p.status == 'complete') continue;
-      timelineRows.add(_TimelineItem(
-        day: p.day,
-        title: p.rule.title,
-        detail: 'Expected Â· ${p.status} Â· ${p.rule.category} Â· ${p.rule.method}',
-        amount: p.amount,
-        kind: p.rule.kind,
-        planned: true,
-        status: p.status,
-        error: p.error,
-        onTap: () => occurrence(p),
-      ));
+      timelineRows.add(
+        _TimelineItem(
+          day: p.day,
+          title: p.rule.title,
+          detail:
+              'Expected · ${p.status} · ${p.rule.category} · ${p.rule.method}',
+          amount: p.amount,
+          kind: p.rule.kind,
+          planned: true,
+          status: p.status,
+          error: p.error,
+          onTap: () => occurrence(p),
+        ),
+      );
     }
     int typeRank(_TimelineItem it) {
       if (it.planned) return 0;
@@ -304,6 +340,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       if (it.kind == 'savings') return 2;
       return 3; // expense/other
     }
+
     timelineRows.sort((a, b) {
       int cmp;
       switch (_timelineSort) {
@@ -325,7 +362,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       }
       return _timelineDesc ? -cmp : cmp;
     });
-    final accounts = walletAccounts(widget.data);
+    final accounts = walletAccounts(d, null, committed);
     final totalBalance = accounts
         .where((a) => a.included)
         .fold<int>(0, (sum, a) => sum + a.balance);
@@ -337,6 +374,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             const SizedBox(height: 72),
             WalletSection(
               data: d,
+              accounts: accounts,
               month: summary,
               wallet: wallet,
               committed: committed,
@@ -374,7 +412,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                     ? 'Add planner rule'
                                     : 'Add planner rule for $wallet',
                                 onPressed: withFeedback(
-                                  () => panel(c, RuleForm(data: d, initialMethod: wallet)),
+                                  () => panel(
+                                    c,
+                                    RuleForm(data: d, initialMethod: wallet),
+                                  ),
                                 ),
                                 icon: const Icon(LucideIcons.plus),
                               ),
@@ -398,7 +439,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                           subtitle: Text(
                                             '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
                                           ),
-                                          onTap: withFeedback(() => ruleMenu(r)),
+                                          onTap: withFeedback(
+                                            () => ruleMenu(r),
+                                          ),
                                         ),
                                     ],
                                   ),
@@ -414,7 +457,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         onTap: () => panel(
                           c,
                           PanelContent(
-                            header: PanelHeading(title: 'Analytics', trailing: _scopeTag(c)),
+                            header: PanelHeading(
+                              title: 'Analytics',
+                              trailing: _scopeTag(c),
+                            ),
                             child: categories.isEmpty
                                 ? EmptyState(
                                     'No spending this month.',
@@ -424,7 +470,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                     LucideIcons.chartPie,
                                   )
                                 : Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       SizedBox(
                                         height: 180,
@@ -438,13 +485,18 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                               sections: List.generate(
                                                 categories.length,
                                                 (i) => PieChartSectionData(
-                                                  value: categories[i].value.toDouble(),
-                                                  color: Design.chart[i % Design.chart.length],
+                                                  value: categories[i].value
+                                                      .toDouble(),
+                                                  color:
+                                                      Design.chart[i %
+                                                          Design.chart.length],
                                                   radius: 26,
                                                   showTitle: false,
                                                 ),
                                               ),
-                                              pieTouchData: PieTouchData(enabled: true),
+                                              pieTouchData: PieTouchData(
+                                                enabled: true,
+                                              ),
                                             ),
                                             duration: Motion.duration(c),
                                           ),
@@ -454,7 +506,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                       ...List.generate(
                                         categories.length,
                                         (i) => Padding(
-                                          padding: const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
                                           child: Column(
                                             children: [
                                               Row(
@@ -463,14 +517,25 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                                     width: 8,
                                                     height: 8,
                                                     decoration: BoxDecoration(
-                                                      color: Design.chart[i % Design.chart.length],
+                                                      color:
+                                                          Design.chart[i %
+                                                              Design
+                                                                  .chart
+                                                                  .length],
                                                       shape: BoxShape.circle,
                                                     ),
                                                   ),
                                                   const SizedBox(width: 10),
-                                                  Expanded(child: Text(categories[i].key)),
+                                                  Expanded(
+                                                    child: Text(
+                                                      categories[i].key,
+                                                    ),
+                                                  ),
                                                   Text(
-                                                    money(categories[i].value, d.currency),
+                                                    money(
+                                                      categories[i].value,
+                                                      d.currency,
+                                                    ),
                                                     style: const TextStyle(
                                                       fontFamily: 'Geist Mono',
                                                       fontSize: 12,
@@ -480,12 +545,20 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                               ),
                                               const SizedBox(height: 8),
                                               ClipRRect(
-                                                borderRadius: BorderRadius.circular(6),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
                                                 child: LinearProgressIndicator(
-                                                  value: summary.expenses <= 0 ? 0 : categories[i].value / summary.expenses,
+                                                  value: summary.expenses <= 0
+                                                      ? 0
+                                                      : categories[i].value /
+                                                            summary.expenses,
                                                   minHeight: 4,
-                                                  color: Design.chart[i % Design.chart.length],
-                                                  backgroundColor: Theme.of(c).colorScheme.surfaceContainerHighest,
+                                                  color:
+                                                      Design.chart[i %
+                                                          Design.chart.length],
+                                                  backgroundColor: Theme.of(c)
+                                                      .colorScheme
+                                                      .surfaceContainerHighest,
                                                 ),
                                               ),
                                             ],
@@ -511,7 +584,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                               trailing: IconButton(
                                 tooltip: 'Set savings goal',
                                 onPressed: withFeedback(() => savingsGoal(c)),
-                                icon: const Icon(LucideIcons.pencilLine, size: 18),
+                                icon: const Icon(
+                                  LucideIcons.pencilLine,
+                                  size: 18,
+                                ),
                               ),
                             ),
                             child: Column(
@@ -523,7 +599,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                       : 'SAVED · ${wallet!.toUpperCase()}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 10, letterSpacing: 1.6),
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    letterSpacing: 1.6,
+                                  ),
                                 ),
                                 const SizedBox(height: 8),
                                 NumberValue(money(saved, d.currency), size: 28),
@@ -531,7 +610,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                 ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: LinearProgressIndicator(
-                                    value: goal <= 0 ? 0 : (saved / goal).clamp(0, 1),
+                                    value: goal <= 0
+                                        ? 0
+                                        : (saved / goal).clamp(0, 1),
                                     minHeight: 7,
                                   ),
                                 ),
@@ -546,7 +627,9 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                     'The goal is shared across all wallets.',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      color: Theme.of(c).colorScheme.onSurfaceVariant,
+                                      color: Theme.of(c)
+                                          .colorScheme
+                                          .onSurfaceVariant,
                                     ),
                                   ),
                                 if (savingsEntries.isNotEmpty) ...[
@@ -560,13 +643,17 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                             fontSize: 10,
                                             letterSpacing: 1.6,
                                             fontWeight: FontWeight.w600,
-                                            color: Theme.of(c).colorScheme.onSurfaceVariant,
+                                            color: Theme.of(c)
+                                                .colorScheme
+                                                .onSurfaceVariant,
                                           ),
                                         ),
                                       ),
                                       if (wallet != null)
                                         TextButton(
-                                          onPressed: withFeedback(() => setState(() => wallet = null)),
+                                          onPressed: withFeedback(
+                                            () => setState(() => wallet = null),
+                                          ),
                                           child: const Text('All wallets'),
                                         ),
                                     ],
@@ -585,10 +672,17 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                       ),
                                       trailing: Text(
                                         money(entry.value, d.currency),
-                                        style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 11),
+                                        style: const TextStyle(
+                                          fontFamily: 'Geist Mono',
+                                          fontSize: 11,
+                                        ),
                                       ),
                                       onTap: withFeedback(
-                                        () => setState(() => wallet = wallet == entry.key ? null : entry.key),
+                                        () => setState(
+                                          () => wallet = wallet == entry.key
+                                              ? null
+                                              : entry.key,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -602,89 +696,113 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 ),
               ),
             ),
-        SectionHeading(
-          'History',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _scopeTag(c),
-              if (_historyExpanded) ...[
-                const SizedBox(width: 4),
-                Builder(
-                  builder: (anchor) => IconButton(
-                    tooltip: 'Sort',
+            SectionHeading(
+              'History',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _scopeTag(c),
+                  if (_historyExpanded) ...[
+                    const SizedBox(width: 4),
+                    Builder(
+                      builder: (anchor) => IconButton(
+                        tooltip: 'Sort',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: withFeedback(() async {
+                          final current =
+                              '${_timelineSort}_${_timelineDesc ? 'desc' : 'asc'}';
+                          final value = await showChoiceMenu<String>(
+                            anchor,
+                            choices: const {
+                              'date_asc': 'Date (oldest first)',
+                              'date_desc': 'Date (newest first)',
+                              'amount_asc': 'Amount (low to high)',
+                              'amount_desc': 'Amount (high to low)',
+                              'type_asc': 'Type',
+                              'type_desc': 'Type (reverse)',
+                            },
+                            selected: current,
+                          );
+                          if (value == null) return;
+                          final parts = value.split('_');
+                          setState(() {
+                            _timelineSort = parts[0];
+                            _timelineDesc = parts[1] == 'desc';
+                          });
+                          final db = ref.read(databaseProvider);
+                          unawaited(
+                            db
+                                .pref('financeHistorySort', _timelineSort)
+                                .catchError((Object _) {}),
+                          );
+                          unawaited(
+                            db
+                                .pref('financeHistoryDesc', '$_timelineDesc')
+                                .catchError((Object _) {}),
+                          );
+                        }),
+                        icon: Icon(
+                          _timelineDesc
+                              ? LucideIcons.arrowDownWideNarrow
+                              : LucideIcons.arrowUpNarrowWide,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                  IconButton(
+                    tooltip: _historyExpanded ? 'Minimize' : 'Expand',
                     visualDensity: VisualDensity.compact,
-                    onPressed: withFeedback(() async {
-                      final current = '${_timelineSort}_${_timelineDesc ? 'desc' : 'asc'}';
-                      final value = await showChoiceMenu<String>(
-                        anchor,
-                        choices: const {
-                          'date_asc': 'Date (oldest first)',
-                          'date_desc': 'Date (newest first)',
-                          'amount_asc': 'Amount (low to high)',
-                          'amount_desc': 'Amount (high to low)',
-                          'type_asc': 'Type',
-                          'type_desc': 'Type (reverse)',
-                        },
-                        selected: current,
+                    onPressed: withFeedback(() {
+                      setState(() => _historyExpanded = !_historyExpanded);
+                      unawaited(
+                        ref
+                            .read(databaseProvider)
+                            .pref('financeHistoryExpanded', '$_historyExpanded')
+                            .catchError((Object _) {}),
                       );
-                      if (value == null) return;
-                      final parts = value.split('_');
-                      setState(() {
-                        _timelineSort = parts[0];
-                        _timelineDesc = parts[1] == 'desc';
-                      });
-                      final db = ref.read(databaseProvider);
-                      unawaited(db.pref('financeHistorySort', _timelineSort).catchError((Object _) {}));
-                      unawaited(db.pref('financeHistoryDesc', '$_timelineDesc').catchError((Object _) {}));
                     }),
                     icon: Icon(
-                      _timelineDesc ? LucideIcons.arrowDownWideNarrow : LucideIcons.arrowUpNarrowWide,
-                      size: 16,
+                      _historyExpanded
+                          ? LucideIcons.chevronUp
+                          : LucideIcons.chevronDown,
+                      size: 18,
                     ),
                   ),
-                ),
-              ],
-              IconButton(
-                tooltip: _historyExpanded ? 'Minimize' : 'Expand',
-                visualDensity: VisualDensity.compact,
-                onPressed: withFeedback(() {
-                  setState(() => _historyExpanded = !_historyExpanded);
-                  unawaited(
-                    ref
-                        .read(databaseProvider)
-                        .pref('financeHistoryExpanded', '$_historyExpanded')
-                        .catchError((Object _) {}),
-                  );
-                }),
-                icon: Icon(_historyExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown, size: 18),
+                ],
               ),
-            ],
-          ),
-        ),
-        if (_historyExpanded)
-          (timelineRows.isEmpty
-              ? Surface(
-                  child: EmptyState(
-                    'A clean slate.',
-                    wallet == null
-                        ? 'Add a transaction or a planner rule.'
-                        : 'No activity for $wallet this month.',
-                    LucideIcons.wallet,
-                  ),
-                )
-              : Surface(
-                  child: Column(
-                    children: [
-                      for (var i = 0; i < timelineRows.length; i++) ...[
-                        _TimelineRow(item: timelineRows[i], currency: d.currency, showDay: true),
-                        if (i != timelineRows.length - 1)
-                          Divider(height: 1, color: Theme.of(c).colorScheme.outlineVariant.withValues(alpha: .4)),
-                      ],
-                    ],
-                  ),
-                )),
-      ],
+            ),
+            if (_historyExpanded)
+              (timelineRows.isEmpty
+                  ? Surface(
+                      child: EmptyState(
+                        'A clean slate.',
+                        wallet == null
+                            ? 'Add a transaction or a planner rule.'
+                            : 'No activity for $wallet this month.',
+                        LucideIcons.wallet,
+                      ),
+                    )
+                  : Surface(
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < timelineRows.length; i++) ...[
+                            _TimelineRow(
+                              item: timelineRows[i],
+                              currency: d.currency,
+                              showDay: true,
+                            ),
+                            if (i != timelineRows.length - 1)
+                              Divider(
+                                height: 1,
+                                color: Theme.of(c).colorScheme.outlineVariant
+                                    .withValues(alpha: .4),
+                              ),
+                          ],
+                        ],
+                      ),
+                    )),
+          ],
         ),
         Positioned(
           top: 16,
@@ -748,7 +866,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               ],
             ),
             builder: (context, progress, child) {
-              final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+              final reduce =
+                  MediaQuery.maybeOf(context)?.disableAnimations ?? false;
               final t = reduce ? (progress >= 0.5 ? 1.0 : 0.0) : progress;
               final curved = Curves.easeOutCubic.transform(t);
               return IgnorePointer(
@@ -771,10 +890,14 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                               colors: [Color(0xff191b19), Color(0xff303630)],
                             ),
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white.withValues(alpha: .06)),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: .06),
+                            ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.16 * curved),
+                                color: Colors.black.withValues(
+                                  alpha: 0.16 * curved,
+                                ),
                                 blurRadius: 14,
                                 offset: const Offset(0, 5),
                               ),
@@ -855,7 +978,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                 decimal: true,
               ),
               decoration: InputDecoration(
-                labelText: 'Goal Â· ${widget.data.currency}',
+                labelText: 'Goal · ${widget.data.currency}',
               ),
             ),
           );
@@ -865,7 +988,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     field.dispose();
   }
 }
-
 
 class _TimelineItem {
   final String day;
@@ -952,14 +1074,20 @@ class _TimelineRow extends StatelessWidget {
                     item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                   const SizedBox(height: 1),
                   Text(
                     showDay ? '${item.day} · ${item.detail}' : item.detail,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -971,7 +1099,9 @@ class _TimelineRow extends StatelessWidget {
                 fontFamily: 'Geist Mono',
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: item.error != null ? scheme.onSurfaceVariant : amountColor,
+                color: item.error != null
+                    ? scheme.onSurfaceVariant
+                    : amountColor,
               ),
             ),
           ],
@@ -980,7 +1110,7 @@ class _TimelineRow extends StatelessWidget {
     );
   }
 }
-// ignore: unused_element
+
 class _CompactPillButton extends StatelessWidget {
   final String label;
   final IconData icon;
@@ -994,7 +1124,8 @@ class _CompactPillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: .5),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest
+          .withValues(alpha: .5),
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         onTap: withFeedback(onTap),
@@ -1011,7 +1142,10 @@ class _CompactPillButton extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

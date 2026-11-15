@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.ComponentName
 import android.app.NotificationManager
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.provider.Telephony
 import org.json.JSONObject
@@ -171,49 +173,90 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 }
                 "acknowledge" -> { check(prefs.edit().remove("pendingId").remove("pendingEnd").remove("pendingNote").remove("pendingPosition").commit()); result.success(null) }
                 "smsScan" -> {
-                    if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) { result.error("permission", "SMS permission required", null); return@setMethodCallHandler }
-                    val since = (call.arguments as? Number)?.toLong() ?: Automation.prefs(this).getLong("smsLastScan", System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000)
-                    var maxDate = since
-                    val cursor = contentResolver.query(Telephony.Sms.Inbox.CONTENT_URI, arrayOf("_id", "address", "body", "date"), "date > ?", arrayOf(since.toString()), "date ASC")
-                    cursor?.use {
-                        val idIdx = it.getColumnIndexOrThrow("_id")
-                        val addrIdx = it.getColumnIndexOrThrow("address")
-                        val bodyIdx = it.getColumnIndexOrThrow("body")
-                        val dateIdx = it.getColumnIndexOrThrow("date")
-                        while (it.moveToNext()) {
-                            val body = it.getString(bodyIdx) ?: continue
-                            val transaction = FinanceNotificationParser.parse(body) ?: continue
-                            val date = it.getLong(dateIdx)
-                            if (date > maxDate) maxDate = date
-                            val reference = Regex("(?i)(?:reference|ref|transaction)(?:\\s*(?:no|number|id))?[.:#\\s]+([A-Z0-9-]{6,})").find(body)?.groupValues?.get(1)
-                            val idPrefix = if (transaction.kind == "income") "income" else "purchase"
-                            val smsId = it.getString(idIdx)
-                            val id = "sms:$smsId"
-                            val counterparty = transaction.counterparty
-                            val eventTitle = when (transaction.kind) {
-                                "income" -> if (counterparty == "Not specified") "Received income" else "Received income · $counterparty"
-                                else -> if (counterparty == "Item not specified") "Purchased · item not specified" else "Purchased at $counterparty"
-                            }
-                            val event = JSONObject(Automation.prefs(this).getString("lastLocation", "{}")!!)
-                                .put("id", "$idPrefix:$id")
-                                .put("time", date)
-                                .put("action", "purchase")
-                                .put("kind", transaction.kind)
-                                .put("title", eventTitle)
-                                .put("merchant", counterparty)
-                                .put("amount", transaction.amount)
-                                .put("currency", transaction.currency)
-                                .put("package", "sms")
-                                .put("reference", reference ?: "")
-                            val addr = it.getString(addrIdx) ?: "SMS"
-                            event.put("source", addr)
-                            val locationTime = event.optLong("locationTime", 0L)
-                            if (System.currentTimeMillis() - locationTime > 120000L) { event.remove("lat"); event.remove("lng"); event.put("location", "Location unavailable") }
-                            Automation.emit(this, event)
-                        }
+                    if (!Automation.config(this).optBoolean("sms")) {
+                        result.success(0L)
+                        return@setMethodCallHandler
                     }
-                    Automation.prefs(this).edit().putLong("smsLastScan", maxDate).commit()
-                    result.success(maxDate)
+                    if (checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+                        result.error("permission", "SMS permission required", null)
+                        return@setMethodCallHandler
+                    }
+                    val appContext = applicationContext
+                    val mainHandler = Handler(Looper.getMainLooper())
+                    val argSince = (call.arguments as? Number)?.toLong()
+                    Thread {
+                        try {
+                            val automationPrefs = Automation.prefs(appContext)
+                            val since = argSince ?: automationPrefs.getLong(
+                                "smsLastScan",
+                                System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+                            )
+                            var maxDate = since
+                            val referencePattern = Regex(
+                                "(?i)(?:reference|ref|transaction)(?:\\s*(?:no|number|id))?[.:#\\s]+([A-Z0-9-]{6,})"
+                            )
+                            val lastLocationRaw = automationPrefs.getString("lastLocation", "{}") ?: "{}"
+                            val cursor = appContext.contentResolver.query(
+                                Telephony.Sms.Inbox.CONTENT_URI,
+                                arrayOf("_id", "address", "body", "date"),
+                                "date > ?",
+                                arrayOf(since.toString()),
+                                "date ASC"
+                            )
+                            cursor?.use {
+                                val idIdx = it.getColumnIndexOrThrow("_id")
+                                val addrIdx = it.getColumnIndexOrThrow("address")
+                                val bodyIdx = it.getColumnIndexOrThrow("body")
+                                val dateIdx = it.getColumnIndexOrThrow("date")
+                                while (it.moveToNext()) {
+                                    val date = it.getLong(dateIdx)
+                                    if (date > maxDate) maxDate = date
+                                    val body = it.getString(bodyIdx) ?: continue
+                                    val transaction = FinanceNotificationParser.parse(body) ?: continue
+                                    val reference = referencePattern.find(body)?.groupValues?.get(1)
+                                    val idPrefix = if (transaction.kind == "income") "income" else "purchase"
+                                    val smsId = it.getString(idIdx)
+                                    val id = "sms:$smsId"
+                                    val counterparty = transaction.counterparty
+                                    val eventTitle = when (transaction.kind) {
+                                        "income" -> if (counterparty == "Not specified") "Received income" else "Received income · $counterparty"
+                                        else -> if (counterparty == "Item not specified") "Purchased · item not specified" else "Purchased at $counterparty"
+                                    }
+                                    val event = JSONObject(lastLocationRaw)
+                                        .put("id", "$idPrefix:$id")
+                                        .put("time", date)
+                                        .put("action", "purchase")
+                                        .put("kind", transaction.kind)
+                                        .put("title", eventTitle)
+                                        .put("merchant", counterparty)
+                                        .put("amount", transaction.amount)
+                                        .put("currency", transaction.currency)
+                                        .put("package", "sms")
+                                        .put("reference", reference ?: "")
+                                    val addr = it.getString(addrIdx) ?: "SMS"
+                                    event.put("source", addr)
+                                    val locationTime = event.optLong("locationTime", 0L)
+                                    if (System.currentTimeMillis() - locationTime > 120000L) {
+                                        event.remove("lat")
+                                        event.remove("lng")
+                                        event.put("location", "Location unavailable")
+                                    }
+                                    Automation.emit(appContext, event)
+                                }
+                            }
+                            automationPrefs.edit().putLong("smsLastScan", maxDate).commit()
+                            mainHandler.post { result.success(maxDate) }
+                        } catch (error: Exception) {
+                            android.util.Log.w("FrekiHub", "Native operation failed: smsScan", error)
+                            mainHandler.post {
+                                result.error(
+                                    "native_operation",
+                                    "Could not complete this operation. Your pending actions are retained for retry.",
+                                    null
+                                )
+                            }
+                        }
+                    }.start()
                 }
                 else -> result.notImplemented()
             } } catch (error: Exception) {

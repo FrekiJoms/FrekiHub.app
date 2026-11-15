@@ -71,7 +71,7 @@ The exact saved keys are visible in `pref` call sites. These are the important f
 | `dateFormat`, `clockFormat`, `columnWidths` | Session display formats and six table widths |
 | `savingsGoal:CURRENCY` | Minor-unit goal for that currency |
 | `status:ruleId:day` | Finance occurrence state |
-| `activityLogging`, `locationEnabled`, `purchaseScanning` | Opt-in booleans stored as strings |
+| `activityLogging`, `locationEnabled`, `purchaseScanning`, `smsScanning` | Opt-in booleans stored as strings |
 | `automation` | JSON configuration: saved visual/structured rules and selected payment apps |
 | `locationName`, `locationDetails`, `locationSampleTime` | Cached imported position label/payload/time |
 | `logRevision`, `activityCount`, `lastActivityAction`, `lastActivityTitle` | Log refresh/observable metadata |
@@ -79,6 +79,7 @@ The exact saved keys are visible in `pref` call sites. These are the important f
 | `mapPeriod`, `mapDate`, `mapFrom`, `mapUntil`, `mapTrace` | Saved map view preferences |
 | `mapContext` | Separately encoded last viewed map runtime observations |
 | `walletOrder`, `walletView`, `walletMasked` | Shared wallet card order, rows/multi/stack view and amount mask |
+| `financeMonthCardExpanded`, `financeHistoryExpanded`, `financeHistorySort`, `financeHistoryDesc` | Finance month-card/history expansion and timeline sort field/direction |
 | `wallet:METHOD:style`, `wallet:METHOD:image`, `wallet:METHOD:scale`, `wallet:METHOD:dx`, `wallet:METHOD:dy`, `wallet:METHOD:include` | Per-wallet card preset/uploaded art, artwork framing and summary inclusion |
 | `currentPage` | Current target string for rule navigation conditions |
 | `purchaseNotice:EVENT_ID` | Pending post-commit receipt JSON; remove after posting succeeds |
