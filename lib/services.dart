@@ -36,6 +36,8 @@ abstract final class RecordLocation {
         // Unsupported previews still save records.
       } on TimeoutException {
         // A bounded request never blocks saving indefinitely.
+      } catch (_) {
+        // Any permission or location lookup issue must not discard the record.
       }
     }
     return db.transaction(() async {
