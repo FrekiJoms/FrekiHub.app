@@ -127,12 +127,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
-    'Hold center, drag to expense, release selects; outside cancels',
+    'Central plus button centers in pill, short-taps radial menu and preserves long-press quick add',
     (tester) async {
-      String? action;
+      final actionsTriggered = <String>[];
       int? selected;
       await tester.pumpWidget(
         MaterialApp(
+          theme: Design.theme(false),
           home: Scaffold(
             body: Align(
               alignment: Alignment.bottomCenter,
@@ -141,7 +142,7 @@ void main() {
                 child: PillNavigation(
                   index: 0,
                   onChanged: (value) => selected = value,
-                  onQuickAdd: (value) => action = value,
+                  onQuickAdd: actionsTriggered.add,
                 ),
               ),
             ),
@@ -149,30 +150,126 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      final center = tester.getCenter(find.byType(PillNavigation));
-      await tester.tapAt(center - const Offset(10, 0));
+
+      final pillRect = tester.getRect(find.byType(PillNavigation));
+      final plusFinder = find.byKey(const ValueKey('nav-plus-button'));
+      expect(plusFinder, findsOneWidget);
+      final plusRect = tester.getRect(plusFinder);
+      expect(plusRect.center.dx, closeTo(pillRect.center.dx, 0.01));
+      expect(plusRect.center.dy, closeTo(pillRect.center.dy, 0.01));
+
+      await tester.tap(find.bySemanticsLabel('Map'));
       await tester.pumpAndSettle();
       expect(selected, 1);
-      await tester.tapAt(center + const Offset(10, 0));
+      await tester.tap(find.bySemanticsLabel('Sessions'));
       await tester.pumpAndSettle();
       expect(selected, 2);
+
+      // Short tap opens radial menu and never executes quick-add or drag menu.
+      await tester.tap(plusFinder);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsOneWidget);
+      expect(find.byKey(const ValueKey('quick-add-menu')), findsNothing);
+      expect(actionsTriggered, isEmpty);
+
+      // Staggered outward expansion from the exact center of the + button.
+      final firstItemEarly = tester.getCenter(
+        find.byKey(const ValueKey('radial-action-session')),
+      );
+      final lastItemEarly = tester.getCenter(
+        find.byKey(const ValueKey('radial-action-rule')),
+      );
+      expect(
+        (firstItemEarly - plusRect.center).distance,
+        greaterThan((lastItemEarly - plusRect.center).distance),
+      );
+
+      await tester.pumpAndSettle();
+      for (final kind in ['session', 'expense', 'income', 'savings', 'rule']) {
+        final itemRect = tester.getRect(
+          find.byKey(ValueKey('radial-action-$kind')),
+        );
+        expect(itemRect.left, greaterThanOrEqualTo(0));
+        expect(itemRect.right, lessThanOrEqualTo(800));
+        expect(itemRect.top, greaterThanOrEqualTo(0));
+        expect((itemRect.center - plusRect.center).distance, greaterThan(60));
+      }
+
+      // Closing animation uses reverse stagger and returns items toward center.
+      await tester.tap(find.byKey(const ValueKey('radial-close-button')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final firstItemClosing = tester.getCenter(
+        find.byKey(const ValueKey('radial-action-session')),
+      );
+      final lastItemClosing = tester.getCenter(
+        find.byKey(const ValueKey('radial-action-rule')),
+      );
+      expect(
+        (lastItemClosing - plusRect.center).distance,
+        lessThan((firstItemClosing - plusRect.center).distance),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+      expect(actionsTriggered, isEmpty);
+
+      // Short tap then selecting a radial item triggers action once and closes.
+      await tester.tap(plusFinder);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('radial-action-income')));
+      await tester.pumpAndSettle();
+      expect(actionsTriggered, ['income']);
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+      actionsTriggered.clear();
+
+      // Instant swipe on '+' (0ms hold) opens the radial menu immediately and selects the swiped action.
+      final center = tester.getCenter(plusFinder);
+      final swipe = await tester.startGesture(center);
+      await swipe.moveBy(const Offset(0, -48));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsOneWidget);
+      await swipe.up();
+      await tester.pumpAndSettle();
+      expect(actionsTriggered, ['income']);
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+      actionsTriggered.clear();
+
+      // Fast hold (150ms) on '+' opens the radial menu and drag-release selects radial item.
       final gesture = await tester.startGesture(center);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('Expense'), findsOneWidget);
-      await gesture.moveTo(tester.getCenter(find.text('Expense')));
+      await tester.pump(const Duration(milliseconds: 160));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsOneWidget);
+      expect(find.text('Drag to add · release to select'), findsNothing);
+      final expenseItem = find.byKey(const ValueKey('radial-action-expense'));
+      expect(expenseItem, findsOneWidget);
+      await gesture.moveTo(tester.getCenter(expenseItem));
       await tester.pump(const Duration(milliseconds: 160));
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(action, 'expense');
-      expect(find.text('Expense'), findsNothing);
-      action = null;
+      expect(actionsTriggered, ['expense']);
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+
+      // Releasing outside radial items cancels without firing an action.
+      actionsTriggered.clear();
       final cancel = await tester.startGesture(center);
-      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
       await cancel.moveTo(const Offset(5, 5));
       await cancel.up();
       await tester.pumpAndSettle();
-      expect(action, isNull);
-      expect(find.text('Expense'), findsNothing);
+      expect(actionsTriggered, isEmpty);
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+
+      // Pointer cancellation during gesture cleans up without firing actions.
+      final interrupted = await tester.startGesture(center);
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsOneWidget);
+      await interrupted.cancel();
+      await tester.pumpAndSettle();
+      expect(actionsTriggered, isEmpty);
+      expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

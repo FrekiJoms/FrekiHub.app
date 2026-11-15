@@ -14,7 +14,7 @@ This is the requested singular `AGENT.md` onboarding guide. **`AGENTS.md` is the
 
 - Android-first Flutter app; local SQLite storage; no login, backend, remote sync or AI purchase parser.
 - Six main page surfaces: Home, Map, Sessions, Finance, Calendar and Settings. Four bottom tabs; Calendar top-left and Settings top-right. Logs use their own Settings drawer; Syntax builder is a separate full-screen workspace.
-- Quick add is a center-bottom long-press/drag gesture with accessible actions, not a visible plus tab.
+- Quick add uses a compact circular `+` button integrated at the horizontal center of the bottom liquid-glass navigation pill: short-tapping expands a staggered radial liquid-glass action menu, while holding and dragging preserves the quick-add drag-and-release gesture with accessible actions.
 - Record editing and Settings sheets use the shared content-fit/70% bottom drawer. Follow the drawer contract in [App documentation](docs/APP_DOCUMENTATION.md) and the canonical instructions before introducing a new modal.
 - Finance retains `BudgetScreen`, `budget.dart`, `budget_page`, `budget.*` and native receipt destination `budget` for compatibility.
 - `Session` stores epoch milliseconds and a date key; money uses integer minor units. Planner rules and automation rules are different resources.

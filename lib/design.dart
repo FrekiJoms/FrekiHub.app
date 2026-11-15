@@ -620,6 +620,10 @@ class _PillNavigationState extends State<PillNavigation>
   bool _longPressActive = false;
   bool _radialClosing = false;
   bool _dispatchingQuickAdd = false;
+  int? _activePointer;
+  Offset? _pointerDownPos;
+  Offset? _lastPointerPos;
+  Timer? _holdTimer;
   Offset? _lastPlusCenter;
   Timer? _tooltipTimer;
   int? _lastIndex;
@@ -912,15 +916,15 @@ class _PillNavigationState extends State<PillNavigation>
     }
   }
 
-  void openRadialMenu() {
+  void openRadialMenu({bool fast = false}) {
     if (!mounted) return;
     ActionFeedback.tap();
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) return;
     final themes = InheritedTheme.capture(from: context, to: overlay.context);
     _radialClosing = false;
-    _radialController.duration = Motion.duration(context, 420);
-    _radialController.reverseDuration = Motion.duration(context, 340);
+    _radialController.duration = Motion.duration(context, fast ? 150 : 360);
+    _radialController.reverseDuration = Motion.duration(context, 280);
     if (_radialEntry == null) {
       _radialEntry = OverlayEntry(
         builder: (overlayContext) =>
@@ -931,7 +935,10 @@ class _PillNavigationState extends State<PillNavigation>
     if (MediaQuery.disableAnimationsOf(context)) {
       _radialController.value = 1.0;
     } else {
-      _radialController.forward(from: _radialController.value);
+      final startValue = fast
+          ? math.max(_radialController.value, 0.35)
+          : _radialController.value;
+      _radialController.forward(from: startValue);
     }
     setState(() {});
   }
@@ -948,25 +955,58 @@ class _PillNavigationState extends State<PillNavigation>
     }
     if (_radialClosing) return;
     _radialClosing = true;
-    _radialController.reverseDuration = Motion.duration(context, 340);
+    _radialController.reverseDuration = Motion.duration(context, 280);
     _radialController.reverse();
     if (mounted) setState(() {});
   }
 
   void _updateRadialHover(Offset globalPosition) {
+    if (!mounted) return;
+    final media = MediaQuery.of(context);
+    final screen = media.size;
+    final safePadding = media.viewPadding;
+    final overlay = Overlay.maybeOf(context);
+    final origin = _resolvePlusCenter(overlay?.context ?? context);
+    final delta = globalPosition - origin;
+    final distFromOrigin = delta.distance;
+
     int? next;
-    for (var i = 0; i < optionKeys.length; i++) {
-      final box =
-          optionKeys[i].currentContext?.findRenderObject() as RenderBox?;
-      if (box != null &&
-          box.hasSize &&
-          (box.localToGlobal(Offset.zero) & box.size)
-              .inflate(6)
-              .contains(globalPosition)) {
+    var bestOrbDistance = 40.0;
+    for (var i = 0; i < actions.length; i++) {
+      final targetCenter =
+          origin +
+          _radialOffset(i, actions.length, screen, safePadding, origin);
+      final distance = (globalPosition - targetCenter).distance;
+      if (distance <= bestOrbDistance) {
+        bestOrbDistance = distance;
         next = i;
-        break;
       }
     }
+
+    if (next == null &&
+        distFromOrigin >= 18.0 &&
+        distFromOrigin <= 145.0 &&
+        delta.dy <= 18.0) {
+      final swipeAngle = math.atan2(delta.dy, delta.dx);
+      var bestAngleDiff = 0.48;
+      for (var i = 0; i < actions.length; i++) {
+        final offset = _radialOffset(
+          i,
+          actions.length,
+          screen,
+          safePadding,
+          origin,
+        );
+        final itemAngle = math.atan2(offset.dy, offset.dx);
+        var diff = (swipeAngle - itemAngle).abs();
+        if (diff > math.pi) diff = 2 * math.pi - diff;
+        if (diff <= bestAngleDiff) {
+          bestAngleDiff = diff;
+          next = i;
+        }
+      }
+    }
+
     if (next == hovered) return;
     hovered = next;
     if (next != null) ActionFeedback.tap();
@@ -1069,7 +1109,8 @@ class _PillNavigationState extends State<PillNavigation>
               animation: _radialController,
               builder: (c, _) {
                 final t = _radialController.value.clamp(0.0, 1.0);
-                final scrimAlpha = (dark ? 0.34 : 0.16) * Curves.easeOut.transform(t);
+                final scrimAlpha =
+                    (dark ? 0.34 : 0.16) * Curves.easeOut.transform(t);
                 return GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () => closeRadialMenu(feedback: true),
@@ -1156,7 +1197,10 @@ class _PillNavigationState extends State<PillNavigation>
             Positioned(
               left: (origin.dx - 96).clamp(
                 safePadding.left + 12.0,
-                math.max(safePadding.left + 12.0, screen.width - safePadding.right - 204.0),
+                math.max(
+                  safePadding.left + 12.0,
+                  screen.width - safePadding.right - 204.0,
+                ),
               ),
               top: math.max(safePadding.top + 12.0, origin.dy - 62.0),
               width: 192,
@@ -1179,7 +1223,9 @@ class _PillNavigationState extends State<PillNavigation>
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: dark ? .40 : .14),
+                          color: Colors.black.withValues(
+                            alpha: dark ? .40 : .14,
+                          ),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -1206,17 +1252,14 @@ class _PillNavigationState extends State<PillNavigation>
             top: origin.dy - 19,
             width: 38,
             height: 38,
-            child: GestureDetector(
+            child: Listener(
               key: const ValueKey('radial-close-button'),
               behavior: HitTestBehavior.opaque,
-              onTap: () => closeRadialMenu(feedback: true),
-              onLongPressStart: _handleLongPressStart,
-              onLongPressMoveUpdate: _handleLongPressMove,
-              onLongPressCancel: _handleLongPressCancel,
-              onLongPressEnd: _handleLongPressEnd,
-              child: Center(
-                child: _buildPlusOrb(overlayContext, active: true),
-              ),
+              onPointerDown: _onPlusPointerDown,
+              onPointerMove: _onPlusPointerMove,
+              onPointerUp: _onPlusPointerUp,
+              onPointerCancel: _onPlusPointerCancel,
+              child: Center(child: _buildPlusOrb(overlayContext, active: true)),
             ),
           ),
         ],
@@ -1224,50 +1267,85 @@ class _PillNavigationState extends State<PillNavigation>
     );
   }
 
-  void _handleLongPressStart(LongPressStartDetails d) {
+  void _startHoldDrag(Offset globalPosition, {bool fast = false}) {
+    if (!mounted) return;
     _setPlusPressed(false);
     _longPressActive = true;
     hovered = null;
     if (!isRadialOpen) {
-      openRadialMenu();
+      openRadialMenu(fast: fast);
     }
-    _updateRadialHover(d.globalPosition);
+    _updateRadialHover(globalPosition);
   }
 
-  void _handleLongPressMove(LongPressMoveUpdateDetails d) {
-    if (_radialEntry != null) {
-      _updateRadialHover(d.globalPosition);
-    }
-  }
-
-  void _handleLongPressCancel() {
-    _setPlusPressed(false);
+  void _onPlusPointerDown(PointerDownEvent e) {
+    _holdTimer?.cancel();
+    _activePointer = e.pointer;
+    _pointerDownPos = e.position;
+    _lastPointerPos = e.position;
     _longPressActive = false;
-    closeRadialMenu();
+    _setPlusPressed(true);
+    _holdTimer = Timer(const Duration(milliseconds: 140), () {
+      if (_activePointer == e.pointer && !_longPressActive) {
+        _startHoldDrag(_lastPointerPos ?? e.position, fast: true);
+      }
+    });
   }
 
-  void _handleLongPressEnd(LongPressEndDetails d) {
-    _setPlusPressed(false);
-    if (_radialEntry == null) {
-      _longPressActive = false;
+  void _onPlusPointerMove(PointerMoveEvent e) {
+    if (_activePointer != e.pointer) return;
+    _lastPointerPos = e.position;
+    if (!_longPressActive) {
+      final down = _pointerDownPos ?? e.position;
+      if ((e.position - down).distance > 4.0) {
+        _holdTimer?.cancel();
+        _startHoldDrag(e.position, fast: true);
+      }
       return;
     }
-    _updateRadialHover(d.globalPosition);
-    final selection = hovered;
-    _longPressActive = false;
-    closeRadialMenu();
-    if (selection != null) _triggerQuickAdd(actions[selection]);
+    if (_radialEntry != null) {
+      _updateRadialHover(e.position);
+    }
   }
 
-  void _handlePointerCancel(PointerCancelEvent _) {
+  void _onPlusPointerUp(PointerUpEvent e) {
+    if (_activePointer != e.pointer) return;
+    _holdTimer?.cancel();
+    _activePointer = null;
+    _pointerDownPos = null;
+    _lastPointerPos = null;
     _setPlusPressed(false);
     if (_longPressActive) {
-      _handleLongPressCancel();
+      if (_radialEntry == null) {
+        _longPressActive = false;
+        return;
+      }
+      _updateRadialHover(e.position);
+      final selection = hovered;
+      _longPressActive = false;
+      closeRadialMenu();
+      if (selection != null) _triggerQuickAdd(actions[selection]);
+      return;
+    }
+    toggleRadialMenu();
+  }
+
+  void _onPlusPointerCancel(PointerCancelEvent e) {
+    if (_activePointer != null && _activePointer != e.pointer) return;
+    _holdTimer?.cancel();
+    _activePointer = null;
+    _pointerDownPos = null;
+    _lastPointerPos = null;
+    _setPlusPressed(false);
+    if (_longPressActive) {
+      _longPressActive = false;
+      closeRadialMenu();
     }
   }
 
   @override
   void dispose() {
+    _holdTimer?.cancel();
     closeRadialMenu(immediate: true);
     _removeTooltip();
     _radialControllerInstance?.dispose();
@@ -1335,7 +1413,7 @@ class _PillNavigationState extends State<PillNavigation>
             _triggerQuickAdd('rule'),
       },
       child: Listener(
-        onPointerCancel: _handlePointerCancel,
+        onPointerCancel: _onPlusPointerCancel,
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
@@ -1425,26 +1503,32 @@ class _PillNavigationState extends State<PillNavigation>
                               ? 'Close quick actions'
                               : 'Quick actions',
                           child: GestureDetector(
-                            key: const ValueKey('nav-plus-button'),
                             behavior: HitTestBehavior.opaque,
-                            onTapDown: (_) => _setPlusPressed(true),
-                            onTapCancel: () => _setPlusPressed(false),
-                            onTapUp: (_) => _setPlusPressed(false),
-                            onTap: toggleRadialMenu,
-                            onLongPressStart: _handleLongPressStart,
-                            onLongPressMoveUpdate: _handleLongPressMove,
-                            onLongPressCancel: _handleLongPressCancel,
-                            onLongPressEnd: _handleLongPressEnd,
-                            child: SizedBox(
-                              key: _plusKey,
-                              width: 38,
-                              height: 38,
-                              child: AnimatedScale(
-                                scale: _plusPress,
-                                duration: Motion.duration(c, 120),
-                                curve: Curves.easeOutCubic,
-                                child: Center(
-                                  child: _buildPlusOrb(c, active: isRadialOpen),
+                            onHorizontalDragStart: (_) {},
+                            onHorizontalDragUpdate: (_) {},
+                            onVerticalDragStart: (_) {},
+                            onVerticalDragUpdate: (_) {},
+                            child: Listener(
+                              key: const ValueKey('nav-plus-button'),
+                              behavior: HitTestBehavior.opaque,
+                              onPointerDown: _onPlusPointerDown,
+                              onPointerMove: _onPlusPointerMove,
+                              onPointerUp: _onPlusPointerUp,
+                              onPointerCancel: _onPlusPointerCancel,
+                              child: SizedBox(
+                                key: _plusKey,
+                                width: 38,
+                                height: 38,
+                                child: AnimatedScale(
+                                  scale: _plusPress,
+                                  duration: Motion.duration(c, 120),
+                                  curve: Curves.easeOutCubic,
+                                  child: Center(
+                                    child: _buildPlusOrb(
+                                      c,
+                                      active: isRadialOpen,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
