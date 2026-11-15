@@ -520,11 +520,19 @@ class _ManageListState extends ConsumerState<_ManageList> {
             hidden.remove(item.trim().toLowerCase());
           }
           await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
+          final order = List<String>.from(
+            jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
+          );
+          var orderChanged = false;
+          for (final item in next) {
+            if (!order.contains(item)) {
+              order.add(item);
+              orderChanged = true;
+            }
+          }
           if (removed.isNotEmpty) {
-            final order = List<String>.from(
-              jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
-            )..removeWhere((w) => removed.contains(w));
-            await db.pref('walletOrder', jsonEncode(order));
+            order.removeWhere((w) => removed.contains(w));
+            orderChanged = true;
             final config = AutomationSync.config(data);
             final apps = Set<String>.from(config['apps'] as List? ?? []);
             var appsChanged = false;
@@ -538,6 +546,9 @@ class _ManageListState extends ConsumerState<_ManageList> {
               config['apps'] = apps.toList();
               await db.pref('automation', jsonEncode(config));
             }
+          }
+          if (orderChanged) {
+            await db.pref('walletOrder', jsonEncode(order));
           }
         }
       });
@@ -648,6 +659,13 @@ class _ManageListState extends ConsumerState<_ManageList> {
           ..remove(appName.toLowerCase());
         await db.pref('methods', jsonEncode(nextMethods));
         await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
+        final order = List<String>.from(
+          jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
+        );
+        if (!order.contains(appName)) {
+          order.add(appName);
+          await db.pref('walletOrder', jsonEncode(order));
+        }
         await db.pref('wallet:$appName:package', pkg);
         await db.pref('wallet:$appName:style', WalletSkin.byName(appName).id);
         final config = AutomationSync.config(data);

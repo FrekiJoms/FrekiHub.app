@@ -343,7 +343,6 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
               onMenu: _menu,
             ),
             WalletView.stack => _WalletDeck(
-              key: ValueKey(accounts.map((a) => a.name).join('|')),
               accounts: accounts,
               currency: widget.data.currency,
               masked: _effectiveMasked,
@@ -1237,6 +1236,24 @@ class _WalletGrid extends StatelessWidget {
   );
 }
 
+enum _DeckMotion { idle, dragging, committingNext, committingPrev, cancelling }
+
+class _DeckSlotPose {
+  final int index;
+  final double tx, ty, scale, angle, scrim, alpha;
+  final int zOrder;
+  const _DeckSlotPose({
+    required this.index,
+    this.tx = 0,
+    this.ty = 0,
+    this.scale = 1,
+    this.angle = 0,
+    this.scrim = 0,
+    this.alpha = 1,
+    required this.zOrder,
+  });
+}
+
 class _WalletDeck extends StatefulWidget {
   final List<WalletAccount> accounts;
   final String currency;
@@ -1247,7 +1264,6 @@ class _WalletDeck extends StatefulWidget {
   final ValueChanged<WalletAccount> onNext;
   final ValueChanged<WalletAccount> onPrevious;
   const _WalletDeck({
-    super.key,
     required this.accounts,
     required this.currency,
     required this.masked,
@@ -1264,174 +1280,567 @@ class _WalletDeck extends StatefulWidget {
 
 class _WalletDeckState extends State<_WalletDeck>
     with SingleTickerProviderStateMixin {
-  late final AnimationController motion = AnimationController(
+  static const double _peekStep = 14.0;
+  static const double _scaleStep = 0.045;
+  static const double _scrimStep = 0.085;
+  static const double _prevSwapAt = 0.48;
+
+  late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 240),
+    duration: const Duration(milliseconds: 280),
   );
-  Offset drag = Offset.zero, from = Offset.zero, to = Offset.zero;
-  VoidCallback? finish;
+  final ValueNotifier<double> _dragPx = ValueNotifier<double>(0);
+  late final Listenable _repaint = Listenable.merge([_controller, _dragPx]);
+
+  _DeckMotion _mode = _DeckMotion.idle;
+  double _flightFromPx = 0;
+  double _deckWidth = 320;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addStatusListener(_onAnimationStatus);
+  }
+
+  @override
+  void didUpdateWidget(covariant _WalletDeck oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.accounts.length < 2 && _mode != _DeckMotion.idle) {
+      _mode = _DeckMotion.idle;
+      _dragPx.value = 0;
+      _controller.reset();
+    }
+  }
 
   @override
   void dispose() {
-    motion.dispose();
+    _controller.removeStatusListener(_onAnimationStatus);
+    _controller.dispose();
+    _dragPx.dispose();
     super.dispose();
   }
 
-  Offset get current {
-    if (!motion.isAnimating) return drag;
-    final t = Curves.easeOut.transform(motion.value);
-    return Offset.lerp(from, to, t) ?? drag;
+  void _onAnimationStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed || !mounted) return;
+    final completedMode = _mode;
+    _mode = _DeckMotion.idle;
+    _dragPx.value = 0;
+    _flightFromPx = 0;
+    _controller.reset();
+    if (widget.accounts.length < 2) return;
+    if (completedMode == _DeckMotion.committingNext) {
+      widget.onNext(widget.accounts.first);
+    } else if (completedMode == _DeckMotion.committingPrev) {
+      widget.onPrevious(widget.accounts.last);
+    }
   }
 
-  void _animateTo(Offset target, int milliseconds, [VoidCallback? done]) {
-    from = current;
-    to = target;
-    finish = done;
-    motion.duration = Motion.duration(context, milliseconds);
-    motion.forward(from: 0).whenComplete(() {
-      if (!mounted) return;
-      final callback = finish;
-      finish = null;
-      setState(() {
-        drag = Offset.zero;
-        from = Offset.zero;
-        to = Offset.zero;
-        motion.reset();
-      });
-      callback?.call();
-    });
+  bool get _isCommitting =>
+      _mode == _DeckMotion.committingNext ||
+      _mode == _DeckMotion.committingPrev;
+
+  double _slotY(double slot, int behind) => (behind - slot) * _peekStep;
+  double _slotScale(double slot) => 1.0 - _scaleStep * slot;
+  double _slotScrim(double slot) => (_scrimStep * slot).clamp(0.0, 0.28);
+
+  void _onDragStart(DragStartDetails details) {
+    if (_isCommitting) return;
+    if (_mode == _DeckMotion.cancelling) {
+      final k = Motion.settle.transform(_controller.value);
+      _dragPx.value = ui.lerpDouble(_flightFromPx, 0.0, k) ?? 0.0;
+      _controller.stop();
+      _controller.reset();
+    }
+    _mode = _DeckMotion.dragging;
   }
 
-  void _release(Offset velocity, double width, double height) {
-    if (motion.isAnimating) return;
+  void _onDragUpdate(DragUpdateDetails details) {
+    if (_mode != _DeckMotion.dragging) return;
     if (widget.accounts.length < 2) {
-      _animateTo(Offset.zero, 220);
+      _dragPx.value = (_dragPx.value + details.delta.dx * 0.28).clamp(
+        -40.0,
+        40.0,
+      );
       return;
     }
-    final speed = velocity.distance;
-    final far = drag.distance > width * .16 || speed > 620;
-    if (!far) {
-      _animateTo(Offset.zero, 220);
+    _dragPx.value = (_dragPx.value + details.delta.dx).clamp(
+      -_deckWidth * 1.1,
+      _deckWidth * 1.1,
+    );
+  }
+
+  void _onDragEnd(DragEndDetails details) {
+    if (_mode != _DeckMotion.dragging) return;
+    _finishDrag(details.velocity.pixelsPerSecond.dx);
+  }
+
+  void _onDragCancel() {
+    if (_mode != _DeckMotion.dragging) return;
+    _finishDrag(0);
+  }
+
+  void _finishDrag(double vx) {
+    if (widget.accounts.length < 2) {
+      _animateCancel();
       return;
     }
-    final direction = drag.distance > 12
-        ? drag / drag.distance
-        : speed > 0
-        ? velocity / speed
-        : const Offset(0, -1);
-    final distance = math.max(width, height) * 1.4;
-    final duration = (310 - speed / 20).clamp(170, 320).round();
-    _animateTo(direction * distance, duration, () {
-      if (mounted) widget.onNext(widget.accounts.first);
-    });
+    final dx = _dragPx.value;
+    final w = _deckWidth;
+    final commitNext = dx < -w * 0.20 || (vx < -460 && dx < 24);
+    final commitPrev = dx > w * 0.20 || (vx > 460 && dx > -24);
+    if (commitNext) {
+      _startCommit(next: true, velocityX: vx);
+    } else if (commitPrev) {
+      _startCommit(next: false, velocityX: vx);
+    } else {
+      _animateCancel();
+    }
+  }
+
+  void _startCommit({required bool next, double velocityX = 0}) {
+    if (widget.accounts.length < 2 || _isCommitting) return;
+    if (Motion.duration(context, 280) == Duration.zero) {
+      _mode = _DeckMotion.idle;
+      _dragPx.value = 0;
+      _flightFromPx = 0;
+      _controller.reset();
+      if (next) {
+        widget.onNext(widget.accounts.first);
+      } else {
+        widget.onPrevious(widget.accounts.last);
+      }
+      return;
+    }
+    _flightFromPx = _dragPx.value;
+    _mode = next ? _DeckMotion.committingNext : _DeckMotion.committingPrev;
+    final ms = (290 - velocityX.abs() / 22).clamp(180, 300).round();
+    _controller.duration = Motion.duration(context, ms);
+    _controller.forward(from: 0);
+  }
+
+  void _animateCancel() {
+    if (Motion.duration(context, 220) == Duration.zero ||
+        _dragPx.value.abs() < 0.5) {
+      _mode = _DeckMotion.idle;
+      _dragPx.value = 0;
+      _flightFromPx = 0;
+      _controller.reset();
+      return;
+    }
+    _flightFromPx = _dragPx.value;
+    _mode = _DeckMotion.cancelling;
+    _controller.duration = Motion.duration(context, 220);
+    _controller.forward(from: 0);
+  }
+
+  List<_DeckSlotPose> _poses(double width, int n, int behind) {
+    final swipeRange = math.max(120.0, width * 0.48);
+
+    List<_DeckSlotPose> restPoses() => [
+      for (var i = behind; i >= 0; i--)
+        _DeckSlotPose(
+          index: i,
+          ty: _slotY(i.toDouble(), behind),
+          scale: _slotScale(i.toDouble()),
+          scrim: _slotScrim(i.toDouble()),
+          zOrder: behind - i,
+        ),
+    ];
+
+    List<_DeckSlotPose> dragPoses(double dx) {
+      if (n == 1) {
+        return [
+          _DeckSlotPose(
+            index: 0,
+            tx: dx,
+            angle: (dx / width).clamp(-1.0, 1.0) * 0.04,
+            zOrder: 0,
+          ),
+        ];
+      }
+      if (dx <= 0) {
+        final t = (-dx / swipeRange).clamp(0.0, 1.0);
+        final poses = <_DeckSlotPose>[];
+        if (n > 4 && t > 0.001) {
+          final slot = 4.0 - t;
+          poses.add(
+            _DeckSlotPose(
+              index: 4,
+              ty: _slotY(slot, behind),
+              scale: _slotScale(slot),
+              scrim: _slotScrim(slot),
+              alpha: t,
+              zOrder: -1,
+            ),
+          );
+        }
+        for (var i = behind; i >= 1; i--) {
+          final slot = i - t;
+          poses.add(
+            _DeckSlotPose(
+              index: i,
+              ty: _slotY(slot, behind),
+              scale: _slotScale(slot),
+              scrim: _slotScrim(slot),
+              zOrder: behind - i,
+            ),
+          );
+        }
+        poses.add(
+          _DeckSlotPose(
+            index: 0,
+            tx: dx,
+            ty: _slotY(0, behind),
+            scale: ui.lerpDouble(1.0, 0.95, t)!,
+            angle: (dx / width).clamp(-1.0, 1.0) * 0.075,
+            zOrder: behind + 1,
+          ),
+        );
+        return poses;
+      }
+
+      // Dragging right previews bringing the previous card forward.
+      final t = (dx / swipeRange).clamp(0.0, 1.0);
+      final u = t * (_prevSwapAt - 0.02);
+      final k = Curves.easeOutCubic.transform(u / _prevSwapAt);
+      final backSlot = behind.toDouble();
+      final prevIndex = n - 1;
+      final poses = <_DeckSlotPose>[];
+
+      poses.add(
+        _DeckSlotPose(
+          index: prevIndex,
+          tx: -width * 0.72 * k,
+          ty: ui.lerpDouble(_slotY(backSlot, behind), _slotY(0, behind) - 4, k)!,
+          scale: ui.lerpDouble(_slotScale(backSlot), 0.94, k)!,
+          angle: -0.07 * k,
+          scrim: ui.lerpDouble(_slotScrim(backSlot), 0.04, k)!,
+          alpha: n > 4 ? (u / 0.22).clamp(0.0, 1.0) : 1.0,
+          zOrder: -1,
+        ),
+      );
+
+      final maxMiddle = n <= 4 ? n - 2 : 3;
+      for (var i = maxMiddle; i >= 1; i--) {
+        final slot = i + u;
+        poses.add(
+          _DeckSlotPose(
+            index: i,
+            ty: _slotY(slot, behind),
+            scale: _slotScale(slot),
+            scrim: _slotScrim(slot),
+            zOrder: behind - i,
+          ),
+        );
+      }
+
+      final c0Slot = u / _prevSwapAt * 0.5;
+      poses.add(
+        _DeckSlotPose(
+          index: 0,
+          tx: dx * 0.42,
+          ty: _slotY(c0Slot, behind),
+          scale: _slotScale(c0Slot),
+          angle: (dx / width).clamp(0.0, 1.0) * 0.05,
+          scrim: _slotScrim(c0Slot),
+          zOrder: behind + 1,
+        ),
+      );
+      return poses;
+    }
+
+    switch (_mode) {
+      case _DeckMotion.idle:
+        return restPoses();
+      case _DeckMotion.dragging:
+        return dragPoses(_dragPx.value);
+      case _DeckMotion.cancelling:
+        final k = Motion.settle.transform(_controller.value);
+        final dx = ui.lerpDouble(_flightFromPx, 0.0, k)!;
+        return dragPoses(dx);
+      case _DeckMotion.committingNext:
+        final u = _controller.value;
+        final startT = (-_flightFromPx / swipeRange).clamp(0.0, 1.0);
+        final t = ui.lerpDouble(
+          startT,
+          1.0,
+          Curves.easeOutCubic.transform(u),
+        )!;
+        final peakDx = math.min(_flightFromPx, -width * 0.72);
+        final swapAt = _flightFromPx <= -width * 0.65 ? 0.14 : 0.46;
+        final backSlot = behind.toDouble();
+        final midY = ui.lerpDouble(_slotY(0, behind), _slotY(backSlot, behind), 0.35)!;
+        final poses = <_DeckSlotPose>[];
+
+        if (n > 4) {
+          final slot = 4.0 - t;
+          poses.add(
+            _DeckSlotPose(
+              index: 4,
+              ty: _slotY(slot, behind),
+              scale: _slotScale(slot),
+              scrim: _slotScrim(slot),
+              alpha: t,
+              zOrder: 0,
+            ),
+          );
+        }
+        for (var i = behind; i >= 1; i--) {
+          final slot = i - t;
+          poses.add(
+            _DeckSlotPose(
+              index: i,
+              ty: _slotY(slot, behind),
+              scale: _slotScale(slot),
+              scrim: _slotScrim(slot),
+              zOrder: (behind - i) + 1,
+            ),
+          );
+        }
+
+        if (u < swapAt) {
+          final k = Curves.easeOutCubic.transform(u / swapAt);
+          final tx = ui.lerpDouble(_flightFromPx, peakDx, k)!;
+          poses.add(
+            _DeckSlotPose(
+              index: 0,
+              tx: tx,
+              ty: ui.lerpDouble(_slotY(0, behind), midY, k)!,
+              scale: ui.lerpDouble(ui.lerpDouble(1.0, 0.95, startT)!, 0.93, k)!,
+              angle: (tx / width).clamp(-1.0, 1.0) * 0.075,
+              zOrder: behind + 2,
+            ),
+          );
+        } else {
+          final k = Curves.easeInOutCubic.transform((u - swapAt) / (1.0 - swapAt));
+          poses.add(
+            _DeckSlotPose(
+              index: 0,
+              tx: ui.lerpDouble(peakDx, 0.0, k)!,
+              ty: ui.lerpDouble(midY, _slotY(backSlot, behind), k)!,
+              scale: ui.lerpDouble(0.93, _slotScale(backSlot), k)!,
+              angle: ui.lerpDouble(
+                (peakDx / width).clamp(-1.0, 1.0) * 0.075,
+                0.0,
+                k,
+              )!,
+              scrim: ui.lerpDouble(0.0, _slotScrim(backSlot), k)!,
+              alpha: n > 4 ? (1.0 - k) : 1.0,
+              zOrder: -1,
+            ),
+          );
+        }
+        poses.sort((a, b) => a.zOrder.compareTo(b.zOrder));
+        return poses;
+
+      case _DeckMotion.committingPrev:
+        final startU =
+            (_flightFromPx / swipeRange).clamp(0.0, 1.0) * (_prevSwapAt - 0.02);
+        final u = ui.lerpDouble(
+          startU,
+          1.0,
+          Curves.easeInOutCubic.transform(_controller.value),
+        )!;
+        final backSlot = behind.toDouble();
+        final prevIndex = n - 1;
+        final startC0Tx = _flightFromPx * 0.42;
+        final peakC0Tx = math.max(startC0Tx, width * 0.22);
+        final poses = <_DeckSlotPose>[];
+
+        final maxMiddle = n <= 4 ? n - 2 : 3;
+        for (var i = maxMiddle; i >= 1; i--) {
+          final slot = i + u;
+          final alpha = (n > 4 && i == 3)
+              ? (1.0 - (u - 0.35) / 0.45).clamp(0.0, 1.0)
+              : 1.0;
+          poses.add(
+            _DeckSlotPose(
+              index: i,
+              ty: _slotY(slot, behind),
+              scale: _slotScale(slot),
+              scrim: _slotScrim(slot),
+              alpha: alpha,
+              zOrder: behind - i,
+            ),
+          );
+        }
+
+        if (u < _prevSwapAt) {
+          final localT = (u - startU) / (_prevSwapAt - startU);
+          final kAll = Curves.easeOutCubic.transform(u / _prevSwapAt);
+          final c0Tx = ui.lerpDouble(
+            startC0Tx,
+            peakC0Tx,
+            Curves.easeOut.transform(localT.clamp(0.0, 1.0)),
+          )!;
+          final c0Slot = (u / _prevSwapAt) * 0.5;
+          poses.add(
+            _DeckSlotPose(
+              index: 0,
+              tx: c0Tx,
+              ty: _slotY(c0Slot, behind),
+              scale: _slotScale(c0Slot),
+              angle: (c0Tx / width).clamp(0.0, 1.0) * 0.05,
+              scrim: _slotScrim(c0Slot),
+              zOrder: behind + 1,
+            ),
+          );
+          poses.add(
+            _DeckSlotPose(
+              index: prevIndex,
+              tx: -width * 0.72 * kAll,
+              ty: ui.lerpDouble(
+                _slotY(backSlot, behind),
+                _slotY(0, behind) - 4,
+                kAll,
+              )!,
+              scale: ui.lerpDouble(_slotScale(backSlot), 0.94, kAll)!,
+              angle: -0.07 * kAll,
+              scrim: ui.lerpDouble(_slotScrim(backSlot), 0.04, kAll)!,
+              alpha: n > 4 ? (u / 0.22).clamp(0.0, 1.0) : 1.0,
+              zOrder: -1,
+            ),
+          );
+        } else {
+          final k = Curves.easeOutCubic.transform(
+            (u - _prevSwapAt) / (1.0 - _prevSwapAt),
+          );
+          final kEase = Curves.easeInOutCubic.transform(
+            (u - _prevSwapAt) / (1.0 - _prevSwapAt),
+          );
+          final c0Slot = ui.lerpDouble(0.5, 1.0, kEase)!;
+          poses.add(
+            _DeckSlotPose(
+              index: 0,
+              tx: ui.lerpDouble(peakC0Tx, 0.0, kEase)!,
+              ty: _slotY(c0Slot, behind),
+              scale: _slotScale(c0Slot),
+              angle: ui.lerpDouble(
+                (peakC0Tx / width).clamp(0.0, 1.0) * 0.05,
+                0.0,
+                kEase,
+              )!,
+              scrim: _slotScrim(c0Slot),
+              zOrder: behind + 1,
+            ),
+          );
+          poses.add(
+            _DeckSlotPose(
+              index: prevIndex,
+              tx: ui.lerpDouble(-width * 0.72, 0.0, k)!,
+              ty: ui.lerpDouble(_slotY(0, behind) - 4, _slotY(0, behind), k)!,
+              scale: ui.lerpDouble(0.94, 1.0, k)!,
+              angle: ui.lerpDouble(-0.07, 0.0, k)!,
+              scrim: ui.lerpDouble(0.04, 0.0, k)!,
+              zOrder: behind + 2,
+            ),
+          );
+        }
+        poses.sort((a, b) => a.zOrder.compareTo(b.zOrder));
+        return poses;
+    }
   }
 
   @override
   Widget build(BuildContext c) {
     final accounts = widget.accounts;
     if (accounts.isEmpty) return const SizedBox.shrink();
+    final n = accounts.length;
     final front = accounts.first;
+    final behind = math.min(3, n - 1);
+    final dark = Theme.of(c).brightness == Brightness.dark;
+
+    // Prebuild card widgets outside AnimatedBuilder so drag/animation frames
+    // only update compositor transforms without rebuilding WalletCard subtrees.
+    final indices = <int>{
+      for (var i = 0; i <= behind; i++) i,
+      if (n > 4) 4,
+      if (n > 1) n - 1,
+    };
+    final cardWidgets = <int, Widget>{
+      for (final i in indices)
+        i: RepaintBoundary(
+          key: ValueKey(accounts[i].name),
+          child: WalletCard(
+            account: accounts[i],
+            currency: widget.currency,
+            masked: widget.masked,
+            selected: accounts[i].name == widget.selected,
+            showMenu: i == 0,
+            onMenu: i == 0 ? () => widget.onMenu(accounts[i]) : null,
+            semanticsLabel: i == 0 ? '${accounts[i].name} wallet card' : null,
+          ),
+        ),
+    };
+
     return LayoutBuilder(
       builder: (c, constraints) {
         final width = constraints.maxWidth;
-        final height = width / 1.586;
-        final behind = math.min(3, accounts.length - 1);
+        _deckWidth = width;
+        final cardHeight = width / 1.586;
+        final stackHeight = cardHeight + behind * _peekStep + 8;
+
         return Column(
           children: [
-            SizedBox(
-              height: height + 30,
-              child: AnimatedBuilder(
-                animation: motion,
-                builder: (c, _) {
-                  final offset = current;
-                  final angle = (offset.dx / width).clamp(-1.2, 1.2) * .2;
-                  final scale =
-                      (1 - math.min(.05, offset.distance / width * .05))
-                          .toDouble();
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.topCenter,
-                    children: [
-                      for (var i = behind; i >= 1; i--)
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: Transform.translate(
-                            offset: Offset(0, 7.0 * i),
-                            child: Transform.scale(
-                              scale: 1 - .04 * i,
-                              alignment: Alignment.topCenter,
-                              child: Opacity(
-                                opacity: 1 - .14 * i,
-                                child: WalletCard(
-                                  account: accounts[i % accounts.length],
-                                  currency: widget.currency,
-                                  masked: widget.masked,
-                                  selected:
-                                      accounts[i % accounts.length].name ==
-                                      widget.selected,
-                                  showMenu: false,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      Positioned(
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        child: Semantics(
-                          label:
-                              '${front.name} wallet, ${widget.masked ? 'amount hidden' : money(front.balance, widget.currency)}, card 1 of ${accounts.length}',
-                          onIncrease: () => widget.onNext(front),
-                          onDecrease: () => widget.onPrevious(accounts.last),
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: motion.isAnimating
-                                ? null
-                                : () => widget.onOpen(front),
-                            onPanStart: motion.isAnimating
-                                ? null
-                                : (_) {
-                                    setState(() => drag = Offset.zero);
-                                  },
-                            onPanUpdate: motion.isAnimating
-                                ? null
-                                : (details) {
-                                    setState(() => drag += details.delta);
-                                  },
-                            onPanEnd: motion.isAnimating
-                                ? null
-                                : (details) => _release(
-                                    details.velocity.pixelsPerSecond,
-                                    width,
-                                    height,
-                                  ),
-                            child: Transform.translate(
-                              offset: offset,
-                              child: Transform.rotate(
-                                angle: angle,
-                                child: Transform.scale(
-                                  scale: scale,
-                                  alignment: Alignment.topCenter,
-                                  child: WalletCard(
-                                    account: front,
-                                    currency: widget.currency,
-                                    masked: widget.masked,
-                                    selected: front.name == widget.selected,
-                                    onMenu: () => widget.onMenu(front),
-                                    semanticsLabel: '${front.name} wallet card',
+            Semantics(
+              label:
+                  '${front.name} wallet, ${widget.masked ? 'amount hidden' : money(front.balance, widget.currency)}, card 1 of $n',
+              onIncrease: n < 2 ? null : () => _startCommit(next: true),
+              onDecrease: n < 2 ? null : () => _startCommit(next: false),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _isCommitting ? null : () => widget.onOpen(front),
+                onLongPress: _isCommitting ? null : () => widget.onMenu(front),
+                onHorizontalDragStart: _onDragStart,
+                onHorizontalDragUpdate: _onDragUpdate,
+                onHorizontalDragEnd: _onDragEnd,
+                onHorizontalDragCancel: _onDragCancel,
+                child: SizedBox(
+                  height: stackHeight,
+                  child: AnimatedBuilder(
+                    animation: _repaint,
+                    builder: (c, _) {
+                      final poses = _poses(width, n, behind);
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.topCenter,
+                        children: [
+                          for (final pose in poses)
+                            if (pose.alpha > 0.005)
+                              Positioned(
+                                key: ValueKey('slot-${accounts[pose.index].name}'),
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                child: IgnorePointer(
+                                  ignoring: pose.index != 0,
+                                  child: Transform.translate(
+                                    offset: Offset(pose.tx, pose.ty),
+                                    child: Transform.rotate(
+                                      angle: pose.angle,
+                                      alignment: Alignment.center,
+                                      child: Transform.scale(
+                                        scale: pose.scale,
+                                        alignment: Alignment.topCenter,
+                                        child: _DeckCardShell(
+                                          dark: dark,
+                                          selected:
+                                              accounts[pose.index].name ==
+                                              widget.selected,
+                                          scrim: pose.scrim,
+                                          alpha: pose.alpha,
+                                          child: cardWidgets[pose.index]!,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
             Row(
@@ -1439,14 +1848,12 @@ class _WalletDeckState extends State<_WalletDeck>
               children: [
                 IconButton(
                   tooltip: 'Previous wallet',
-                  onPressed: accounts.length < 2
-                      ? null
-                      : () => widget.onPrevious(accounts.last),
+                  onPressed: n < 2 ? null : () => _startCommit(next: false),
                   icon: const Icon(LucideIcons.chevronLeft, size: 18),
                 ),
                 Expanded(
                   child: Text(
-                    'Swipe any direction · ${accounts.length} cards',
+                    n == 1 ? '1 wallet card' : 'Swipe left or right · $n cards',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -1458,9 +1865,7 @@ class _WalletDeckState extends State<_WalletDeck>
                 ),
                 IconButton(
                   tooltip: 'Next wallet',
-                  onPressed: accounts.length < 2
-                      ? null
-                      : () => widget.onNext(front),
+                  onPressed: n < 2 ? null : () => _startCommit(next: true),
                   icon: const Icon(LucideIcons.chevronRight, size: 18),
                 ),
               ],
@@ -1469,6 +1874,61 @@ class _WalletDeckState extends State<_WalletDeck>
         );
       },
     );
+  }
+}
+
+class _DeckCardShell extends StatelessWidget {
+  final bool dark;
+  final bool selected;
+  final double scrim;
+  final double alpha;
+  final Widget child;
+  const _DeckCardShell({
+    required this.dark,
+    required this.selected,
+    required this.scrim,
+    required this.alpha,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final radius = BorderRadius.circular(18);
+    Widget result = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: radius,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? .42 : .16),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? .28 : .10),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: selected
+              ? null
+              : Border.all(
+                  color: Colors.white.withValues(alpha: dark ? .12 : .24),
+                  width: .8,
+                ),
+          color: scrim > 0.005 ? Colors.black.withValues(alpha: scrim) : null,
+        ),
+        child: child,
+      ),
+    );
+    if (alpha < 0.999) {
+      result = Opacity(opacity: alpha.clamp(0.0, 1.0), child: result);
+    }
+    return result;
   }
 }
 
@@ -2261,11 +2721,127 @@ class _AddWalletSheet extends ConsumerStatefulWidget {
 class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
   final name = TextEditingController();
   bool busy = false;
+  String? _selectedPackage;
 
   @override
   void dispose() {
     name.dispose();
     super.dispose();
+  }
+
+  List<String> _methodSuggestions() {
+    final visible = widget.data.walletMethods
+        .map((m) => m.toLowerCase())
+        .toSet();
+    final seen = <String>{...visible};
+    final out = <String>[];
+    for (final m in widget.data.methods) {
+      final key = m.trim().toLowerCase();
+      if (key.isEmpty || !seen.add(key)) continue;
+      out.add(m.trim());
+    }
+    for (final preset in const [
+      'GCash',
+      'Maya',
+      'MariBank',
+      'GoTyme',
+      'HelloMoney',
+    ]) {
+      final key = preset.toLowerCase();
+      if (!seen.add(key)) continue;
+      out.add(preset);
+    }
+    return out;
+  }
+
+  Future<void> _pickInstalledApp() async {
+    if (busy) return;
+    setState(() => busy = true);
+    try {
+      final installed =
+          (await NativeSession.channel.invokeListMethod('notificationApps') ??
+                  [])
+              .map((a) => Map<String, dynamic>.from(a as Map))
+              .toList();
+      if (!mounted) return;
+      setState(() => busy = false);
+      var query = '';
+      final picked = await panel<Map<String, dynamic>>(
+        context,
+        StatefulBuilder(
+          builder: (c, setLocal) {
+            final filtered = query.trim().isEmpty
+                ? installed
+                : installed.where((app) {
+                    final n = (app['name'] as String? ?? '').toLowerCase();
+                    final p = (app['package'] as String? ?? '').toLowerCase();
+                    final q = query.trim().toLowerCase();
+                    return n.contains(q) || p.contains(q);
+                  }).toList();
+            return PanelContent(
+              header: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const PanelHeading(title: 'Pick payment app'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    onChanged: (v) => setLocal(() => query = v),
+                    decoration: const InputDecoration(
+                      labelText: 'Search installed apps',
+                      prefixIcon: Icon(LucideIcons.search, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              footer: AppButton(
+                label: 'Cancel',
+                secondary: true,
+                onPressed: () => Navigator.pop(c),
+              ),
+              scrollable: true,
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (c, i) {
+                  final app = filtered[i];
+                  final appName = (app['name'] as String? ?? '').trim();
+                  final pkg = (app['package'] as String? ?? '').trim();
+                  final added = widget.data.walletMethods.any(
+                    (s) => s.toLowerCase() == appName.toLowerCase(),
+                  );
+                  return ListTile(
+                    title: Text(appName),
+                    subtitle: Text(
+                      pkg,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: added
+                        ? const Icon(LucideIcons.check, size: 18)
+                        : null,
+                    onTap: () => Navigator.pop(c, app),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      );
+      if (picked == null || !mounted) return;
+      final appName = (picked['name'] as String? ?? '').trim();
+      final pkg = (picked['package'] as String? ?? '').trim();
+      if (appName.isEmpty || pkg.isEmpty) return;
+      final trimmedName = appName.length > 24
+          ? appName.substring(0, 24).trim()
+          : appName;
+      name.text = trimmedName;
+      name.selection = TextSelection.collapsed(offset: trimmedName.length);
+      setState(() => _selectedPackage = pkg);
+    } catch (e) {
+      if (mounted) {
+        setState(() => busy = false);
+        toast(context, 'Could not load installed apps.', error: true);
+      }
+    }
   }
 
   Future<void> _add() async {
@@ -2287,18 +2863,50 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
     }
     setState(() => busy = true);
     try {
-      final methods = [...widget.data.methods, value];
-      final stored = [...walletStoredOrder(widget.data.prefs)]..remove(value);
-      final order = [...stored, value];
+      final existingIndex = widget.data.methods.indexWhere(
+        (m) => m.toLowerCase() == value.toLowerCase(),
+      );
+      final canonical = existingIndex >= 0
+          ? widget.data.methods[existingIndex]
+          : value;
+      final methods = existingIndex >= 0
+          ? [...widget.data.methods]
+          : [...widget.data.methods, value];
+      final stored = [...walletStoredOrder(widget.data.prefs)]
+        ..removeWhere((m) => m.toLowerCase() == canonical.toLowerCase());
+      final order = [...stored, canonical];
       final db = ref.read(databaseProvider);
+      final pkg = _selectedPackage;
       await db.transaction(() async {
-        final hidden = {...widget.data.hiddenWallets}
-          ..remove(value.toLowerCase());
+        final fresh = await db.readAll();
+        final hidden = {...fresh.hiddenWallets}
+          ..remove(canonical.toLowerCase());
         await db.pref('methods', jsonEncode(methods));
         await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
         await db.pref('walletOrder', jsonEncode(order));
-        await db.pref('wallet:$value:style', WalletSkin.byName(value).id);
+        await db.pref(
+          'wallet:$canonical:style',
+          WalletSkin.byName(canonical).id,
+        );
+        if (pkg != null && pkg.isNotEmpty) {
+          await db.pref('wallet:$canonical:package', pkg);
+          final config = AutomationSync.config(fresh);
+          final apps = Set<String>.from(config['apps'] as List? ?? []);
+          apps.add(pkg);
+          config['apps'] = apps.toList();
+          await db.pref('automation', jsonEncode(config));
+          await db.pref('purchaseScanning', true);
+        }
       });
+      if (pkg != null && pkg.isNotEmpty) {
+        await AutomationSync.configure(await db.readAll());
+        if (mounted) {
+          await PermissionHints.request<bool>(
+            context,
+            'notificationPermission',
+          );
+        }
+      }
       if (mounted) {
         dataToast(context, 'Payment method', DataAction.saved);
         Navigator.pop(context);
@@ -2313,66 +2921,128 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
   }
 
   @override
-  Widget build(BuildContext c) => PanelContent(
-    header: const PanelHeading(title: 'Add wallet'),
-    footer: AppButton(
-      label: 'Add wallet',
-      icon: LucideIcons.plus,
-      busy: busy,
-      onPressed: _add,
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: name,
-          builder: (c, value, _) {
-            final label = value.text.trim().isEmpty
-                ? 'New wallet'
-                : value.text.trim();
-            final skin = WalletSkin.byName(label);
-            return WalletCard(
-              account: WalletAccount(
-                name: label,
-                balance: 0,
-                skin: skin,
-                imagePath: null,
-                scale: 1,
-                dx: 0,
-                dy: 0,
-                included: true,
-                movements: 0,
+  Widget build(BuildContext c) {
+    final suggestions = _methodSuggestions();
+    return PanelContent(
+      header: const PanelHeading(title: 'Add wallet'),
+      footer: AppButton(
+        label: 'Add wallet',
+        icon: LucideIcons.plus,
+        busy: busy,
+        onPressed: _add,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: name,
+            builder: (c, value, _) {
+              final label = value.text.trim().isEmpty
+                  ? 'New wallet'
+                  : value.text.trim();
+              final skin = WalletSkin.byName(label);
+              return WalletCard(
+                account: WalletAccount(
+                  name: label,
+                  balance: 0,
+                  skin: skin,
+                  imagePath: null,
+                  scale: 1,
+                  dx: 0,
+                  dy: 0,
+                  included: true,
+                  movements: 0,
+                ),
+                currency: widget.data.currency,
+                masked: false,
+                showMenu: false,
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: name,
+            autofocus: true,
+            maxLength: 24,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Wallet or payment method',
+              helperText:
+                  'Balances come from transactions assigned to this method.',
+              counterText: '',
+            ),
+            onSubmitted: (_) => _add(),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : _pickInstalledApp,
+                  icon: const Icon(LucideIcons.smartphone, size: 16),
+                  label: Text(
+                    _selectedPackage == null
+                        ? 'Pick installed app'
+                        : 'App: $_selectedPackage',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
-              currency: widget.data.currency,
-              masked: false,
-              showMenu: false,
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: name,
-          autofocus: true,
-          maxLength: 24,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(
-            labelText: 'Wallet or payment method',
-            helperText:
-                'Balances come from transactions assigned to this method.',
-            counterText: '',
+              if (_selectedPackage != null) ...[
+                const SizedBox(width: 6),
+                IconButton(
+                  tooltip: 'Clear linked app',
+                  onPressed: busy
+                      ? null
+                      : () => setState(() => _selectedPackage = null),
+                  icon: const Icon(LucideIcons.x, size: 16),
+                ),
+              ],
+            ],
           ),
-          onSubmitted: (_) => _add(),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'The card artwork is chosen from the name. You can change it after adding, or upload your own card design.',
-          style: TextStyle(
-            fontSize: 11,
-            height: 1.4,
-            color: Theme.of(c).colorScheme.onSurfaceVariant,
+          if (suggestions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Select payment method',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: Theme.of(c).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final item in suggestions)
+                  ActionChip(
+                    label: Text(item),
+                    onPressed: busy
+                        ? null
+                        : () {
+                            name.text = item;
+                            name.selection = TextSelection.collapsed(
+                              offset: item.length,
+                            );
+                            setState(() => _selectedPackage = null);
+                          },
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            'The card artwork is chosen from the name. You can change it after adding, or upload your own card design.',
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.4,
+              color: Theme.of(c).colorScheme.onSurfaceVariant,
+            ),
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
