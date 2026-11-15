@@ -1547,6 +1547,20 @@ class _WalletMark extends StatelessWidget {
       final appIcon = account.hasCustomArtwork
           ? null
           : _WalletAppIcons.iconFor(account.name);
+      if (appIcon != null) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Image.memory(
+            appIcon,
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        );
+      }
       final generic = _genericIcon(account.name);
       return ClipRRect(
         borderRadius: BorderRadius.circular(size * .32),
@@ -1569,13 +1583,6 @@ class _WalletMark extends StatelessWidget {
                 Image.file(
                   File(account.imagePath!),
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                )
-              else if (appIcon != null)
-                Image.memory(
-                  appIcon,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 )
               else if (generic != null)
