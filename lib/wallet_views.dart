@@ -1560,6 +1560,19 @@ class _WalletMark extends StatelessWidget {
         );
       }
       final generic = _genericIcon(account.name);
+      if (!account.hasCustomArtwork && generic != null) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Center(
+            child: Icon(
+              generic,
+              size: size * .76,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        );
+      }
       return ClipRRect(
         borderRadius: BorderRadius.circular(size * .32),
         child: SizedBox(
@@ -1582,14 +1595,6 @@ class _WalletMark extends StatelessWidget {
                   File(account.imagePath!),
                   fit: BoxFit.cover,
                   errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                )
-              else if (generic != null)
-                Center(
-                  child: Icon(
-                    generic,
-                    size: size * .48,
-                    color: account.skin.ink,
-                  ),
                 )
               else if (account.skin.assetPath != null)
                 Image.asset(

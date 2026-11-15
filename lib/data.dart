@@ -744,20 +744,31 @@ class AppData {
   }
 
   /// Wallets are the saved payment methods plus any active method referenced by
-  /// a transaction, excluding removed wallets and messaging transports.
+  /// a transaction, merged case-insensitively and excluding removed/messaging ones.
   List<String> get walletMethods {
     final hidden = hiddenWallets;
-    final names = <String>{
-      for (final m in methods)
-        if (!_isMessagingMethod(m)) m,
-    };
+    final byLower = <String, String>{};
+    for (final m in methods) {
+      final trimmed = m.trim();
+      if (trimmed.isEmpty || _isMessagingMethod(trimmed)) continue;
+      byLower.putIfAbsent(trimmed.toLowerCase(), () => trimmed);
+    }
     for (final e in entries.where((e) => e.currency == currency)) {
       final name = walletMethodName(e.method);
       final lower = name.toLowerCase();
       if (_isMessagingMethod(name) || hidden.contains(lower)) continue;
-      names.add(name);
+      byLower.putIfAbsent(lower, () => name);
     }
-    return names.toList();
+    return byLower.values.toList();
+  }
+
+  String _canonicalWalletName(String method) {
+    final name = walletMethodName(method);
+    final lower = name.toLowerCase();
+    for (final canonical in walletMethods) {
+      if (canonical.toLowerCase() == lower) return canonical;
+    }
+    return name;
   }
 
   static bool _isMessagingMethod(String name) {
@@ -765,15 +776,21 @@ class AppData {
     return lower == 'messaging' || lower == 'messages';
   }
 
-  /// One pass over the current currency's ledger, keyed by payment method.
+  /// One pass over the current currency's ledger, keyed by canonical payment method.
   Map<String, int> get walletBalances {
     final hidden = hiddenWallets;
-    final result = <String, int>{for (final name in walletMethods) name: 0};
+    final list = walletMethods;
+    final byLower = <String, String>{
+      for (final name in list) name.toLowerCase(): name,
+    };
+    final result = <String, int>{for (final name in list) name: 0};
     for (final e in entries.where((e) => e.currency == currency)) {
-      final name = walletMethodName(e.method);
-      if (_isMessagingMethod(name) || hidden.contains(name.toLowerCase())) {
+      final raw = walletMethodName(e.method);
+      final lower = raw.toLowerCase();
+      if (_isMessagingMethod(raw) || hidden.contains(lower)) {
         continue;
       }
+      final name = byLower[lower] ?? raw;
       result.update(
         name,
         (value) => value + (e.kind == 'income' ? e.amount : -e.amount),
@@ -783,25 +800,34 @@ class AppData {
     return result;
   }
 
-  int walletBalance(String method) => walletBalances[method] ?? 0;
+  int walletBalance(String method) => walletBalances[_canonicalWalletName(method)] ?? 0;
 
-  List<Entry> walletEntries(String method) => entries
-      .where(
-        (e) => e.currency == currency && walletMethodName(e.method) == method,
-      )
-      .toList();
+  List<Entry> walletEntries(String method) {
+    final target = method.trim().toLowerCase();
+    return entries
+        .where(
+          (e) =>
+              e.currency == currency &&
+              walletMethodName(e.method).toLowerCase() == target,
+        )
+        .toList();
+  }
 
   /// Ledger rows in the display currency, optionally narrowed to one month and
   /// one payment method. Finance uses this so every summary, chart and timeline
   /// changes together when a wallet is selected.
-  List<Entry> scopedEntries({String? wallet, String? month}) => entries
-      .where(
-        (e) =>
-            e.currency == currency &&
-            (month == null || e.day.startsWith(month)) &&
-            (wallet == null || walletMethodName(e.method) == wallet),
-      )
-      .toList();
+  List<Entry> scopedEntries({String? wallet, String? month}) {
+    final target = wallet?.trim().toLowerCase();
+    return entries
+        .where(
+          (e) =>
+              e.currency == currency &&
+              (month == null || e.day.startsWith(month)) &&
+              (target == null ||
+                  walletMethodName(e.method).toLowerCase() == target),
+        )
+        .toList();
+  }
 
   /// Lifetime savings contributions per wallet for the goal breakdown.
   Map<String, int> get savingsByWallet {
