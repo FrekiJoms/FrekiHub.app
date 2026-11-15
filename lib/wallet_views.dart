@@ -1094,7 +1094,9 @@ class _WalletRows extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext c) => Surface(
+  Widget build(BuildContext c) {
+    _WalletAppIcons.prefetch(accounts.map((a) => a.name));
+    return Surface(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     child: ReorderableListView.builder(
       shrinkWrap: true,
@@ -1184,6 +1186,7 @@ class _WalletRows extends StatelessWidget {
       },
     ),
   );
+  }
 }
 
 class _WalletGrid extends StatelessWidget {
@@ -1469,56 +1472,144 @@ class _WalletDeckState extends State<_WalletDeck>
   }
 }
 
+class _WalletAppIcons {
+  static final Map<String, Uint8List?> _cache = {};
+  static final Set<String> _pending = {};
+  static final ValueNotifier<int> version = ValueNotifier<int>(0);
+
+  static Uint8List? iconFor(String name) {
+    final key = name.trim();
+    if (key.isEmpty) return null;
+    if (!_cache.containsKey(key) && !_pending.contains(key)) {
+      _load([key]);
+    }
+    return _cache[key];
+  }
+
+  static void prefetch(Iterable<String> names) {
+    final missing = names
+        .map((n) => n.trim())
+        .where((n) => n.isNotEmpty && !_cache.containsKey(n) && !_pending.contains(n))
+        .toList();
+    if (missing.isNotEmpty) _load(missing);
+  }
+
+  static Future<void> _load(List<String> names) async {
+    _pending.addAll(names);
+    try {
+      final fetched = await NativeSession.channel.invokeMapMethod<String, Uint8List>(
+        'walletAppIcons',
+        names,
+      );
+      var updated = false;
+      for (final name in names) {
+        final bytes = fetched?[name];
+        if (bytes != null && bytes.isNotEmpty) {
+          _cache[name] = bytes;
+          updated = true;
+        } else {
+          _cache[name] = null;
+        }
+      }
+      if (updated) version.value++;
+    } catch (_) {
+      for (final name in names) {
+        _cache[name] = null;
+      }
+    } finally {
+      _pending.removeAll(names);
+    }
+  }
+}
+
 class _WalletMark extends StatelessWidget {
   final WalletAccount account;
   final double size;
   const _WalletMark({required this.account, this.size = 38});
+
+  IconData? _genericIcon(String name) {
+    switch (name.trim().toLowerCase()) {
+      case 'cash':
+        return LucideIcons.banknote;
+      case 'bank':
+        return LucideIcons.landmark;
+      case 'card':
+        return LucideIcons.creditCard;
+      default:
+        return null;
+    }
+  }
+
   @override
-  Widget build(BuildContext c) => ClipRRect(
-    borderRadius: BorderRadius.circular(size * .32),
-    child: SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: account.skin.colors,
-              ),
-            ),
-          ),
-          if (account.hasCustomArtwork)
-            Image.file(
-              File(account.imagePath!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            )
-          else if (account.skin.assetPath != null)
-            Image.asset(
-              account.skin.assetPath!,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            )
-          else
-            Center(
-              child: Text(
-                account.name.isEmpty
-                    ? '?'
-                    : account.name.substring(0, 1).toUpperCase(),
-                style: TextStyle(
-                  color: account.skin.ink,
-                  fontSize: size * .34,
-                  fontWeight: FontWeight.w700,
+  Widget build(BuildContext c) => ValueListenableBuilder<int>(
+    valueListenable: _WalletAppIcons.version,
+    builder: (context, _, _) {
+      final appIcon = account.hasCustomArtwork
+          ? null
+          : _WalletAppIcons.iconFor(account.name);
+      final generic = _genericIcon(account.name);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(size * .32),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: account.skin.colors,
+                  ),
                 ),
               ),
-            ),
-        ],
-      ),
-    ),
+              if (account.hasCustomArtwork)
+                Image.file(
+                  File(account.imagePath!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                )
+              else if (appIcon != null)
+                Image.memory(
+                  appIcon,
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                )
+              else if (generic != null)
+                Center(
+                  child: Icon(
+                    generic,
+                    size: size * .48,
+                    color: account.skin.ink,
+                  ),
+                )
+              else if (account.skin.assetPath != null)
+                Image.asset(
+                  account.skin.assetPath!,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                )
+              else
+                Center(
+                  child: Text(
+                    account.name.isEmpty
+                        ? '?'
+                        : account.name.substring(0, 1).toUpperCase(),
+                    style: TextStyle(
+                      color: account.skin.ink,
+                      fontSize: size * .34,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    },
   );
 }
 

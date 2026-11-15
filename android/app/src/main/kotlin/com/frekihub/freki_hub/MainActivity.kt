@@ -11,8 +11,11 @@ import android.provider.Settings
 import android.provider.Telephony
 import org.json.JSONObject
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.media.AudioAttributes
 import android.media.SoundPool
+import java.io.ByteArrayOutputStream
 import io.flutter.FlutterInjector
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -130,6 +133,13 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 "notificationApps" -> {
                     val apps = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).distinctBy { it.activityInfo.packageName }.map { mapOf("name" to it.loadLabel(packageManager).toString(), "package" to it.activityInfo.packageName) }.sortedBy { it["name"] }
                     result.success(apps)
+                }
+                "walletAppIcons" -> {
+                    val names = (call.arguments as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
+                    Thread {
+                        val icons = resolveWalletAppIcons(names)
+                        Handler(Looper.getMainLooper()).post { result.success(icons) }
+                    }.start()
                 }
                 "sound" -> {
                     try { playSound(call.arguments as? String); result.success(null) }
@@ -332,5 +342,64 @@ private var smsPermissionResult: MethodChannel.Result? = null
         if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }
         if (requestCode == 76) { reminderPermissionResult?.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled()); reminderPermissionResult = null }
         if (requestCode == 77) { smsPermissionResult?.success(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED); smsPermissionResult = null }
+    }
+
+    private fun resolveWalletAppIcons(names: List<String>): Map<String, ByteArray> {
+        if (names.isEmpty()) return emptyMap()
+        val launcherApps = try {
+            packageManager.queryIntentActivities(
+                Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),
+                0
+            ).distinctBy { it.activityInfo.packageName }.map { info ->
+                Triple(
+                    info.loadLabel(packageManager).toString().trim(),
+                    info.activityInfo.packageName.lowercase(),
+                    info
+                )
+            }
+        } catch (_: Exception) {
+            return emptyMap()
+        }
+        val result = mutableMapOf<String, ByteArray>()
+        for (rawName in names) {
+            val key = rawName.trim()
+            if (key.isEmpty()) continue
+            val lower = key.lowercase()
+            if (lower == "cash" || lower == "bank" || lower == "card" || lower == "other") continue
+            val aliases = walletAliases(lower)
+            val match = launcherApps.firstOrNull { (label, _, _) ->
+                aliases.any { alias -> label.equals(alias, ignoreCase = true) }
+            } ?: launcherApps.firstOrNull { (label, pkg, _) ->
+                aliases.any { alias ->
+                    label.lowercase().contains(alias) || pkg.contains(alias.replace(" ", ""))
+                }
+            } ?: continue
+            try {
+                val drawable = match.third.loadIcon(packageManager)
+                val size = 96
+                val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bitmap)
+                drawable.setBounds(0, 0, size, size)
+                drawable.draw(canvas)
+                val stream = ByteArrayOutputStream()
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                bitmap.recycle()
+                result[key] = stream.toByteArray()
+            } catch (_: Exception) {
+            }
+        }
+        return result
+    }
+
+    private fun walletAliases(lower: String): List<String> = when {
+        lower.contains("gotyme") || lower.contains("go tyme") -> listOf("gotyme", "gotyme bank", "go tyme")
+        lower.contains("maribank") || lower.contains("mari bank") || lower.contains("seabank") -> listOf("maribank", "mari bank", "seabank")
+        lower.contains("hellomoney") || lower.contains("hello money") -> listOf("hellomoney", "hello money")
+        lower.contains("maya") || lower.contains("paymaya") -> listOf("maya", "paymaya")
+        lower.contains("gcash") -> listOf("gcash")
+        lower.contains("unionbank") || lower.contains("union bank") -> listOf("unionbank", "union bank")
+        lower.contains("security bank") -> listOf("security bank", "securitybank")
+        lower.contains("landbank") || lower.contains("land bank") -> listOf("landbank", "land bank")
+        else -> listOf(lower)
     }
 }
