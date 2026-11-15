@@ -190,8 +190,7 @@ abstract final class AutomationSync {
                     .getSingleOrNull()
               : null;
           if (duplicate != null) {
-            final currentSource =
-                (event['source'] ?? event['package']) as String;
+            final currentSource = _resolvePurchaseMethod(event);
             final sources = <String>{
               ...duplicate.method.split(' + '),
               currentSource,
@@ -202,6 +201,7 @@ abstract final class AutomationSync {
             acknowledged.add(id);
             continue;
           }
+          final resolvedMethod = _resolvePurchaseMethod(event);
           await db
               .into(db.entries)
               .insert(
@@ -212,7 +212,7 @@ abstract final class AutomationSync {
                   amount: amount,
                   currency: event['currency'] as String,
                   category: event['category'] as String? ?? 'Other',
-                  method: (event['source'] ?? event['package']) as String,
+                  method: resolvedMethod,
                   note: event['merchant'] as String,
                   occurrence: id,
                 ),
@@ -230,7 +230,7 @@ abstract final class AutomationSync {
                 'merchant': merchant,
                 'time': event['time'],
                 'date': DateFormat('d MMM y · h:mm a').format(time),
-                'source': event['source'] ?? event['package'],
+                'source': resolvedMethod,
                 'location': event['location'] ?? 'Location unavailable',
                 'reference': event['reference'] ?? '',
               }),
@@ -302,4 +302,47 @@ abstract final class AutomationSync {
       }
     }
   }
+
+  static String _resolvePurchaseMethod(Map<String, dynamic> event) {
+    final raw = ((event['source'] ?? event['package']) as String? ?? '').trim();
+    final pkg = (event['package'] as String? ?? '').trim().toLowerCase();
+    final lower = raw.toLowerCase();
+    final isMessaging =
+        lower.isEmpty ||
+        lower == 'messaging' ||
+        lower == 'messages' ||
+        lower == 'sms' ||
+        lower == 'text messages' ||
+        lower == 'mms' ||
+        pkg == 'sms' ||
+        pkg.contains('.messaging') ||
+        pkg.contains('.mms');
+    if (!isMessaging) return raw;
+    final text = '${event['title'] ?? ''} ${event['merchant'] ?? ''}';
+    for (final rule in _providerPatterns) {
+      if (rule.pattern.hasMatch(text)) return rule.label;
+    }
+    return 'Other';
+  }
+
+  static final List<({String label, RegExp pattern})> _providerPatterns = [
+    (label: 'Maya', pattern: RegExp(r'\b(?:maya|paymaya)\b', caseSensitive: false)),
+    (label: 'GCash', pattern: RegExp(r'\bgcash\b', caseSensitive: false)),
+    (label: 'MariBank', pattern: RegExp(r'\b(?:maribank|mari\s+bank|seabank|sea\s+bank)\b', caseSensitive: false)),
+    (label: 'GoTyme', pattern: RegExp(r'\b(?:gotyme|go\s+tyme)\b', caseSensitive: false)),
+    (label: 'HelloMoney', pattern: RegExp(r'\b(?:hellomoney|hello\s+money)\b', caseSensitive: false)),
+    (label: 'BPI', pattern: RegExp(r'\bbpi\b', caseSensitive: false)),
+    (label: 'Metrobank', pattern: RegExp(r'\bmetrobank\b', caseSensitive: false)),
+    (label: 'BDO', pattern: RegExp(r'\bbdo\b', caseSensitive: false)),
+    (label: 'UnionBank', pattern: RegExp(r'\b(?:unionbank|union\s+bank)\b', caseSensitive: false)),
+    (label: 'LandBank', pattern: RegExp(r'\b(?:landbank|land\s+bank)\b', caseSensitive: false)),
+    (label: 'RCBC', pattern: RegExp(r'\brcbc\b', caseSensitive: false)),
+    (label: 'Security Bank', pattern: RegExp(r'\bsecurity\s+bank\b', caseSensitive: false)),
+    (label: 'PNB', pattern: RegExp(r'\bpnb\b', caseSensitive: false)),
+    (label: 'Chinabank', pattern: RegExp(r'\bchinabank\b', caseSensitive: false)),
+    (label: 'EastWest', pattern: RegExp(r'\beastwest\b', caseSensitive: false)),
+    (label: 'PayPal', pattern: RegExp(r'\bpaypal\b', caseSensitive: false)),
+    (label: 'GrabPay', pattern: RegExp(r'\bgrabpay\b', caseSensitive: false)),
+    (label: 'ShopeePay', pattern: RegExp(r'\bshopeepay\b', caseSensitive: false)),
+  ];
 }

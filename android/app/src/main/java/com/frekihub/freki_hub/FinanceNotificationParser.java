@@ -129,4 +129,88 @@ public final class FinanceNotificationParser {
         value = value.replaceAll("(?i)\\s+(?:reference|ref|transaction|id)\\b.*$", "").trim();
         return value.isEmpty() ? fallback : value;
     }
+
+    private record ProviderRule(String label, Pattern pattern) {}
+
+    private static final ProviderRule[] PROVIDERS = {
+            new ProviderRule("Maya", Pattern.compile("(?i)\\b(?:maya|paymaya)\\b")),
+            new ProviderRule("GCash", Pattern.compile("(?i)\\bgcash\\b")),
+            new ProviderRule("MariBank", Pattern.compile("(?i)\\b(?:maribank|mari\\s+bank|seabank|sea\\s+bank)\\b")),
+            new ProviderRule("GoTyme", Pattern.compile("(?i)\\b(?:gotyme|go\\s+tyme)\\b")),
+            new ProviderRule("HelloMoney", Pattern.compile("(?i)\\b(?:hellomoney|hello\\s+money)\\b")),
+            new ProviderRule("BPI", Pattern.compile("(?i)\\bbpi\\b")),
+            new ProviderRule("Metrobank", Pattern.compile("(?i)\\bmetrobank\\b")),
+            new ProviderRule("BDO", Pattern.compile("(?i)\\bbdo\\b")),
+            new ProviderRule("UnionBank", Pattern.compile("(?i)\\b(?:unionbank|union\\s+bank)\\b")),
+            new ProviderRule("LandBank", Pattern.compile("(?i)\\b(?:landbank|land\\s+bank)\\b")),
+            new ProviderRule("RCBC", Pattern.compile("(?i)\\brcbc\\b")),
+            new ProviderRule("Security Bank", Pattern.compile("(?i)\\bsecurity\\s+bank\\b")),
+            new ProviderRule("PNB", Pattern.compile("(?i)\\bpnb\\b")),
+            new ProviderRule("Chinabank", Pattern.compile("(?i)\\bchinabank\\b")),
+            new ProviderRule("EastWest", Pattern.compile("(?i)\\beastwest\\b")),
+            new ProviderRule("PayPal", Pattern.compile("(?i)\\bpaypal\\b")),
+            new ProviderRule("GrabPay", Pattern.compile("(?i)\\bgrabpay\\b")),
+            new ProviderRule("ShopeePay", Pattern.compile("(?i)\\bshopeepay\\b")),
+            new ProviderRule("Coins.ph", Pattern.compile("(?i)\\bcoins\\.ph\\b")),
+            new ProviderRule("Tonik", Pattern.compile("(?i)\\btonik\\b")),
+            new ProviderRule("CIMB", Pattern.compile("(?i)\\bcimb\\b")),
+            new ProviderRule("Komo", Pattern.compile("(?i)\\bkomo\\b")),
+            new ProviderRule("DiskarTech", Pattern.compile("(?i)\\bdiskartech\\b")),
+            new ProviderRule("Wise", Pattern.compile("(?i)\\bwise\\b")),
+            new ProviderRule("Revolut", Pattern.compile("(?i)\\brevolut\\b")),
+            new ProviderRule("Atome", Pattern.compile("(?i)\\batome\\b")),
+            new ProviderRule("SPayLater", Pattern.compile("(?i)\\bspaylater\\b")),
+    };
+
+    private static final Pattern NUMERIC_SENDER = Pattern.compile("^[+0-9\\s()-]{3,}$");
+
+    /**
+     * Resolves the payment method name for a parsed notification or SMS.
+     * Messaging/SMS transports are redirected to the wallet or bank named in the message.
+     */
+    public static String resolveSource(String text, String appOrSenderLabel, String packageName) {
+        String label = appOrSenderLabel == null ? "" : appOrSenderLabel.trim();
+        if (!isMessagingTransport(packageName, label)) {
+            String canonical = detectProvider(label);
+            return canonical != null ? canonical : label;
+        }
+        String detected = detectProvider(text);
+        return detected != null ? detected : "Other";
+    }
+
+    public static boolean isMessagingTransport(String packageName, String label) {
+        String pkg = packageName == null ? "" : packageName.trim().toLowerCase(Locale.ROOT);
+        if (pkg.equals("sms")
+                || pkg.equals("com.google.android.apps.messaging")
+                || pkg.equals("com.samsung.android.messaging")
+                || pkg.equals("com.android.mms")
+                || pkg.equals("com.android.messaging")
+                || pkg.contains(".messaging")
+                || pkg.contains(".mms")
+                || pkg.contains(".sms")) {
+            return true;
+        }
+        String normalized = label == null ? "" : label.trim().toLowerCase(Locale.ROOT);
+        return normalized.isEmpty()
+                || normalized.equals("messages")
+                || normalized.equals("messaging")
+                || normalized.equals("sms")
+                || normalized.equals("text messages")
+                || normalized.equals("mms")
+                || NUMERIC_SENDER.matcher(normalized).matches();
+    }
+
+    public static String detectProvider(String text) {
+        if (text == null || text.isBlank()) return null;
+        String bestLabel = null;
+        int bestIndex = Integer.MAX_VALUE;
+        for (ProviderRule rule : PROVIDERS) {
+            Matcher m = rule.pattern().matcher(text);
+            if (m.find() && m.start() < bestIndex) {
+                bestIndex = m.start();
+                bestLabel = rule.label();
+            }
+        }
+        return bestLabel;
+    }
 }

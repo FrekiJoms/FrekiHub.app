@@ -63,6 +63,21 @@ public final class FinanceNotificationParserCheck {
                 "expense", "150.00", "PHP", "Coffee Shop");
         expect("MariBank debit transaction of PHP1,234.56",
                 "expense", "1234.56", "PHP", "Item not specified");
-        System.out.println("27 finance notification parser checks passed");
+
+        expectSource("Maya You paid PHP 150.00 at Coffee Shop", "Messaging", "com.google.android.apps.messaging", "Maya");
+        expectSource("You have sent PHP50.00 of GCash to JUAN", "Messages", "com.google.android.apps.messaging", "GCash");
+        expectSource("SeaBank debit transaction of PHP 150.00", "Messages", "com.samsung.android.messaging", "MariBank");
+        expectSource("GoTyme Bank: Paid PHP 99.00 at Store", "Messaging", "com.android.mms", "GoTyme");
+        expectSource("HelloMoney payment of PHP 250.00 at Store", "+639171234567", "sms", "HelloMoney");
+        expectSource("You paid PHP 120.00 at Bakery", "Messaging", "com.google.android.apps.messaging", "Other");
+        expectSource("You transferred PHP 500.00 to GCash", "Maya", "com.paymaya", "Maya");
+        System.out.println("34 finance notification parser checks passed");
+    }
+
+    private static void expectSource(String text, String label, String pkg, String expected) {
+        String actual = FinanceNotificationParser.resolveSource(text, label, pkg);
+        if (!expected.equals(actual)) {
+            throw new AssertionError("Expected source " + expected + " for [" + label + "/" + pkg + "] " + text + ", got " + actual);
+        }
     }
 }

@@ -193,7 +193,9 @@ class PurchaseListener : NotificationListenerService() {
             .put("package", sbn.packageName)
             .put("reference", reference ?: "")
         if (System.currentTimeMillis() - event.optLong("locationTime", 0) > 120000) { event.remove("lat"); event.remove("lng"); event.put("location", "Location unavailable") }
-        val sourceName = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }; event.put("source", sourceName); Automation.emit(this, event)
+        val appLabel = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() } catch (e: Exception) { sbn.packageName }
+        val sourceName = FinanceNotificationParser.resolveSource(text, appLabel, sbn.packageName)
+        event.put("source", sourceName); Automation.emit(this, event)
     }
 }
 

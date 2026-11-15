@@ -234,7 +234,7 @@ private var smsPermissionResult: MethodChannel.Result? = null
                                         .put("package", "sms")
                                         .put("reference", reference ?: "")
                                     val addr = it.getString(addrIdx) ?: "SMS"
-                                    event.put("source", addr)
+                                    event.put("source", FinanceNotificationParser.resolveSource(body, addr, "sms"))
                                     val locationTime = event.optLong("locationTime", 0L)
                                     if (System.currentTimeMillis() - locationTime > 120000L) {
                                         event.remove("lat")
