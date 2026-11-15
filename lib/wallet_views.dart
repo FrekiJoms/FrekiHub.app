@@ -157,6 +157,53 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     }
   }
 
+  Future<void> _removeWallet(WalletAccount account) async {
+    if (!await confirm(
+      context,
+      'Remove ${account.name}?',
+      'It will be removed from Wallets and Payment methods. Existing transactions remain in your records.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    try {
+      final db = ref.read(databaseProvider);
+      final targetLower = account.name.trim().toLowerCase();
+      await db.transaction(() async {
+        final data = await db.readAll();
+        final nextMethods = data.methods
+            .where((m) => m.trim().toLowerCase() != targetLower)
+            .toList();
+        await db.pref('methods', jsonEncode(nextMethods));
+        final hidden = {...data.hiddenWallets, targetLower};
+        await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
+        final stored = [...walletStoredOrder(data.prefs)]
+          ..removeWhere((w) => w.trim().toLowerCase() == targetLower);
+        await db.pref('walletOrder', jsonEncode(stored));
+        final pkg = data.prefs['wallet:${account.name}:package'];
+        if (pkg != null && pkg.isNotEmpty) {
+          final config = AutomationSync.config(data);
+          final apps = Set<String>.from(config['apps'] as List? ?? []);
+          if (apps.remove(pkg)) {
+            config['apps'] = apps.toList();
+            await db.pref('automation', jsonEncode(config));
+          }
+        }
+      });
+      await AutomationSync.configure(await db.readAll());
+      if (widget.wallet?.toLowerCase() == targetLower) {
+        widget.onWallet?.call(null);
+      }
+      if (mounted) {
+        dataToast(context, 'Payment method', DataAction.deleted);
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'Could not remove this wallet. Try again.', error: true);
+      }
+    }
+  }
+
   void _setView(WalletView next) {
     if (view == next) return;
     HapticFeedback.selectionClick();
@@ -242,6 +289,10 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           Navigator.pop(sheet);
           _addWallet();
         },
+        onRemove: () {
+          Navigator.pop(sheet);
+          _removeWallet(account);
+        },
         onFocus: widget.onWallet == null
             ? null
             : () {
@@ -262,11 +313,16 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
   Widget build(BuildContext c) {
     final accounts = _accounts();
     final included = accounts.where((a) => a.included).toList();
-    final total = included.fold(0, (sum, a) => sum + a.balance);
-    final assets = included
+    final scoped = widget.wallet == null
+        ? included
+        : accounts
+              .where((a) => a.name.toLowerCase() == widget.wallet!.toLowerCase())
+              .toList();
+    final total = scoped.fold(0, (sum, a) => sum + a.balance);
+    final assets = scoped
         .where((a) => a.balance > 0)
         .fold(0, (sum, a) => sum + a.balance);
-    final liabilities = included
+    final liabilities = scoped
         .where((a) => a.balance < 0)
         .fold(0, (sum, a) => sum - a.balance);
     return Column(
@@ -278,7 +334,8 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             total: total,
             assets: assets,
             liabilities: liabilities,
-            count: included.length,
+            count: scoped.length,
+            wallet: widget.wallet,
             currency: widget.data.currency,
             masked: _effectiveMasked,
             onToggle: _toggleMasked,
@@ -368,6 +425,7 @@ bool _sameNames(List<String> a, List<String> b) {
 
 class _WalletTotalCard extends StatelessWidget {
   final int total, assets, liabilities, count;
+  final String? wallet;
   final String currency;
   final bool masked;
   final VoidCallback onToggle;
@@ -376,6 +434,7 @@ class _WalletTotalCard extends StatelessWidget {
     required this.assets,
     required this.liabilities,
     required this.count,
+    this.wallet,
     required this.currency,
     required this.masked,
     required this.onToggle,
@@ -410,7 +469,11 @@ class _WalletTotalCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    'TOTAL BALANCE',
+                    wallet == null
+                        ? 'TOTAL BALANCE'
+                        : 'WALLET BALANCE · ${wallet!.toUpperCase()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: .7),
                       fontSize: 10,
@@ -476,7 +539,9 @@ class _WalletTotalCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'All wallets · all time, in $currency',
+              wallet == null
+                  ? 'All wallets · all time, in $currency'
+                  : '$wallet · all time, in $currency',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: .5),
                 fontSize: 10,
@@ -2289,7 +2354,7 @@ class _WalletMenu extends StatelessWidget {
   final WalletAccount account;
   final bool selected;
   final VoidCallback onEdit, onFront, onAdd;
-  final VoidCallback? onFocus;
+  final VoidCallback? onFocus, onRemove;
   final ValueChanged<bool> onIncluded;
   const _WalletMenu({
     required this.account,
@@ -2299,6 +2364,7 @@ class _WalletMenu extends StatelessWidget {
     required this.onIncluded,
     required this.onAdd,
     required this.onFocus,
+    this.onRemove,
   });
 
   @override
@@ -2354,6 +2420,20 @@ class _WalletMenu extends StatelessWidget {
           title: const Text('Add another wallet'),
           onTap: onAdd,
         ),
+        if (onRemove != null)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              LucideIcons.trash2,
+              size: 20,
+              color: Theme.of(c).colorScheme.error,
+            ),
+            title: Text(
+              'Remove wallet',
+              style: TextStyle(color: Theme.of(c).colorScheme.error),
+            ),
+            onTap: onRemove,
+          ),
       ],
     ),
   );
@@ -2740,16 +2820,8 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
       if (key.isEmpty || !seen.add(key)) continue;
       out.add(m.trim());
     }
-    for (final preset in const [
-      'GCash',
-      'Maya',
-      'MariBank',
-      'GoTyme',
-      'HelloMoney',
-    ]) {
-      final key = preset.toLowerCase();
-      if (!seen.add(key)) continue;
-      out.add(preset);
+    if (seen.add('cash')) {
+      out.add('Cash');
     }
     return out;
   }

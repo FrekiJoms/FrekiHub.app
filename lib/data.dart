@@ -749,7 +749,11 @@ class AppData {
     final byLower = <String, String>{};
     for (final m in methods) {
       final trimmed = m.trim();
-      if (trimmed.isEmpty || _isMessagingMethod(trimmed)) continue;
+      if (trimmed.isEmpty ||
+          _isMessagingMethod(trimmed) ||
+          hidden.contains(trimmed.toLowerCase())) {
+        continue;
+      }
       byLower.putIfAbsent(trimmed.toLowerCase(), () => trimmed);
     }
     for (final e in entries.where((e) => e.currency == currency)) {

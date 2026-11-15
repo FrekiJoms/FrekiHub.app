@@ -374,7 +374,8 @@ class _EntryFormState extends ConsumerState<EntryForm> {
           selectField(
             'Payment method',
             method,
-            {...widget.data.methods, method}.toList(),
+            {...widget.data.walletMethods, ...widget.data.methods, method}
+                .toList(),
             (v) => method = v,
           ),
         ),
@@ -668,7 +669,8 @@ class _RuleFormState extends ConsumerState<RuleForm> {
           selectField(
             'Payment method',
             method,
-            {...widget.data.methods, method}.toList(),
+            {...widget.data.walletMethods, ...widget.data.methods, method}
+                .toList(),
             (v) => method = v,
           ),
         ),

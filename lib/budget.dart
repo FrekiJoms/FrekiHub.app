@@ -363,8 +363,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       return _timelineDesc ? -cmp : cmp;
     });
     final accounts = walletAccounts(d, null, committed);
-    final totalBalance = accounts
-        .where((a) => a.included)
+    final totalBalance = (wallet == null
+            ? accounts.where((a) => a.included)
+            : accounts.where(
+                (a) => a.name.toLowerCase() == wallet!.toLowerCase(),
+              ))
         .fold<int>(0, (sum, a) => sum + a.balance);
     return Stack(
       children: [
