@@ -1,5 +1,7 @@
 part of 'screens.dart';
 
+enum _HistoryMenuAction { filters, formats, toggleView, toggleSelection }
+
 class HistoryScreen extends ConsumerStatefulWidget {
   final AppData data;
   const HistoryScreen({super.key, required this.data});
@@ -11,10 +13,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   final search = TextEditingController();
   final selected = <String>{};
   int sortColumn = 0;
-  bool ascending = false,
-      selection = false,
-      tableView = false,
-      filtersExpanded = false;
+  bool ascending = false, selection = false, tableView = false;
   final recordScroll = ScrollController();
   String month = 'All months',
       kind = 'All types',
@@ -280,6 +279,139 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     ),
   );
 
+  Future<void> openFiltersSheet(
+    List<String> months,
+    List<String> types,
+  ) => panel(
+    context,
+    StatefulBuilder(
+      builder: (sheetContext, setSheet) {
+        final colors = Theme.of(sheetContext).colorScheme;
+        final clockFormat = widget.data.prefs['clockFormat'] ?? '24';
+        final dateFormat = widget.data.prefs['dateFormat'] ?? 'EEE, d MMM';
+        final filteredCount = rows.length;
+        return PanelContent(
+          header: PanelHeading(
+            title: 'Filters',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (hasActiveQuery)
+                  TextButton(
+                    onPressed: withFeedback(() {
+                      resetFilters();
+                      setSheet(() {});
+                    }),
+                    child: const Text('Reset'),
+                  ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: withFeedback(() => Navigator.pop(sheetContext)),
+                  icon: const Icon(LucideIcons.x, size: 18),
+                ),
+              ],
+            ),
+          ),
+          footer: PanelActions(
+            children: [
+              AppButton(
+                label:
+                    'Show $filteredCount ${filteredCount == 1 ? 'session' : 'sessions'}',
+                onPressed: () => Navigator.pop(sheetContext),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              selectField('Month', month, ['All months', ...months], (v) {
+                setState(() => month = v);
+                setSheet(() {});
+              }),
+              const SizedBox(height: 10),
+              selectField('Type', kind, ['All types', ...types], (v) {
+                setState(() => kind = v);
+                setSheet(() {});
+              }),
+              const SizedBox(height: 10),
+              selectField(
+                'Weekday',
+                weekday,
+                [
+                  'All weekdays',
+                  'Monday',
+                  'Tuesday',
+                  'Wednesday',
+                  'Thursday',
+                  'Friday',
+                  'Saturday',
+                  'Sunday',
+                ],
+                (v) {
+                  setState(() => weekday = v);
+                  setSheet(() {});
+                },
+              ),
+              const SizedBox(height: 10),
+              selectField(
+                'Notes',
+                notes,
+                ['All notes', 'With notes', 'Without notes'],
+                (v) {
+                  setState(() => notes = v);
+                  setSheet(() {});
+                },
+              ),
+              const SizedBox(height: 14),
+              Divider(
+                height: 1,
+                color: colors.outlineVariant.withValues(alpha: .45),
+              ),
+              const SizedBox(height: 14),
+              Material(
+                color: colors.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(16),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 4,
+                  ),
+                  leading: Icon(
+                    LucideIcons.calendarDays,
+                    size: 18,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  title: const Text(
+                    'Date & time format',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    '$clockFormat-hour · $dateFormat',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                  trailing: Icon(
+                    LucideIcons.chevronRight,
+                    size: 16,
+                    color: colors.onSurfaceVariant,
+                  ),
+                  onTap: withFeedback(() {
+                    Navigator.pop(sheetContext);
+                    formats();
+                  }),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    ),
+  );
+
   int get activeFilters => [
     month != 'All months',
     kind != 'All types',
@@ -343,12 +475,20 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     });
   }
 
+  void _enterSelection(String id) {
+    ActionFeedback.tap();
+    setState(() {
+      selection = true;
+      selected.clear();
+      selected.add(id);
+    });
+  }
+
   @override
   Widget build(BuildContext c) {
     final theme = Theme.of(c);
     final colors = theme.colorScheme;
     final dark = theme.brightness == Brightness.dark;
-    final narrow = MediaQuery.sizeOf(c).width < 600;
     final months = {
       ...widget.data.sessions.map((s) => s.day.substring(0, 7)),
     }.toList()..sort();
@@ -362,7 +502,6 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final list = rows;
     final hasRules =
         (AutomationSync.config(widget.data)['rules'] as List? ?? []).isNotEmpty;
-    final showList = narrow && !tableView;
 
     final totalSeconds = list.fold<int>(0, (sum, s) => sum + durationOf(s));
     final uniqueDays = {for (final s in list) s.day}.length;
@@ -376,462 +515,706 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
     final breakdown = byKind.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final maxListHeight = math.max(240.0, MediaQuery.sizeOf(c).height * .52);
+    final hairline = colors.outlineVariant.withValues(alpha: dark ? .35 : .55);
+    final bottomSafe = math.max(
+      MediaQuery.paddingOf(c).bottom,
+      MediaQuery.viewPaddingOf(c).bottom,
+    );
 
-    return PageBody(
-      title: 'SESSIONS',
-      subtitle: 'Time & focus ledger',
-      children: [
-        _SessionSummaryCard(
-          filtered: hasActiveQuery,
-          count: list.length,
-          days: uniqueDays,
-          totalSeconds: totalSeconds,
-          hasLive: hasLive,
-          breakdown: breakdown,
-        ),
-        if (hasRules)
-          Surface(
-            padding: EdgeInsets.zero,
-            borderRadius: const BorderRadius.all(Radius.circular(20)),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 2,
-              ),
-              leading: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: colors.primary.withValues(alpha: .08),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(
-                  LucideIcons.workflow,
-                  size: 17,
-                  color: colors.primary,
-                ),
-              ),
-              title: const Text(
-                'Automation rules saved',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text(
-                'Review rules and Run/Stop status in Syntax builder',
-                style: TextStyle(fontSize: 12),
-              ),
-              trailing: Icon(
-                LucideIcons.chevronRight,
-                size: 16,
-                color: colors.onSurfaceVariant,
-              ),
-              onTap: withFeedback(() => openSyntaxBuilder(c)),
-            ),
-          ),
-        TextField(
-          controller: search,
-          onChanged: (_) => setState(() {}),
-          style: const TextStyle(fontSize: 14),
-          decoration: InputDecoration(
-            hintText: 'Search dates, types and notes',
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: colors.onSurfaceVariant.withValues(alpha: .75),
-            ),
-            isDense: true,
-            filled: true,
-            fillColor: colors.surface,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 13,
-            ),
-            prefixIcon: Icon(
-              LucideIcons.search,
-              size: 18,
-              color: colors.onSurfaceVariant,
-            ),
-            suffixIcon: search.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Clear search',
-                    onPressed: withFeedback(() {
-                      search.clear();
-                      setState(() {});
-                    }),
-                    icon: const Icon(LucideIcons.x, size: 17),
-                  ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: colors.outlineVariant.withValues(alpha: .4),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: colors.outlineVariant.withValues(alpha: .4),
-              ),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: colors.primary.withValues(alpha: .5),
-                width: 1.5,
-              ),
-            ),
-          ),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            _ToolbarPill(
-              icon: filtersExpanded
-                  ? LucideIcons.chevronUp
-                  : LucideIcons.slidersHorizontal,
-              label: activeFilters == 0
-                  ? 'Filters'
-                  : 'Filters · $activeFilters',
-              active: filtersExpanded || activeFilters > 0,
-              onTap: withFeedback(
-                () => setState(() => filtersExpanded = !filtersExpanded),
-              ),
-            ),
-            Builder(
-              builder: (anchor) => _ToolbarPill(
-                icon: LucideIcons.arrowUpDown,
-                label: 'Sort · ${headers[sortColumn]}',
-                trailingIcon: LucideIcons.chevronDown,
-                onTap: withFeedback(() async {
-                  final value = await showChoiceMenu<int>(
-                    anchor,
-                    choices: {
-                      for (var i = 0; i < headers.length; i++) i: headers[i],
-                    },
-                    selected: sortColumn,
-                  );
-                  if (value != null && mounted) {
-                    setState(() => sortColumn = value);
-                  }
-                }),
-              ),
-            ),
-            Tooltip(
-              message: ascending
-                  ? 'Ascending; switch to descending'
-                  : 'Descending; switch to ascending',
-              child: _ToolbarIconPill(
-                icon: ascending ? LucideIcons.arrowUp : LucideIcons.arrowDown,
-                semanticsLabel: ascending
-                    ? 'Ascending; switch to descending'
-                    : 'Descending; switch to ascending',
-                onTap: withFeedback(
-                  () => setState(() => ascending = !ascending),
-                ),
-              ),
-            ),
-            if (narrow)
-              _ViewSegmentedControl(
-                tableView: tableView,
-                onChanged: (next) {
-                  ActionFeedback.tap();
-                  setState(() => tableView = next);
-                },
-              ),
-            _ToolbarPill(
-              icon: LucideIcons.calendarDays,
-              label: 'Date & time',
-              onTap: withFeedback(formats),
-            ),
-            _ToolbarPill(
-              icon: LucideIcons.listChecks,
-              label: selection ? 'Done' : 'Select',
-              active: selection,
-              onTap: list.isEmpty && !selection
-                  ? null
-                  : withFeedback(() {
-                      setState(() {
-                        selection = !selection;
-                        selected.clear();
-                      });
-                    }),
-            ),
-          ],
-        ),
-        SizeTransitionPanel(
-          alignment: Alignment.topCenter,
-          child: filtersExpanded
-              ? Surface(
-                  padding: const EdgeInsets.all(14),
-                  borderRadius: const BorderRadius.all(Radius.circular(20)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'FILTER BY',
-                              style: TextStyle(
-                                fontSize: 10,
-                                letterSpacing: 1.5,
-                                fontWeight: FontWeight.w600,
-                                color: colors.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          if (hasActiveQuery)
-                            InkWell(
-                              borderRadius: BorderRadius.circular(99),
-                              onTap: withFeedback(resetFilters),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
+    return WidthLayoutBuilder(
+      builder: (c, width) {
+        final narrow = width < 600;
+        final showList = narrow && !tableView;
+        final inset = width < 380 ? 16.0 : 24.0;
+        final horizontal = math.max(inset, (width - 720) / 2);
+
+        return Scrollbar(
+          controller: recordScroll,
+          child: KeyboardFocusRevealer(
+            child: CustomScrollView(
+              key: const PageStorageKey('SESSIONS'),
+              controller: recordScroll,
+              slivers: [
+                // 1. Compact Header (~110px)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 16, horizontal, 0),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(
+                          height: 44,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 56),
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
                                 child: Text(
-                                  'Reset',
+                                  'TIME & FOCUS LEDGER',
+                                  maxLines: 1,
                                   style: TextStyle(
-                                    fontSize: 12,
+                                    fontSize: 10.5,
+                                    letterSpacing: 1.5,
                                     fontWeight: FontWeight.w600,
-                                    color: colors.primary,
+                                    color: colors.onSurfaceVariant,
                                   ),
                                 ),
                               ),
                             ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      LayoutBuilder(
-                        builder: (c, constraints) {
-                          final twoCol = constraints.maxWidth >= 230;
-                          final itemWidth = twoCol
-                              ? (constraints.maxWidth - 10) / 2
-                              : constraints.maxWidth;
-                          return Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: [
-                              SizedBox(
-                                width: itemWidth,
-                                child: selectField('Month', month, [
-                                  'All months',
-                                  ...months,
-                                ], (v) => setState(() => month = v)),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Expanded(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: PageTitle('SESSIONS'),
                               ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: selectField('Type', kind, [
-                                  'All types',
-                                  ...types,
-                                ], (v) => setState(() => kind = v)),
+                            ),
+                            if (hasRules)
+                              Tooltip(
+                                message: 'Automation rules saved · Review in Syntax builder',
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: withFeedback(
+                                    () => openSyntaxBuilder(c),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          LucideIcons.workflow,
+                                          size: 14,
+                                          color: colors.primary,
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          'Rules',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: colors.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                               ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: selectField('Weekday', weekday, [
-                                  'All weekdays',
-                                  'Monday',
-                                  'Tuesday',
-                                  'Wednesday',
-                                  'Thursday',
-                                  'Friday',
-                                  'Saturday',
-                                  'Sunday',
-                                ], (v) => setState(() => weekday = v)),
-                              ),
-                              SizedBox(
-                                width: itemWidth,
-                                child: selectField('Notes', notes, [
-                                  'All notes',
-                                  'With notes',
-                                  'Without notes',
-                                ], (v) => setState(() => notes = v)),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
                   ),
-                )
-              : const SizedBox.shrink(),
-        ),
-        if (hasActiveQuery && !filtersExpanded)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: _ToolbarPill(
-              icon: LucideIcons.x,
-              label: 'Clear filters & search',
-              onTap: withFeedback(resetFilters),
-            ),
-          ),
-        SizeTransitionPanel(
-          alignment: Alignment.topCenter,
-          child: selection
-              ? Surface(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                ),
+
+                // 2. Inline Summary (~120px, no card container)
+                SliverPadding(
+                  padding: EdgeInsets.symmetric(horizontal: horizontal),
+                  sliver: SliverToBoxAdapter(
+                    child: _InlineSessionSummary(
+                      filtered: hasActiveQuery,
+                      count: list.length,
+                      days: uniqueDays,
+                      totalSeconds: totalSeconds,
+                      hasLive: hasLive,
+                      breakdown: breakdown,
+                      hairline: hairline,
+                    ),
                   ),
-                  borderRadius: const BorderRadius.all(Radius.circular(18)),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        selected.isEmpty
-                            ? 'Tap sessions to select'
-                            : '${selected.length} selected',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                ),
+
+                // 3. Search Bar (~52px, integrated filter access)
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 6),
+                  sliver: SliverToBoxAdapter(
+                    child: TextField(
+                      controller: search,
+                      onChanged: (_) => setState(() {}),
+                      style: const TextStyle(fontSize: 14),
+                      decoration: InputDecoration(
+                        hintText: 'Search sessions...',
+                        hintStyle: TextStyle(
+                          fontSize: 14,
+                          color: colors.onSurfaceVariant.withValues(alpha: .75),
+                        ),
+                        isDense: true,
+                        filled: true,
+                        fillColor: colors.surfaceContainerLow,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 11,
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        prefixIcon: Icon(
+                          LucideIcons.search,
+                          size: 17,
+                          color: colors.onSurfaceVariant,
+                        ),
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        suffixIcon: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (search.text.isNotEmpty)
+                              IconButton(
+                                tooltip: 'Clear search',
+                                style: IconButton.styleFrom(
+                                  minimumSize: const Size(36, 40),
+                                  padding: EdgeInsets.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: withFeedback(() {
+                                  search.clear();
+                                  setState(() {});
+                                }),
+                                icon: const Icon(LucideIcons.x, size: 16),
+                              ),
+                            IconButton(
+                              tooltip: activeFilters == 0
+                                  ? 'Filters'
+                                  : 'Filters · $activeFilters active',
+                              style: IconButton.styleFrom(
+                                minimumSize: const Size(40, 40),
+                                padding: const EdgeInsets.only(right: 4),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              onPressed: withFeedback(
+                                () => openFiltersSheet(months, types),
+                              ),
+                              icon: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Icon(
+                                    LucideIcons.slidersHorizontal,
+                                    size: 17,
+                                    color: activeFilters > 0
+                                        ? colors.primary
+                                        : colors.onSurfaceVariant,
+                                  ),
+                                  if (activeFilters > 0)
+                                    Positioned(
+                                      right: -4,
+                                      top: -4,
+                                      child: Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: BoxDecoration(
+                                          color: colors.primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: hairline),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: hairline),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: colors.primary.withValues(alpha: .55),
+                            width: 1.5,
+                          ),
                         ),
                       ),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _ToolbarPill(
-                            icon:
-                                selected.length == list.length &&
-                                    list.isNotEmpty
-                                ? LucideIcons.square
-                                : LucideIcons.checkCheck,
-                            label:
-                                selected.length == list.length &&
-                                    list.isNotEmpty
-                                ? 'Clear selection'
-                                : 'Select visible',
-                            onTap: list.isEmpty
-                                ? null
-                                : withFeedback(() {
-                                    setState(() {
-                                      if (selected.length == list.length) {
-                                        selected.clear();
-                                      } else {
-                                        selected.addAll(list.map((s) => s.id));
-                                      }
-                                    });
-                                  }),
-                          ),
-                          if (selected.isNotEmpty)
-                            Material(
-                              color: colors.error,
-                              borderRadius: BorderRadius.circular(99),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(99),
-                                onTap: withFeedback(bulkDelete),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        LucideIcons.trash2,
-                                        size: 14,
-                                        color: colors.onError,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Delete ${selected.length}',
+                    ),
+                  ),
+                ),
+
+                // 4. Compact Toolbar (~38-42px) + Contextual Selection Bar
+                SliverPadding(
+                  padding: EdgeInsets.fromLTRB(horizontal, 0, horizontal, 4),
+                  sliver: SliverToBoxAdapter(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minHeight: 38),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        hasActiveQuery
+                                            ? '${list.length} OF ${widget.data.sessions.length} RECORDS'
+                                            : '${list.length} ${list.length == 1 ? 'RECORD' : 'RECORDS'}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
-                                          fontSize: 12,
+                                          fontFamily: 'Geist Mono',
+                                          fontSize: 11,
+                                          letterSpacing: 0.8,
                                           fontWeight: FontWeight.w600,
-                                          color: colors.onError,
+                                          color: colors.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                    if (hasActiveQuery) ...[
+                                      const SizedBox(width: 8),
+                                      InkWell(
+                                        borderRadius: BorderRadius.circular(6),
+                                        onTap: withFeedback(resetFilters),
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 4,
+                                          ),
+                                          child: Text(
+                                            'Reset',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: colors.primary,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ],
+                                  ],
+                                ),
+                              ),
+                              Builder(
+                                builder: (anchor) => Semantics(
+                                  button: true,
+                                  label: 'Sort by ${headers[sortColumn]}',
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: withFeedback(() async {
+                                      final value = await showChoiceMenu<int>(
+                                        anchor,
+                                        choices: {
+                                          for (
+                                            var i = 0;
+                                            i < headers.length;
+                                            i++
+                                          )
+                                            i: headers[i],
+                                        },
+                                        selected: sortColumn,
+                                      );
+                                      if (value != null && mounted) {
+                                        setState(() => sortColumn = value);
+                                      }
+                                    }),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 8,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            headers[sortColumn],
+                                            style: TextStyle(
+                                              fontSize: 12.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: colors.onSurface,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Icon(
+                                            LucideIcons.chevronDown,
+                                            size: 13,
+                                            color: colors.onSurfaceVariant,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
+                              Tooltip(
+                                message: ascending
+                                    ? 'Ascending; switch to descending'
+                                    : 'Descending; switch to ascending',
+                                child: Semantics(
+                                  button: true,
+                                  label: ascending
+                                      ? 'Ascending; switch to descending'
+                                      : 'Descending; switch to ascending',
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(8),
+                                    onTap: withFeedback(
+                                      () => setState(
+                                        () => ascending = !ascending,
+                                      ),
+                                    ),
+                                    child: SizedBox(
+                                      width: 34,
+                                      height: 36,
+                                      child: Icon(
+                                        ascending
+                                            ? LucideIcons.arrowUp
+                                            : LucideIcons.arrowDown,
+                                        size: 15,
+                                        color: colors.onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Builder(
+                                builder: (anchor) => Tooltip(
+                                  message: 'View and selection options',
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'View and selection options',
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(8),
+                                      onTap: withFeedback(() async {
+                                        final choices =
+                                            <_HistoryMenuAction?, String>{
+                                              _HistoryMenuAction.filters:
+                                                  activeFilters == 0
+                                                  ? 'Filters'
+                                                  : 'Filters · $activeFilters',
+                                              _HistoryMenuAction.formats:
+                                                  'Date & time',
+                                              if (narrow)
+                                                _HistoryMenuAction.toggleView:
+                                                    tableView
+                                                    ? 'List view'
+                                                    : 'Table view',
+                                              if (list.isNotEmpty || selection)
+                                                _HistoryMenuAction
+                                                    .toggleSelection: selection
+                                                    ? 'Done selecting'
+                                                    : 'Select sessions',
+                                            };
+                                        final action =
+                                            await showChoiceMenu<
+                                              _HistoryMenuAction?
+                                            >(
+                                              anchor,
+                                              choices: choices,
+                                              selected: null,
+                                            );
+                                        if (!mounted || action == null) return;
+                                        switch (action) {
+                                          case _HistoryMenuAction.filters:
+                                            await openFiltersSheet(
+                                              months,
+                                              types,
+                                            );
+                                          case _HistoryMenuAction.formats:
+                                            await formats();
+                                          case _HistoryMenuAction.toggleView:
+                                            ActionFeedback.tap();
+                                            setState(
+                                              () => tableView = !tableView,
+                                            );
+                                          case _HistoryMenuAction
+                                              .toggleSelection:
+                                            setState(() {
+                                              selection = !selection;
+                                              selected.clear();
+                                            });
+                                        }
+                                      }),
+                                      child: SizedBox(
+                                        width: 34,
+                                        height: 36,
+                                        child: Icon(
+                                          LucideIcons.ellipsis,
+                                          size: 16,
+                                          color: colors.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizeTransitionPanel(
+                          alignment: Alignment.topCenter,
+                          child: selection
+                              ? Container(
+                                  margin: const EdgeInsets.only(
+                                    top: 4,
+                                    bottom: 4,
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 8,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.primary.withValues(
+                                      alpha: dark ? .12 : .06,
+                                    ),
+                                    border: Border(
+                                      top: BorderSide(color: hairline),
+                                      bottom: BorderSide(color: hairline),
+                                    ),
+                                  ),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 6,
+                                    alignment: WrapAlignment.spaceBetween,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    children: [
+                                      Text(
+                                        selected.isEmpty
+                                            ? 'Tap sessions to select'
+                                            : '${selected.length} selected',
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 6,
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            onTap: list.isEmpty
+                                                ? null
+                                                : withFeedback(() {
+                                                    setState(() {
+                                                      if (selected.length ==
+                                                          list.length) {
+                                                        selected.clear();
+                                                      } else {
+                                                        selected.addAll(
+                                                          list.map((s) => s.id),
+                                                        );
+                                                      }
+                                                    });
+                                                  }),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 4,
+                                                  ),
+                                              child: Text(
+                                                selected.length ==
+                                                            list.length &&
+                                                        list.isNotEmpty
+                                                    ? 'Clear selection'
+                                                    : 'Select visible',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: colors.primary,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          if (selected.isNotEmpty)
+                                            Material(
+                                              color: colors.error,
+                                              borderRadius:
+                                                  BorderRadius.circular(99),
+                                              child: InkWell(
+                                                borderRadius:
+                                                    BorderRadius.circular(99),
+                                                onTap: withFeedback(bulkDelete),
+                                                child: Padding(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 5,
+                                                      ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        LucideIcons.trash2,
+                                                        size: 13,
+                                                        color: colors.onError,
+                                                      ),
+                                                      const SizedBox(width: 5),
+                                                      Text(
+                                                        'Delete ${selected.length}',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: colors.onError,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                            onTap: withFeedback(() {
+                                              setState(() {
+                                                selection = false;
+                                                selected.clear();
+                                              });
+                                            }),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 4,
+                                                  ),
+                                              child: Text(
+                                                'Done',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: colors.onSurface,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 5. Continuous Flat Record List (or Table view)
+                if (list.isEmpty)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      8,
+                      horizontal,
+                      108 + bottomSafe,
+                    ),
+                    sliver: const SliverToBoxAdapter(
+                      child: EmptyState(
+                        'No matching sessions.',
+                        'Adjust the filters or record your first hours.',
+                        LucideIcons.table2,
+                      ),
+                    ),
+                  )
+                else if (showList) ...[
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: horizontal),
+                    sliver: SliverToBoxAdapter(
+                      child: Container(height: 1, color: hairline),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.only(bottom: 108 + bottomSafe),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((c, index) {
+                        final s = list[index];
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _FlatSessionRow(
+                              data: widget.data,
+                              session: s,
+                              horizontal: horizontal,
+                              selecting: selection,
+                              selected: selected.contains(s.id),
+                              onTap: () {
+                                if (selection) {
+                                  _toggleSelected(s.id);
+                                } else {
+                                  panel(
+                                    c,
+                                    SessionForm(
+                                      data: widget.data,
+                                      session: s,
+                                      day: s.day,
+                                    ),
+                                  );
+                                }
+                              },
+                              onLongPress: selection
+                                  ? null
+                                  : () => _enterSelection(s.id),
                             ),
+                            if (index < list.length - 1)
+                              Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: horizontal,
+                                ),
+                                child: Container(height: 1, color: hairline),
+                              ),
+                          ],
+                        );
+                      }, childCount: list.length),
+                    ),
+                  ),
+                ] else
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      8,
+                      horizontal,
+                      108 + bottomSafe,
+                    ),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildSessionTable(c, list, colors, dark),
+                          const SizedBox(height: 10),
+                          Text(
+                            'Scroll sideways for more columns. Drag a header divider to resize neighbouring columns; double tap it to reset.',
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.35,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                )
-              : const SizedBox.shrink(),
-        ),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '${list.length} ${list.length == 1 ? 'record' : 'records'} · ${elapsed(totalSeconds)} total',
-                style: TextStyle(
-                  fontFamily: 'Geist Mono',
-                  fontSize: 11.5,
-                  color: colors.onSurfaceVariant,
+                SliverToBoxAdapter(
+                  child: KeyboardScrollSpacer(baseBottom: 108 + bottomSafe),
                 ),
-              ),
-            ),
-          ],
-        ),
-        if (list.isEmpty)
-          const Surface(
-            child: EmptyState(
-              'No matching sessions.',
-              'Adjust the filters or record your first hours.',
-              LucideIcons.table2,
-            ),
-          )
-        else if (showList)
-          _buildSessionList(c, list, maxListHeight)
-        else
-          _buildSessionTable(c, list, colors, dark),
-        if (!showList && list.isNotEmpty)
-          Text(
-            'Scroll sideways for more columns. Drag a header divider to resize neighbouring columns; double tap it to reset.',
-            style: TextStyle(
-              fontSize: 11,
-              height: 1.35,
-              color: colors.onSurfaceVariant,
+              ],
             ),
           ),
-      ],
+        );
+      },
     );
-  }
-
-  Widget _buildSessionList(
-    BuildContext c,
-    List<Session> list,
-    double maxHeight,
-  ) {
-    final child = Scrollbar(
-      controller: recordScroll,
-      child: ListView.separated(
-        controller: recordScroll,
-        primary: false,
-        shrinkWrap: list.length <= 6,
-        padding: const EdgeInsets.only(right: 4),
-        itemCount: list.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 8),
-        itemBuilder: (c, index) {
-          final s = list[index];
-          return sessionTile(
-            c,
-            ref,
-            widget.data,
-            s,
-            selecting: selection,
-            selected: selected.contains(s.id),
-            onTapOverride: selection ? () => _toggleSelected(s.id) : null,
-          );
-        },
-      ),
-    );
-    if (list.length <= 6) {
-      return ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight),
-        child: child,
-      );
-    }
-    return SizedBox(height: maxHeight, child: child);
   }
 
   Widget _buildSessionTable(
@@ -841,11 +1224,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     bool dark,
   ) {
     final totalWidth = widths.fold(0.0, (a, b) => a + b) + (selection ? 48 : 0);
+    final maxTableHeight = math.max(240.0, MediaQuery.sizeOf(c).height * .52);
     return Surface(
       padding: EdgeInsets.zero,
-      borderRadius: const BorderRadius.all(Radius.circular(22)),
+      borderRadius: const BorderRadius.all(Radius.circular(18)),
       child: SizedBox(
-        height: math.min(368.0, list.length * 56.0 + 48.0),
+        height: math.min(maxTableHeight, list.length * 56.0 + 48.0),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           primary: false,
@@ -1017,6 +1401,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                             );
                           }
                         }),
+                        onLongPress: selection
+                            ? null
+                            : () => _enterSelection(s.id),
                         child: Container(
                           decoration: BoxDecoration(
                             color: isSelected
@@ -1130,464 +1517,434 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   }
 }
 
-class _SessionSummaryCard extends StatelessWidget {
+class _InlineSessionSummary extends StatelessWidget {
   final bool filtered, hasLive;
   final int count, days, totalSeconds;
   final List<MapEntry<String, int>> breakdown;
-  const _SessionSummaryCard({
+  final Color hairline;
+  const _InlineSessionSummary({
     required this.filtered,
     required this.count,
     required this.days,
     required this.totalSeconds,
     required this.hasLive,
     required this.breakdown,
+    required this.hairline,
   });
 
   @override
   Widget build(BuildContext c) {
+    final colors = Theme.of(c).colorScheme;
+    final dark = Theme.of(c).brightness == Brightness.dark;
     final avg = count == 0 ? 0 : totalSeconds ~/ count;
+    final liveColor = dark ? const Color(0xFF6CE59E) : const Color(0xFF1E8E5A);
     return Semantics(
       container: true,
       label:
           '${filtered ? 'Filtered sessions' : 'All sessions'}: ${sessionDurationLabel(totalSeconds)}, $count sessions across $days days',
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xff191b19), Color(0xff303630)],
-          ),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: Colors.white.withValues(alpha: .06)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
                   child: Text(
-                    filtered ? 'FILTERED SESSIONS' : 'SESSION SUMMARY',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    sessionDurationLabel(totalSeconds),
                     style: TextStyle(
-                      color: Colors.white.withValues(alpha: .7),
-                      fontSize: 10,
-                      letterSpacing: 1.8,
+                      fontFamily: 'Geist Mono',
+                      fontSize: 32,
+                      height: 1.05,
                       fontWeight: FontWeight.w600,
+                      letterSpacing: -1.2,
+                      color: colors.onSurface,
                     ),
-                  ),
-                ),
-                if (hasLive)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF34C759).withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(99),
-                      border: Border.all(
-                        color: const Color(0xFF34C759).withValues(alpha: .35),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: Color(0xFF6CE59E),
-                            shape: BoxShape.circle,
-                          ),
-                          child: SizedBox(width: 5, height: 5),
-                        ),
-                        SizedBox(width: 5),
-                        Text(
-                          'LIVE',
-                          style: TextStyle(
-                            color: Color(0xFF8CF0B5),
-                            fontSize: 9.5,
-                            letterSpacing: 1.1,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  Text(
-                    '$count ${count == 1 ? 'session' : 'sessions'}',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: .55),
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      sessionDurationLabel(totalSeconds),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Geist Mono',
-                        fontSize: 32,
-                        height: 1.05,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -1.2,
-                      ),
-                    ),
-                  ),
-                ),
-                if (totalSeconds > 0) ...[
-                  const SizedBox(width: 10),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 3),
-                    child: Text(
-                      elapsed(totalSeconds),
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: .55),
-                        fontFamily: 'Geist Mono',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            if (breakdown.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(99),
-                child: SizedBox(
-                  height: 6,
-                  child: Row(
-                    children: [
-                      for (var i = 0; i < breakdown.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 2),
-                        Expanded(
-                          flex: math.max(1, breakdown[i].value),
-                          child: ColoredBox(
-                            color: sessionTypeColor(breakdown[i].key, true),
-                          ),
-                        ),
-                      ],
-                    ],
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 4,
-                children: [
-                  for (final entry in breakdown)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: sessionTypeColor(entry.key, true),
-                            shape: BoxShape.circle,
-                          ),
+              const SizedBox(width: 12),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasLive) ...[
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: liveColor,
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${entry.key} ${sessionDurationLabel(entry.value)}',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: .72),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'LIVE',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          letterSpacing: 1.0,
+                          fontWeight: FontWeight.w700,
+                          color: liveColor,
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Text(
+                      '$count ${count == 1 ? 'session' : 'sessions'}',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
-                ],
+                  ],
+                ),
               ),
             ],
-            const SizedBox(height: 12),
-            Row(
+          ),
+          if (breakdown.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: SizedBox(
+                height: 3,
+                child: Row(
+                  children: [
+                    for (var i = 0; i < breakdown.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 2),
+                      Expanded(
+                        flex: math.max(1, breakdown[i].value),
+                        child: ColoredBox(
+                          color: sessionTypeColor(breakdown[i].key, dark),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
               children: [
-                Expanded(
-                  child: _SessionMetric(
-                    label: 'Sessions',
-                    value: '$count',
-                    numeric: true,
+                for (final entry in breakdown)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          color: sessionTypeColor(entry.key, dark),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${entry.key} ${sessionDurationLabel(entry.value)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: colors.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SessionMetric(
-                    label: 'Average',
-                    value: count == 0 ? '0m' : sessionDurationLabel(avg),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _SessionMetric(
-                    label: 'Days',
-                    value: '$days',
-                    numeric: true,
-                  ),
-                ),
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SessionMetric extends StatelessWidget {
-  final String label, value;
-  final bool numeric;
-  const _SessionMetric({
-    required this.label,
-    required this.value,
-    this.numeric = false,
-  });
-
-  @override
-  Widget build(BuildContext c) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: .065),
-      borderRadius: BorderRadius.circular(13),
-      border: Border.all(color: Colors.white.withValues(alpha: .05)),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: .55),
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 5),
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: numeric ? 'Geist' : 'Geist Mono',
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _ToolbarPill extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final IconData? trailingIcon;
-  final bool active;
-  final VoidCallback? onTap;
-  const _ToolbarPill({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.trailingIcon,
-    this.active = false,
-  });
-
-  @override
-  Widget build(BuildContext c) {
-    final colors = Theme.of(c).colorScheme;
-    final disabled = onTap == null;
-    final bg = active ? colors.primary : colors.surface;
-    final fg = active
-        ? colors.onPrimary
-        : disabled
-        ? colors.onSurfaceVariant.withValues(alpha: .45)
-        : colors.onSurface;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(99),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(99),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(99),
-            border: Border.all(
-              color: active
-                  ? colors.primary
-                  : colors.outlineVariant.withValues(alpha: .45),
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
+          const SizedBox(height: 10),
+          Container(height: 1, color: hairline),
+          const SizedBox(height: 10),
+          Row(
             children: [
-              Icon(icon, size: 14, color: fg),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: fg,
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _InlineStat(
+                      value: '$count',
+                      label: count == 1 ? 'session' : 'sessions',
+                    ),
                   ),
                 ),
               ),
-              if (trailingIcon != null) ...[
-                const SizedBox(width: 4),
-                Icon(trailingIcon, size: 13, color: fg),
-              ],
+              Expanded(
+                child: Align(
+                  alignment: Alignment.center,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _InlineStat(
+                      value: count == 0 ? '0m' : sessionDurationLabel(avg),
+                      label: 'average',
+                      mono: true,
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _InlineStat(
+                      value: '$days',
+                      label: days == 1 ? 'day' : 'days',
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ToolbarIconPill extends StatelessWidget {
-  final IconData icon;
-  final String semanticsLabel;
-  final VoidCallback? onTap;
-  const _ToolbarIconPill({
-    required this.icon,
-    required this.semanticsLabel,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext c) {
-    final colors = Theme.of(c).colorScheme;
-    return Semantics(
-      button: true,
-      label: semanticsLabel,
-      child: Material(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(99),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(99),
-          child: Container(
-            padding: const EdgeInsets.all(9),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(99),
-              border: Border.all(
-                color: colors.outlineVariant.withValues(alpha: .45),
-              ),
-            ),
-            child: Icon(icon, size: 14, color: colors.onSurface),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ViewSegmentedControl extends StatelessWidget {
-  final bool tableView;
-  final ValueChanged<bool> onChanged;
-  const _ViewSegmentedControl({
-    required this.tableView,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext c) {
-    final colors = Theme.of(c).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(3),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _SegmentButton(
-            icon: LucideIcons.list,
-            tooltip: 'List view',
-            selected: !tableView,
-            onTap: () => onChanged(false),
-          ),
-          _SegmentButton(
-            icon: LucideIcons.table2,
-            tooltip: 'Table view',
-            selected: tableView,
-            onTap: () => onChanged(true),
-          ),
+          const SizedBox(height: 12),
         ],
       ),
     );
   }
 }
 
-class _SegmentButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final bool selected;
-  final VoidCallback onTap;
-  const _SegmentButton({
-    required this.icon,
-    required this.tooltip,
-    required this.selected,
-    required this.onTap,
+class _InlineStat extends StatelessWidget {
+  final String value, label;
+  final bool mono;
+  const _InlineStat({
+    required this.value,
+    required this.label,
+    this.mono = false,
   });
 
   @override
   Widget build(BuildContext c) {
     final colors = Theme.of(c).colorScheme;
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        selected: selected,
-        label: tooltip,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(9),
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: Motion.duration(c, 160),
-            curve: Motion.curve,
-            width: 32,
-            height: 28,
-            decoration: BoxDecoration(
-              color: selected ? colors.surface : Colors.transparent,
-              borderRadius: BorderRadius.circular(9),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: .07),
-                        blurRadius: 4,
-                        offset: const Offset(0, 1),
-                      ),
-                    ]
-                  : null,
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: value,
+            style: TextStyle(
+              fontFamily: mono ? 'Geist Mono' : 'Geist',
+              fontSize: 12.5,
+              fontWeight: FontWeight.w600,
+              color: colors.onSurface,
             ),
-            child: Icon(
-              icon,
-              size: 14,
-              color: selected ? colors.onSurface : colors.onSurfaceVariant,
+          ),
+          TextSpan(
+            text: ' $label',
+            style: TextStyle(
+              fontFamily: 'Geist',
+              fontSize: 12.5,
+              fontWeight: FontWeight.w400,
+              color: colors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+      maxLines: 1,
+    );
+  }
+}
+
+class _FlatSessionRow extends StatelessWidget {
+  final AppData data;
+  final Session session;
+  final double horizontal;
+  final bool selecting, selected;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+
+  const _FlatSessionRow({
+    required this.data,
+    required this.session,
+    required this.horizontal,
+    required this.selecting,
+    required this.selected,
+    required this.onTap,
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final theme = Theme.of(c);
+    final colors = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final running = session.ended == null;
+    final accent = running
+        ? (dark ? const Color(0xFF55C486) : const Color(0xFF1E8E5A))
+        : sessionTypeColor(session.kind, dark);
+    final conditionName = session.note.startsWith('Automatic · ')
+        ? session.note.substring('Automatic · '.length)
+        : null;
+
+    return Semantics(
+      selected: selecting ? selected : null,
+      child: Material(
+        color: selecting && selected
+            ? colors.primary.withValues(alpha: dark ? .12 : .06)
+            : Colors.transparent,
+        child: InkWell(
+          onTap: withFeedback(onTap),
+          onLongPress: onLongPress,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (selecting) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 1, right: 12),
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected ? colors.primary : Colors.transparent,
+                        border: Border.all(
+                          color: selected
+                              ? colors.primary
+                              : colors.outlineVariant,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: selected
+                          ? Icon(
+                              LucideIcons.check,
+                              size: 13,
+                              color: colors.onPrimary,
+                            )
+                          : null,
+                    ),
+                  ),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              sessionDate(data, session),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -.2,
+                                color: colors.onSurface,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            elapsed(durationOf(session)),
+                            style: TextStyle(
+                              fontFamily: 'Geist Mono',
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w600,
+                              color: running ? accent : colors.onSurface,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 2,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          Text(
+                            session.kind,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: accent,
+                            ),
+                          ),
+                          Text(
+                            '·',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                          Text(
+                            '${clockTime(data, session.started)} – ${running ? 'Running' : clockTime(data, session.ended!)}',
+                            style: TextStyle(
+                              fontFamily: 'Geist Mono',
+                              fontSize: 12.5,
+                              color: running ? accent : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (session.note.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            session.note,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13.5,
+                              height: 1.35,
+                              color: colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      if (conditionName != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: withFeedback(
+                              () => openSyntaxBuilder(
+                                c,
+                                conditionName: conditionName,
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.workflow,
+                                    size: 12,
+                                    color: accent,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Condition set',
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w600,
+                                      color: accent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ),

@@ -33,44 +33,103 @@ Future<void> openSheet(
 }
 
 void main() {
-  testWidgets('Keyboard preserves sheet snap, fields and fixed slots', (
-    tester,
-  ) async {
-    addTearDown(tester.view.resetViewInsets);
-    await openSheet(
-      tester,
-      const PanelContent(
-        header: Text('Input heading'),
-        footer: Text('Input actions'),
-        child: Column(
-          children: [
-            TextField(),
-            TextField(keyboardType: TextInputType.number),
-          ],
+  testWidgets(
+    'Keyboard lifts obscured sheet inputs without changing snap or slot sizes',
+    (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      await openSheet(
+        tester,
+        const PanelContent(
+          header: Text('Input heading'),
+          footer: Text('Input actions'),
+          child: Column(
+            children: [
+              TextField(),
+              TextField(keyboardType: TextInputType.number),
+            ],
+          ),
         ),
-      ),
-    );
-    final sheet = tester
-        .widget<DraggableScrollableSheet>(find.byType(DraggableScrollableSheet))
-        .controller!;
-    for (final field in find.byType(TextField).evaluate().toList()) {
-      await tester.showKeyboard(find.byWidget(field.widget));
-      await tester.pump(const Duration(milliseconds: 300));
-      final extent = sheet.size;
-      final header = tester.getRect(find.text('Input heading'));
-      final footer = tester.getRect(find.text('Input actions'));
-      final input = tester.getRect(find.byWidget(field.widget));
-      for (final inset in [80.0, 160.0, 280.0, 160.0, 80.0, 0.0]) {
-        tester.view.viewInsets = FakeViewPadding(bottom: inset);
-        await tester.pump(const Duration(milliseconds: 50));
-        expect(sheet.size, extent);
+      );
+      final sheet = tester
+          .widget<DraggableScrollableSheet>(
+            find.byType(DraggableScrollableSheet),
+          )
+          .controller!;
+      for (final field in find.byType(TextField).evaluate().toList()) {
+        await tester.showKeyboard(find.byWidget(field.widget));
+        await tester.pump(const Duration(milliseconds: 300));
+        final extent = sheet.size;
+        final header = tester.getRect(find.text('Input heading'));
+        final footer = tester.getRect(find.text('Input actions'));
+        final input = tester.getRect(find.byWidget(field.widget));
+        for (final inset in [80.0, 160.0, 280.0, 160.0, 80.0, 0.0]) {
+          tester.view.viewInsets = FakeViewPadding(bottom: inset);
+          await tester.pumpAndSettle();
+          expect(sheet.size, extent);
+          expect(tester.getRect(find.text('Input heading')).size, header.size);
+          expect(tester.getRect(find.text('Input actions')).size, footer.size);
+          final currentInput = tester.getRect(find.byWidget(field.widget));
+          expect(currentInput.size, input.size);
+          expect(currentInput.bottom, lessThanOrEqualTo(800 - inset));
+        }
         expect(tester.getRect(find.text('Input heading')), header);
         expect(tester.getRect(find.text('Input actions')), footer);
         expect(tester.getRect(find.byWidget(field.widget)), input);
       }
-    }
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Long form sheet keeps unobstructed top fields fixed and reveals bottom fields',
+    (tester) async {
+      addTearDown(tester.view.resetViewInsets);
+      const topFieldKey = ValueKey('top-field');
+      const bottomFieldKey = ValueKey('bottom-field');
+      await openSheet(
+        tester,
+        const PanelContent(
+          header: Text('Long form'),
+          footer: Text('Save / Cancel'),
+          child: Column(
+            children: [
+              TextField(key: topFieldKey),
+              SizedBox(height: 360),
+              TextField(key: bottomFieldKey),
+            ],
+          ),
+        ),
+      );
+      final sheet = tester
+          .widget<DraggableScrollableSheet>(
+            find.byType(DraggableScrollableSheet),
+          )
+          .controller!;
+      final extent = sheet.size;
+      expect(extent, closeTo(.70, .001));
+
+      // Top field is already well above a 280px keyboard, so sheet does not shift.
+      await tester.showKeyboard(find.byKey(topFieldKey));
+      await tester.pumpAndSettle();
+      final topInitial = tester.getRect(find.byKey(topFieldKey));
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      await tester.pumpAndSettle();
+      expect(sheet.size, extent);
+      expect(tester.getRect(find.byKey(topFieldKey)), topInitial);
+
+      // Bottom field sits inside the IME zone and lifts/scrolls clear of the keyboard.
+      await tester.ensureVisible(find.byKey(bottomFieldKey));
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(find.byKey(bottomFieldKey));
+      await tester.pumpAndSettle();
+      expect(sheet.size, extent);
+      expect(
+        tester.getRect(find.byKey(bottomFieldKey)).bottom,
+        lessThanOrEqualTo(800 - 280),
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
   for (final reduced in [false, true]) {
     testWidgets('Content fit, expand and dismiss (reduced: $reduced)', (
       tester,

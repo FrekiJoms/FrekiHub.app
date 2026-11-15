@@ -499,20 +499,28 @@ class _ManageListState extends ConsumerState<_ManageList> {
 
   Future<void> save(List<String> next, {bool clearName = false}) async {
     if (saving) return;
+    final previous = [...items];
+    final removed = previous.where((item) => !next.contains(item)).toList();
     setState(() {
       saving = true;
       savingItem = clearName
           ? null
-          : items.firstWhere((item) => !next.contains(item), orElse: () => '');
+          : previous.firstWhere(
+              (item) => !next.contains(item),
+              orElse: () => '',
+            );
+      items = next;
+      if (clearName) name.clear();
     });
+    var committed = false;
     await guarded(context, () async {
       final db = ref.read(databaseProvider);
       await db.transaction(() async {
         await db.pref(widget.setting, jsonEncode(next));
         if (widget.setting == 'methods') {
-          final data = await db.readAll();
+          final prefs = await db.readPreferences();
+          final data = AppData(const [], const [], const [], prefs);
           final hidden = {...data.hiddenWallets};
-          final removed = items.where((item) => !next.contains(item)).toList();
           for (final item in removed) {
             hidden.add(item.trim().toLowerCase());
           }
@@ -521,7 +529,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
           }
           await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
           final order = List<String>.from(
-            jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
+            jsonDecode(prefs['walletOrder'] ?? '[]') as List,
           );
           var orderChanged = false;
           for (final item in next) {
@@ -537,7 +545,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
             final apps = Set<String>.from(config['apps'] as List? ?? []);
             var appsChanged = false;
             for (final item in removed) {
-              final pkg = data.prefs['wallet:$item:package'];
+              final pkg = prefs['wallet:$item:package'];
               if (pkg != null && apps.remove(pkg)) {
                 appsChanged = true;
               }
@@ -552,21 +560,26 @@ class _ManageListState extends ConsumerState<_ManageList> {
           }
         }
       });
+      committed = true;
       if (widget.setting == 'methods') {
-        await AutomationSync.configure(await db.readAll());
+        unawaited(
+          db.readAll().then(AutomationSync.configure).catchError((Object _) {}),
+        );
       }
       if (!mounted) return;
-      setState(() {
-        items = next;
-        if (clearName) name.clear();
-      });
       dataToast(
         context,
         widget.setting == 'categories' ? 'Category' : 'Payment method',
         clearName ? DataAction.saved : DataAction.deleted,
       );
     });
-    if (mounted) setState(() => saving = false);
+    if (mounted) {
+      setState(() {
+        saving = false;
+        savingItem = null;
+        if (!committed) items = previous;
+      });
+    }
   }
 
   Future<void> _pickInstalledApp() async {
@@ -648,15 +661,13 @@ class _ManageListState extends ConsumerState<_ManageList> {
 
       setState(() => saving = true);
       final db = ref.read(databaseProvider);
-      final nextMethods = items.any(
-        (s) => s.toLowerCase() == appName.toLowerCase(),
-      )
+      final nextMethods =
+          items.any((s) => s.toLowerCase() == appName.toLowerCase())
           ? items
           : [...items, appName];
       await db.transaction(() async {
         final data = await db.readAll();
-        final hidden = {...data.hiddenWallets}
-          ..remove(appName.toLowerCase());
+        final hidden = {...data.hiddenWallets}..remove(appName.toLowerCase());
         await db.pref('methods', jsonEncode(nextMethods));
         await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
         final order = List<String>.from(

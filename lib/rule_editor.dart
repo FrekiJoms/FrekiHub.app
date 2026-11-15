@@ -292,7 +292,7 @@ class _RuleCodeEditorState extends State<RuleCodeEditor> {
         ],
       ),
       RawAutocomplete<_CodeHint>(
-        optionsViewOpenDirection: MediaQuery.viewInsetsOf(c).bottom > 0
+        optionsViewOpenDirection: KeyboardOverlay.imeBottomOf(c) > 0
             ? OptionsViewOpenDirection.up
             : OptionsViewOpenDirection.down,
         textEditingController: widget.controller,

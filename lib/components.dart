@@ -18,22 +18,284 @@ class PageTitle extends StatelessWidget {
   );
 }
 
-/// The IME overlays the app without resizing, reflowing or panning its content.
-/// Applied above the Navigator so pages, sheets and all inputs share the policy.
+class _KeyboardInsetScope extends InheritedWidget {
+  final double bottom;
+  const _KeyboardInsetScope({required this.bottom, required super.child});
+  @override
+  bool updateShouldNotify(_KeyboardInsetScope oldWidget) =>
+      bottom != oldWidget.bottom;
+}
+
+/// Keeps outer navigation/layout bounds fixed while exposing raw IME height
+/// selectively for sheet lift and focused-input scroll clearance.
 class KeyboardOverlay extends StatelessWidget {
   final Widget child;
   const KeyboardOverlay({super.key, required this.child});
+
+  /// Actual bottom IME inset in logical pixels behind [KeyboardOverlay].
+  static double imeBottomOf(BuildContext context) {
+    final scope = context
+        .dependOnInheritedWidgetOfExactType<_KeyboardInsetScope>();
+    if (scope != null) return scope.bottom;
+    return MediaQuery.maybeViewInsetsOf(context)?.bottom ?? 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    return MediaQuery(
-      data: media.copyWith(
-        viewInsets: EdgeInsets.zero,
-        padding: media.viewPadding,
+    return _KeyboardInsetScope(
+      bottom: media.viewInsets.bottom,
+      child: MediaQuery(
+        data: media.copyWith(
+          viewInsets: EdgeInsets.zero,
+          padding: media.viewPadding,
+        ),
+        child: child,
       ),
-      child: child,
     );
   }
+}
+
+bool isContextDescendant(BuildContext? child, BuildContext? ancestor) {
+  if (child == null ||
+      ancestor == null ||
+      !child.mounted ||
+      !ancestor.mounted) {
+    return false;
+  }
+  if (identical(child, ancestor)) return true;
+  var found = false;
+  child.visitAncestorElements((element) {
+    if (identical(element, ancestor)) {
+      found = true;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
+/// Locates the active editable control and target visibility bounds inside it.
+({EditableTextState editable, RenderBox box, Rect localRect})?
+focusedEditableTarget(FocusNode? focus) {
+  final ctx = focus?.context;
+  if (ctx == null || !ctx.mounted) return null;
+  EditableTextState? editable;
+  if (ctx.widget is EditableText) {
+    editable = (ctx as StatefulElement).state as EditableTextState;
+  } else {
+    editable = ctx.findAncestorStateOfType<EditableTextState>();
+  }
+  if (editable == null || !editable.mounted) return null;
+
+  RenderBox? box;
+  editable.context.visitAncestorElements((element) {
+    if (element.widget is InputDecorator) {
+      final ro = element.findRenderObject();
+      if (ro is RenderBox && ro.hasSize) box = ro;
+      return false;
+    }
+    if (element.widget is TextField) return false;
+    return true;
+  });
+  box ??= editable.context.findRenderObject() as RenderBox?;
+  if (box == null || !box!.hasSize) return null;
+
+  final boxSize = box!.size;
+  var localRect = Offset.zero & boxSize;
+  if (boxSize.height > 120) {
+    final renderEditable = editable.renderEditable;
+    final selection = editable.textEditingValue.selection;
+    if (renderEditable.hasSize && selection.isValid) {
+      final caret = renderEditable.getLocalRectForCaret(selection.extent);
+      final topLeft = renderEditable.localToGlobal(
+        caret.topLeft,
+        ancestor: box,
+      );
+      final top = math.max(0.0, topLeft.dy - 12.0);
+      final bottom = math.min(boxSize.height, topLeft.dy + caret.height + 20.0);
+      localRect = Rect.fromLTRB(
+        topLeft.dx,
+        top,
+        topLeft.dx + math.max(1.0, caret.width),
+        math.max(top + 1.0, bottom),
+      );
+    }
+  }
+  return (editable: editable, box: box!, localRect: localRect);
+}
+
+/// Adds extra bottom scroll room while the IME overlays a scrollable page.
+class KeyboardScrollSpacer extends StatelessWidget {
+  final double baseBottom;
+  const KeyboardScrollSpacer({super.key, this.baseBottom = 0});
+
+  @override
+  Widget build(BuildContext context) {
+    final height = math.max(
+      0.0,
+      KeyboardOverlay.imeBottomOf(context) - baseBottom,
+    );
+    return SizedBox(height: height);
+  }
+}
+
+/// Keeps the focused text input or caret scrolled clear of the active keyboard.
+class KeyboardFocusRevealer extends StatefulWidget {
+  final Widget child;
+  const KeyboardFocusRevealer({super.key, required this.child});
+
+  @override
+  State<KeyboardFocusRevealer> createState() => _KeyboardFocusRevealerState();
+}
+
+class _KeyboardFocusRevealerState extends State<KeyboardFocusRevealer> {
+  double _imeBottom = 0;
+  bool _revealScheduled = false;
+  TextEditingController? _controller;
+  ScrollPosition? _animatingPosition;
+  double? _animatingTarget;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(_onFocusChange);
+    _attachToCurrentFocus();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final nextIme = KeyboardOverlay.imeBottomOf(context);
+    final changed = (nextIme - _imeBottom).abs() > 0.5;
+    _imeBottom = nextIme;
+    if (changed && _imeBottom > 0) _scheduleReveal();
+  }
+
+  void _onFocusChange() {
+    _attachToCurrentFocus();
+    if (_imeBottom > 0) _scheduleReveal();
+  }
+
+  void _attachToCurrentFocus() {
+    final target = focusedEditableTarget(FocusManager.instance.primaryFocus);
+    final next =
+        (target != null &&
+            isContextDescendant(target.editable.context, context))
+        ? target.editable.widget.controller
+        : null;
+    if (!identical(_controller, next)) {
+      _controller?.removeListener(_onTextChange);
+      _controller = next;
+      _controller?.addListener(_onTextChange);
+    }
+  }
+
+  void _onTextChange() {
+    if (_imeBottom > 0) _scheduleReveal();
+  }
+
+  void _scheduleReveal() {
+    if (_revealScheduled || !mounted) return;
+    _revealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _revealScheduled = false;
+      _reveal();
+    });
+  }
+
+  void _reveal() {
+    if (!mounted || _imeBottom <= 0) return;
+    final target = focusedEditableTarget(FocusManager.instance.primaryFocus);
+    if (target == null ||
+        !isContextDescendant(target.editable.context, context)) {
+      return;
+    }
+    final scrollable = Scrollable.maybeOf(target.editable.context);
+    if (scrollable == null ||
+        !isContextDescendant(scrollable.context, context)) {
+      return;
+    }
+    final viewportBox = scrollable.context.findRenderObject() as RenderBox?;
+    if (viewportBox == null || !viewportBox.hasSize) return;
+    final position = scrollable.position;
+    if (!position.hasPixels || !position.hasContentDimensions) return;
+
+    final viewportTop = viewportBox.localToGlobal(Offset.zero).dy;
+    final viewportBottom = viewportTop + viewportBox.size.height;
+    final keyboardTop = MediaQuery.sizeOf(context).height - _imeBottom;
+    final safeBottom = math.min(viewportBottom, keyboardTop) - 16.0;
+    final safeTop = viewportTop + 8.0;
+    if (safeBottom <= safeTop) return;
+
+    final fieldTopLeft = target.box.localToGlobal(target.localRect.topLeft);
+    final fieldTop = fieldTopLeft.dy;
+    final fieldBottom = fieldTop + target.localRect.height;
+
+    var delta = 0.0;
+    if (fieldBottom > safeBottom) {
+      delta = fieldBottom - safeBottom;
+      if (fieldTop - delta < safeTop &&
+          target.localRect.height <= safeBottom - safeTop) {
+        delta = math.max(0.0, fieldTop - safeTop);
+      }
+    } else if (fieldTop < safeTop) {
+      delta = fieldTop - safeTop;
+    }
+    if (delta.abs() <= 1.0) return;
+
+    final targetPixels = (position.pixels + delta).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
+    );
+    if ((targetPixels - position.pixels).abs() <= 1.0) return;
+    if (identical(_animatingPosition, position) &&
+        _animatingTarget != null &&
+        (_animatingTarget! - targetPixels).abs() <= 1.0 &&
+        position.isScrollingNotifier.value) {
+      return;
+    }
+    final duration = Motion.duration(context, 160);
+    if (duration == Duration.zero) {
+      _animatingPosition = null;
+      _animatingTarget = null;
+      position.jumpTo(targetPixels);
+    } else {
+      _animatingPosition = position;
+      _animatingTarget = targetPixels;
+      unawaited(
+        position
+            .animateTo(
+              targetPixels,
+              duration: duration,
+              curve: Curves.easeOutCubic,
+            )
+            .whenComplete(() {
+              if (identical(_animatingPosition, position)) {
+                _animatingPosition = null;
+                _animatingTarget = null;
+              }
+            }),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(_onFocusChange);
+    _controller?.removeListener(_onTextChange);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      NotificationListener<ScrollMetricsNotification>(
+        onNotification: (_) {
+          if (_imeBottom > 0) _scheduleReveal();
+          return false;
+        },
+        child: widget.child,
+      );
 }
 
 /// Width-dependent layouts reuse their widget tree during height-only resizing.

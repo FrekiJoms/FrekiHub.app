@@ -44,6 +44,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
   late WalletView view;
   late bool masked;
   late List<String> order;
+  final Set<String> _removing = {};
 
   @override
   void initState() {
@@ -74,19 +75,28 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     if (old.data.prefs['walletView'] != widget.data.prefs['walletView']) {
       view = WalletView.restore(widget.data.prefs['walletView']);
     }
+    if (_removing.isNotEmpty) {
+      final activeLower = widget.data.walletMethods
+          .map((m) => m.trim().toLowerCase())
+          .toSet();
+      _removing.removeWhere((name) => !activeLower.contains(name));
+    }
   }
 
   List<WalletAccount> _accounts() {
+    bool keep(WalletAccount a) =>
+        !_removing.contains(a.name.trim().toLowerCase());
     final provided = widget.accounts;
     if (provided != null &&
         _sameNames(provided.map((a) => a.name).toList(), order)) {
-      return provided;
+      return _removing.isEmpty ? provided : provided.where(keep).toList();
     }
-    return walletAccounts(
+    final list = walletAccounts(
       widget.data,
       widget.data.orderedWalletNames(order),
       widget.committed,
     );
+    return _removing.isEmpty ? list : list.where(keep).toList();
   }
 
   Future<void> _scope([List<WalletAccount>? current]) async {
@@ -166,21 +176,34 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
       return;
     }
     if (!mounted) return;
+    final targetLower = account.name.trim().toLowerCase();
+    final previousOrder = List<String>.from(order);
+    final previousWallet = widget.wallet?.trim().toLowerCase() == targetLower
+        ? widget.wallet
+        : null;
+    setState(() {
+      _removing.add(targetLower);
+      order = [...order]
+        ..removeWhere((w) => w.trim().toLowerCase() == targetLower);
+    });
+    if (previousWallet != null) {
+      widget.onWallet?.call(null);
+    }
     try {
       final db = ref.read(databaseProvider);
-      final targetLower = account.name.trim().toLowerCase();
       await db.transaction(() async {
-        final data = await db.readAll();
+        final prefs = await db.readPreferences();
+        final data = AppData(const [], const [], const [], prefs);
         final nextMethods = data.methods
             .where((m) => m.trim().toLowerCase() != targetLower)
             .toList();
         await db.pref('methods', jsonEncode(nextMethods));
         final hidden = {...data.hiddenWallets, targetLower};
         await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
-        final stored = [...walletStoredOrder(data.prefs)]
+        final stored = [...walletStoredOrder(prefs)]
           ..removeWhere((w) => w.trim().toLowerCase() == targetLower);
         await db.pref('walletOrder', jsonEncode(stored));
-        final pkg = data.prefs['wallet:${account.name}:package'];
+        final pkg = prefs['wallet:${account.name}:package'];
         if (pkg != null && pkg.isNotEmpty) {
           final config = AutomationSync.config(data);
           final apps = Set<String>.from(config['apps'] as List? ?? []);
@@ -190,15 +213,21 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           }
         }
       });
-      await AutomationSync.configure(await db.readAll());
-      if (widget.wallet?.toLowerCase() == targetLower) {
-        widget.onWallet?.call(null);
-      }
+      unawaited(
+        db.readAll().then(AutomationSync.configure).catchError((Object _) {}),
+      );
       if (mounted) {
         dataToast(context, 'Payment method', DataAction.deleted);
       }
     } catch (_) {
       if (mounted) {
+        setState(() {
+          _removing.remove(targetLower);
+          order = previousOrder;
+        });
+        if (previousWallet != null) {
+          widget.onWallet?.call(previousWallet);
+        }
         toast(context, 'Could not remove this wallet. Try again.', error: true);
       }
     }
@@ -343,7 +372,9 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     final scoped = widget.wallet == null
         ? included
         : accounts
-              .where((a) => a.name.toLowerCase() == widget.wallet!.toLowerCase())
+              .where(
+                (a) => a.name.toLowerCase() == widget.wallet!.toLowerCase(),
+              )
               .toList();
     final total = scoped.fold(0, (sum, a) => sum + a.balance);
     final assets = scoped
@@ -1201,95 +1232,95 @@ class _WalletRows extends StatelessWidget {
   Widget build(BuildContext c) {
     _WalletAppIcons.prefetch(accounts);
     return Surface(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-    child: ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      buildDefaultDragHandles: false,
-      itemCount: accounts.length,
-      onReorderItem: (old, next) {
-        final names = accounts.map((a) => a.name).toList();
-        names.insert(next, names.removeAt(old));
-        onReorder(names);
-      },
-      itemBuilder: (c, i) {
-        final account = accounts[i];
-        return Column(
-          key: ValueKey(account.name),
-          children: [
-            ReorderableDelayedDragStartListener(
-              index: i,
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                leading: _WalletMark(account: account, size: 38),
-                title: Text(
-                  account.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-                subtitle: Text(
-                  account.name == selected
-                      ? 'Scoping Finance to this wallet'
-                      : account.committed > 0
-                      ? '${account.included ? 'Included' : 'Excluded'} · ${masked ? 'planned' : '${money(account.committed, currency)} planned'}'
-                      : account.included
-                      ? 'Included in total'
-                      : 'Excluded from total',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Theme.of(c).colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      child: ReorderableListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        buildDefaultDragHandles: false,
+        itemCount: accounts.length,
+        onReorderItem: (old, next) {
+          final names = accounts.map((a) => a.name).toList();
+          names.insert(next, names.removeAt(old));
+          onReorder(names);
+        },
+        itemBuilder: (c, i) {
+          final account = accounts[i];
+          return Column(
+            key: ValueKey(account.name),
+            children: [
+              ReorderableDelayedDragStartListener(
+                index: i,
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: _WalletMark(account: account, size: 38),
+                  title: Text(
+                    account.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                ),
-                onTap: () => onOpen(account),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (account.name == selected) ...[
-                      Icon(
-                        LucideIcons.check,
-                        size: 15,
-                        color: Theme.of(c).colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                    Text(
-                      masked
-                          ? walletMaskedAmount(currency)
-                          : money(account.balance, currency),
-                      style: TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 12,
-                        color: account.balance < 0
-                            ? Theme.of(c).colorScheme.error
-                            : Theme.of(c).colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Icon(
-                      LucideIcons.gripVertical,
-                      size: 16,
+                  subtitle: Text(
+                    account.name == selected
+                        ? 'Scoping Finance to this wallet'
+                        : account.committed > 0
+                        ? '${account.included ? 'Included' : 'Excluded'} · ${masked ? 'planned' : '${money(account.committed, currency)} planned'}'
+                        : account.included
+                        ? 'Included in total'
+                        : 'Excluded from total',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
                       color: Theme.of(c).colorScheme.onSurfaceVariant,
                     ),
-                  ],
+                  ),
+                  onTap: () => onOpen(account),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (account.name == selected) ...[
+                        Icon(
+                          LucideIcons.check,
+                          size: 15,
+                          color: Theme.of(c).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      Text(
+                        masked
+                            ? walletMaskedAmount(currency)
+                            : money(account.balance, currency),
+                        style: TextStyle(
+                          fontFamily: 'Geist Mono',
+                          fontSize: 12,
+                          color: account.balance < 0
+                              ? Theme.of(c).colorScheme.error
+                              : Theme.of(c).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        LucideIcons.gripVertical,
+                        size: 16,
+                        color: Theme.of(c).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            if (i < accounts.length - 1)
-              Divider(
-                height: 1,
-                indent: 54,
-                endIndent: 8,
-                color: Theme.of(c).colorScheme.outlineVariant
-                    .withValues(alpha: .5),
-              ),
-          ],
-        );
-      },
-    ),
-  );
+              if (i < accounts.length - 1)
+                Divider(
+                  height: 1,
+                  indent: 54,
+                  endIndent: 8,
+                  color: Theme.of(c).colorScheme.outlineVariant
+                      .withValues(alpha: .5),
+                ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -1410,9 +1441,12 @@ class _WalletDeckState extends State<_WalletDeck>
   @override
   void didUpdateWidget(covariant _WalletDeck oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.accounts.length < 2 && _mode != _DeckMotion.idle) {
+    if ((widget.accounts.length < 2 ||
+            oldWidget.accounts.length != widget.accounts.length) &&
+        _mode != _DeckMotion.idle) {
       _mode = _DeckMotion.idle;
       _dragPx.value = 0;
+      _flightFromPx = 0;
       _controller.reset();
     }
   }
@@ -1616,7 +1650,11 @@ class _WalletDeckState extends State<_WalletDeck>
         _DeckSlotPose(
           index: prevIndex,
           tx: -width * 0.72 * k,
-          ty: ui.lerpDouble(_slotY(backSlot, behind), _slotY(0, behind) - 4, k)!,
+          ty: ui.lerpDouble(
+            _slotY(backSlot, behind),
+            _slotY(0, behind) - 4,
+            k,
+          )!,
           scale: ui.lerpDouble(_slotScale(backSlot), 0.94, k)!,
           angle: -0.07 * k,
           scrim: ui.lerpDouble(_slotScrim(backSlot), 0.04, k)!,
@@ -1666,15 +1704,15 @@ class _WalletDeckState extends State<_WalletDeck>
       case _DeckMotion.committingNext:
         final u = _controller.value;
         final startT = (-_flightFromPx / swipeRange).clamp(0.0, 1.0);
-        final t = ui.lerpDouble(
-          startT,
-          1.0,
-          Curves.easeOutCubic.transform(u),
-        )!;
+        final t = ui.lerpDouble(startT, 1.0, Curves.easeOutCubic.transform(u))!;
         final peakDx = math.min(_flightFromPx, -width * 0.72);
         final swapAt = _flightFromPx <= -width * 0.65 ? 0.14 : 0.46;
         final backSlot = behind.toDouble();
-        final midY = ui.lerpDouble(_slotY(0, behind), _slotY(backSlot, behind), 0.35)!;
+        final midY = ui.lerpDouble(
+          _slotY(0, behind),
+          _slotY(backSlot, behind),
+          0.35,
+        )!;
         final poses = <_DeckSlotPose>[];
 
         if (n > 4) {
@@ -1717,7 +1755,9 @@ class _WalletDeckState extends State<_WalletDeck>
             ),
           );
         } else {
-          final k = Curves.easeInOutCubic.transform((u - swapAt) / (1.0 - swapAt));
+          final k = Curves.easeInOutCubic.transform(
+            (u - swapAt) / (1.0 - swapAt),
+          );
           poses.add(
             _DeckSlotPose(
               index: 0,
@@ -1913,7 +1953,9 @@ class _WalletDeckState extends State<_WalletDeck>
                           for (final pose in poses)
                             if (pose.alpha > 0.005)
                               Positioned(
-                                key: ValueKey('slot-${accounts[pose.index].name}'),
+                                key: ValueKey(
+                                  'slot-${accounts[pose.index].name}',
+                                ),
                                 top: 0,
                                 left: 0,
                                 right: 0,
@@ -2060,7 +2102,9 @@ class _WalletAppIcons {
     final missing = <({String name, String token})>[];
     for (final a in accounts) {
       final key = a.name.trim();
-      if (key.isNotEmpty && !_cache.containsKey(key) && !_pending.contains(key)) {
+      if (key.isNotEmpty &&
+          !_cache.containsKey(key) &&
+          !_pending.contains(key)) {
         missing.add((name: key, token: _requestToken(key, a.packageName)));
       }
     }
@@ -2071,10 +2115,11 @@ class _WalletAppIcons {
     final names = items.map((e) => e.name).toList();
     _pending.addAll(names);
     try {
-      final fetched = await NativeSession.channel.invokeMapMethod<String, Uint8List>(
-        'walletAppIcons',
-        items.map((e) => e.token).toList(),
-      );
+      final fetched = await NativeSession.channel
+          .invokeMapMethod<String, Uint8List>(
+            'walletAppIcons',
+            items.map((e) => e.token).toList(),
+          );
       var updated = false;
       for (final name in names) {
         final bytes = fetched?[name];
@@ -2328,8 +2373,7 @@ class _WalletDetail extends StatelessWidget {
                 final isIn =
                     entry.kind == 'income' || entry.kind == 'transfer_in';
                 final isTransfer =
-                    entry.kind == 'transfer_in' ||
-                    entry.kind == 'transfer_out';
+                    entry.kind == 'transfer_in' || entry.kind == 'transfer_out';
                 final title = isTransfer
                     ? (entry.note.isEmpty
                           ? (entry.kind == 'transfer_in'
@@ -3242,7 +3286,11 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
         if (e.kind == 'transfer_in') inLeg ??= e;
       }
     }
-    _day = outLeg?.day ?? inLeg?.day ?? widget.initialDay ?? dayKey(DateTime.now());
+    _day =
+        outLeg?.day ??
+        inLeg?.day ??
+        widget.initialDay ??
+        dayKey(DateTime.now());
     _from =
         outLeg?.method ??
         widget.initialFrom ??
@@ -3262,7 +3310,9 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
     }
     final seedAmount = outLeg?.amount ?? inLeg?.amount ?? 0;
     _amount = TextEditingController(
-      text: seedAmount > 0 ? editableMoney(seedAmount, widget.data.currency) : '',
+      text: seedAmount > 0
+          ? editableMoney(seedAmount, widget.data.currency)
+          : '',
     );
     _note = TextEditingController(text: outLeg?.note ?? inLeg?.note ?? '');
   }
@@ -3302,9 +3352,7 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
     final picked = await panel<String>(
       context,
       PanelContent(
-        header: PanelHeading(
-          title: isFrom ? 'Transfer from' : 'Transfer to',
-        ),
+        header: PanelHeading(title: isFrom ? 'Transfer from' : 'Transfer to'),
         footer: AppButton(
           label: 'Cancel',
           secondary: true,
@@ -3319,7 +3367,10 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
                 title: Text(a.name),
                 subtitle: Text(
                   money(a.balance, widget.data.currency),
-                  style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 11),
+                  style: const TextStyle(
+                    fontFamily: 'Geist Mono',
+                    fontSize: 11,
+                  ),
                 ),
                 trailing: a.name.toLowerCase() == current.toLowerCase()
                     ? const Icon(LucideIcons.check, size: 18)
@@ -3496,7 +3547,10 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
                       transitionBuilder: (child, anim) => FadeTransition(
                         opacity: anim,
                         child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.96, end: 1).animate(anim),
+                          scale: Tween<double>(
+                            begin: 0.96,
+                            end: 1,
+                          ).animate(anim),
                           child: child,
                         ),
                       ),
@@ -3545,7 +3599,10 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
                       transitionBuilder: (child, anim) => FadeTransition(
                         opacity: anim,
                         child: ScaleTransition(
-                          scale: Tween<double>(begin: 0.96, end: 1).animate(anim),
+                          scale: Tween<double>(
+                            begin: 0.96,
+                            end: 1,
+                          ).animate(anim),
                           child: child,
                         ),
                       ),
@@ -3565,7 +3622,9 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
               TextField(
                 controller: _amount,
                 autofocus: !_isEdit,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
                 decoration: InputDecoration(
                   labelText: 'Amount ($currency)',
                   prefixText: '${moneySymbol(currency)} ',
@@ -3714,7 +3773,9 @@ class _TransferWalletTile extends StatelessWidget {
                     delta == 0
                         ? money(account.balance, currency)
                         : money(nextBalance, currency),
-                    key: ValueKey('$role-${delta == 0 ? account.balance : nextBalance}'),
+                    key: ValueKey(
+                      '$role-${delta == 0 ? account.balance : nextBalance}',
+                    ),
                     style: TextStyle(
                       fontFamily: 'Geist Mono',
                       fontSize: 12,

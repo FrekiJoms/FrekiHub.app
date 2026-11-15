@@ -1,5 +1,15 @@
 # FrekiHub application audit
 
+## Global keyboard overlay input reveal and targeted sheet lift — 2026-11-15
+
+Source-confirmed resolution across pages, shared `panel` bottom drawers and `SyntaxBuilderScreen`:
+- `KeyboardOverlay` (`lib/components.dart`) continues zeroing descendant `MediaQuery.viewInsets` and preserving `MediaQuery.viewPadding` so `AppShell`, `PillNavigation`, `WidthLayoutBuilder`, `PanelActions` and page layouts never resize or reflow during keyboard transitions, while exposing the raw IME bottom inset through `KeyboardOverlay.imeBottomOf(context)` (`_KeyboardInsetScope`).
+- Added shared `KeyboardFocusRevealer` and `KeyboardScrollSpacer` (`lib/components.dart`) and attached them to `PageBody` (`lib/design.dart`), `HistoryScreen` (`lib/history.dart`), `SyntaxBuilderScreen` (`lib/syntax_builder.dart`) and `PanelContent` (`lib/sheets.dart`) so focused fields and multi-line carets scroll smoothly above the keyboard without restarting an active reveal animation on mid-flight `ScrollMetricsNotification` updates.
+- Updated `RuleCodeEditor` (`lib/rule_editor.dart`) to check `KeyboardOverlay.imeBottomOf(c) > 0` so autocomplete options open upward above the cursor when the keyboard is open.
+- Updated `_PanelSheetState` (`lib/sheets.dart`) to translate the bottom drawer upward via `Transform.translate` only when a focused descendant `EditableText` would sit behind the keyboard (without altering `snapSizes`, `defaultExtent` or header/footer slot sizes), measuring content height from `_contentKey` so dynamic keyboard clearance inside `PanelContent` does not inflate sheet snap sizes.
+
+Verification: `dart format --set-exit-if-changed` (9 modified Dart source/test files), `flutter analyze` (0 issues), and targeted `flutter test` across `test/sheets_test.dart`, `test/navigation_test.dart`, `test/layout_test.dart`, `test/rule_editor_test.dart`, `test/wallet_test.dart`, `test/history_test.dart` and `test/home_note_test.dart` passed all **45 checks**. Physical Android IME height/insets and on-device touch-scroll/typing feel remain a phone verification gap.
+
 ## Code fixes, SMS/reconciliation cleanup and test repairs — 2026-11-15
 
 Source-confirmed fixes across Finance, automation/SMS scanning, navigation and permission hints:

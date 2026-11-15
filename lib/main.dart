@@ -666,7 +666,7 @@ class _DeferredTab extends StatefulWidget {
 }
 
 class _DeferredTabState extends State<_DeferredTab> {
-  Widget? _child;
+  bool _built = false;
   Timer? _timer;
 
   @override
@@ -687,12 +687,12 @@ class _DeferredTabState extends State<_DeferredTab> {
   }
 
   void _check() {
-    if (_child != null || !mounted) return;
+    if (_built || !mounted) return;
     if (widget.activeTab.value == widget.tabIndex) {
       _timer ??= Timer(widget.delay, () {
         _timer = null;
-        if (mounted && _child == null) {
-          setState(() => _child = widget.builder());
+        if (mounted && !_built) {
+          setState(() => _built = true);
         }
       });
     } else {
@@ -710,8 +710,7 @@ class _DeferredTabState extends State<_DeferredTab> {
 
   @override
   Widget build(BuildContext context) {
-    final child = _child;
-    if (child != null) return child;
+    if (_built) return widget.builder();
     return ColoredBox(
       color: Theme.of(context).colorScheme.surfaceContainerLowest,
       child: const SizedBox.expand(),

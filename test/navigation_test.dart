@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drift/native.dart';
@@ -6,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freki_hub/data.dart';
 import 'package:freki_hub/design.dart';
 import 'package:freki_hub/main.dart';
+import 'package:freki_hub/screens.dart';
 import 'package:freki_hub/startup.dart';
 
 void main() {
@@ -107,14 +111,24 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     final original = tester.getRect(find.byType(PillNavigation));
     final input = tester.getRect(find.byType(TextField));
+    var scrolled = false;
     for (final inset in [80.0, 160.0, 280.0, 160.0, 80.0, 0.0]) {
       tester.view.padding = inset == 0
           ? const FakeViewPadding(bottom: 24)
           : FakeViewPadding.zero;
       tester.view.viewInsets = FakeViewPadding(bottom: inset);
       await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.pump(const Duration(milliseconds: 220));
       expect(tester.getRect(find.byType(PillNavigation)), original);
-      expect(tester.getRect(find.byType(TextField)), input);
+      final current = tester.getRect(find.byType(TextField));
+      if (input.bottom <= 800 - inset - 16 && !scrolled) {
+        expect(current, input);
+      } else {
+        scrolled = true;
+        expect(current.top, greaterThanOrEqualTo(0));
+        expect(current.bottom, lessThanOrEqualTo(800 - inset));
+      }
       expect(
         MediaQuery.viewInsetsOf(tester.element(find.byType(TextField))),
         EdgeInsets.zero,
@@ -270,6 +284,142 @@ void main() {
       await tester.pumpAndSettle();
       expect(actionsTriggered, isEmpty);
       expect(find.byKey(const ValueKey('radial-action-menu')), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'Deferred AppShell tabs reflect new transactions, wallet removals, and deleted sessions immediately',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('dev.fluttercommunity.plus/connectivity_status'),
+        (_) async => null,
+      );
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('dev.fluttercommunity.plus/connectivity'),
+        (_) async => ['wifi'],
+      );
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('frekihub/session'),
+        (call) async => call.method == 'automationEvents' ? '[]' : null,
+      );
+
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final today = dayKey(DateTime.now());
+      final started = DateTime.now()
+          .subtract(const Duration(minutes: 45))
+          .millisecondsSinceEpoch;
+      var current = AppData(
+        [
+          Session(
+            id: 's1',
+            day: today,
+            kind: 'Work',
+            started: started,
+            ended: started + 30 * 60 * 1000,
+            note: 'Client call',
+          ),
+        ],
+        const [],
+        const [],
+        {
+          'methods': jsonEncode(['Cash', 'GCash']),
+          'walletOrder': jsonEncode(['GCash', 'Cash']),
+        },
+      );
+      late final StreamController<AppData> controller;
+      controller = StreamController<AppData>.broadcast(
+        onListen: () {
+          scheduleMicrotask(() {
+            if (!controller.isClosed) controller.add(current);
+          });
+        },
+      );
+      addTearDown(() async {
+        await controller.close();
+        await db.close();
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            dataProvider.overrideWith((ref) => controller.stream),
+            graphicsProvider.overrideWith((ref) async => false),
+          ],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            builder: (_, child) => KeyboardOverlay(child: child!),
+            home: const AppShell(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+
+      // Navigate to Finance (deferred tab 3) and wait past transition, 120ms stagger, and Entrance fade.
+      await tester.tap(find.bySemanticsLabel('Finance'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(find.byType(BudgetScreen), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('^GCash wallet')), findsOneWidget);
+
+      // Emit new income + removed GCash wallet and verify Finance updates immediately.
+      current = AppData(
+        current.sessions,
+        [
+          Entry(
+            id: 'e1',
+            day: today,
+            kind: 'income',
+            amount: 50000,
+            currency: 'PHP',
+            category: 'Salary',
+            method: 'Cash',
+            note: 'Payday bonus',
+          ),
+        ],
+        const [],
+        {
+          'methods': jsonEncode(['Cash']),
+          'hiddenWallets': jsonEncode(['gcash']),
+          'walletOrder': jsonEncode(['Cash']),
+        },
+      );
+      controller.add(current);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+
+      expect(find.bySemanticsLabel(RegExp('^GCash wallet')), findsNothing);
+      expect(find.bySemanticsLabel(RegExp('^Cash wallet')), findsOneWidget);
+      expect(find.text(money(50000, 'PHP')), findsWidgets);
+
+      // Navigate to Sessions (deferred tab 2) and wait past transition, stagger, and Entrance fade.
+      await tester.tap(find.bySemanticsLabel('Sessions'));
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(find.byType(HistoryScreen), findsOneWidget);
+      expect(find.text('Client call'), findsOneWidget);
+
+      // Delete the session in AppData and verify Sessions reflects removal immediately.
+      current = AppData(const [], current.entries, const [], current.prefs);
+      controller.add(current);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(find.text('Client call'), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(
+        () async => Future<void>.delayed(const Duration(milliseconds: 50)),
+      );
       expect(tester.takeException(), isNull);
     },
   );

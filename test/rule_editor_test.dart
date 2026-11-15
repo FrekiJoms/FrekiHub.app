@@ -246,4 +246,101 @@ void main() {
       await db.close();
     },
   );
+
+  testWidgets(
+    'SyntaxBuilderScreen reveals focused code editor above keyboard overlay',
+    (tester) async {
+      tester.view.physicalSize = const Size(360, 760);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetViewInsets);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      const source =
+          'target == app {\n  if (app.foreground == true) {\n    app.toast("Ready");\n  }\n}';
+      await db.pref(
+        'automation',
+        jsonEncode({
+          'rules': [
+            {
+              'id': 'r1',
+              'name': 'Session toast',
+              'enabled': false,
+              'lat': 14.5995,
+              'lng': 120.9842,
+              'radius': 150,
+              'else': 'stay',
+              'kind': 'session',
+              'source': source,
+              'program': RuleCompiler.compile(source),
+            },
+          ],
+        }),
+      );
+      final data = await db.readAll();
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        NativeSession.channel,
+        (call) async {
+          if (call.method == 'automationStatus') return {'background': false};
+          if (call.method == 'automationEvents') return '[]';
+          if (call.method == 'receiptNotificationsAllowed') return true;
+          return null;
+        },
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            dataProvider.overrideWithValue(AsyncData(data)),
+          ],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            builder: (context, child) => KeyboardOverlay(child: child!),
+            home: const SyntaxBuilderScreen(conditionName: 'Session toast'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final editorField = find.descendant(
+        of: find.byType(RuleCodeEditor),
+        matching: find.byType(TextField),
+      );
+      await tester.scrollUntilVisible(
+        editorField,
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+      await tester.showKeyboard(editorField);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 320);
+      await tester.pumpAndSettle();
+
+      final autoComplete = tester.widget<RawAutocomplete<Object>>(
+        find.byWidgetPredicate((w) => w is RawAutocomplete),
+      );
+      expect(
+        autoComplete.optionsViewOpenDirection,
+        OptionsViewOpenDirection.up,
+      );
+      final editable = tester.state<EditableTextState>(
+        find.descendant(of: editorField, matching: find.byType(EditableText)),
+      );
+      final caret = editable.renderEditable.getLocalRectForCaret(
+        editable.textEditingValue.selection.extent,
+      );
+      final caretBottom = editable.renderEditable
+          .localToGlobal(caret.bottomLeft)
+          .dy;
+      expect(caretBottom, lessThanOrEqualTo(760 - 320));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox());
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        NativeSession.channel,
+        null,
+      );
+      await db.close();
+    },
+  );
 }

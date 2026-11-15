@@ -444,382 +444,382 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
         ),
       ),
     );
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
-      children: [
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Location conditions'),
-          subtitle: const Text(
-            'Check saved radii and sample location about every 15 minutes',
-          ),
-          value: data.prefs['locationEnabled'] == 'true',
-          onChanged: (v) => toggle('locationEnabled', v),
-        ),
-        if (status['logging_paused'] == true)
-          Text(
-            'Location history is paused while ${status['pending_count']} pending actions sync. Saved records and location rules are retained.',
-            style: const TextStyle(fontSize: 12),
-          ),
-        if (status['background'] != true)
-          Wrap(
-            spacing: 8,
-            children: [
-              OutlinedButton(
-                onPressed: withFeedback(() async {
-                  await guarded(context, () async {
-                    await PermissionHints.request<bool>(
-                      context,
-                      'locationPermission',
-                    );
-                  });
-                  await refresh();
-                }),
-                child: const Text('Allow precise location'),
-              ),
-              OutlinedButton(
-                onPressed: withFeedback(
-                  () => guarded(context, () async {
-                    await PermissionHints.request<void>(
-                      context,
-                      'backgroundPermission',
-                    );
-                  }),
-                ),
-                child: const Text('Allow location all the time'),
-              ),
-            ],
-          ),
-        const Text(
-          'Android may delay background checks. Location rules require precise location and “Allow all the time”. Other rules work without GPS.',
-          style: TextStyle(fontSize: 12),
-        ),
-        const SizedBox(height: 16),
-        for (final rule in rules)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Surface(
-              padding: const EdgeInsets.all(8),
-              child: ListTile(
-                title: Text(rule['name'] as String),
-                subtitle: Text(
-                  rule['source'] != null
-                      ? '${rule['enabled'] == true ? 'Running' : 'Paused'} · structured rule'
-                      : 'If inside ${rule['radius']} m → clock in\nElse → ${rule['else'] == 'clock_out' ? 'clock out' : 'continue'}',
-                ),
-                onTap: withFeedback(
-                  () => setState(() {
-                    editing = rule['id'] as String;
-                    loadSource(rule);
-                    name.text = rule['name'] as String;
-                    lat.text = rule['lat'].toString();
-                    lng.text = rule['lng'].toString();
-                    radius = (rule['radius'] as num).toDouble();
-                    exit = rule['else'] as String;
-                    kind = rule['kind'] as String;
-                    placed = true;
-                    place = rule;
-                  }),
-                ),
-                trailing: IconButton(
-                  tooltip: 'Delete condition',
-                  icon: const Icon(LucideIcons.trash2, size: 18),
-                  onPressed: withFeedback(() async {
-                    if (!await confirm(
-                          c,
-                          'Delete condition?',
-                          'Existing sessions stay recorded.',
-                        ) ||
-                        !c.mounted) {
-                      return;
-                    }
-                    await guarded(
-                      c,
-                      () async {
-                        rules.removeWhere((r) => r['id'] == rule['id']);
-                        config['rules'] = rules;
-                        await ref
-                            .read(databaseProvider)
-                            .pref('automation', jsonEncode(config));
-                        await AutomationSync.configure(
-                          await ref.read(databaseProvider).readAll(),
-                        );
-                      },
-                      success: 'Condition deleted',
-                      successIcon: DataAction.deleted.icon,
-                    );
-                  }),
-                ),
-              ),
+    return KeyboardFocusRevealer(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Location conditions'),
+            subtitle: const Text(
+              'Check saved radii and sample location about every 15 minutes',
             ),
+            value: data.prefs['locationEnabled'] == 'true',
+            onChanged: (v) => toggle('locationEnabled', v),
           ),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Structured syntax'),
-          subtitle: const Text(
-            'Targets, conditions, actions and completion hints',
+          if (status['logging_paused'] == true)
+            Text(
+              'Location history is paused while ${status['pending_count']} pending actions sync. Saved records and location rules are retained.',
+              style: const TextStyle(fontSize: 12),
+            ),
+          if (status['background'] != true)
+            Wrap(
+              spacing: 8,
+              children: [
+                OutlinedButton(
+                  onPressed: withFeedback(() async {
+                    await guarded(context, () async {
+                      await PermissionHints.request<bool>(
+                        context,
+                        'locationPermission',
+                      );
+                    });
+                    await refresh();
+                  }),
+                  child: const Text('Allow precise location'),
+                ),
+                OutlinedButton(
+                  onPressed: withFeedback(
+                    () => guarded(context, () async {
+                      await PermissionHints.request<void>(
+                        context,
+                        'backgroundPermission',
+                      );
+                    }),
+                  ),
+                  child: const Text('Allow location all the time'),
+                ),
+              ],
+            ),
+          const Text(
+            'Android may delay background checks. Location rules require precise location and “Allow all the time”. Other rules work without GPS.',
+            style: TextStyle(fontSize: 12),
           ),
-          value: sourceMode,
-          onChanged: ruleRunning && sourceMode
-              ? null
-              : (v) => setState(() {
-                  ActionFeedback.tap();
-                  sourceMode = v;
-                  if (v && code.text.trim().isEmpty) {
-                    code.text = RuleCompiler.visual(kind: kind, exit: exit);
-                  }
-                }),
-        ),
-        block(
-          sourceMode
-              ? 'Rule name'
-              : editing == null
-              ? 'Choose a place'
-              : 'Edit condition',
-          Column(
-            children: [
-              spaced(
-                TextField(
-                  controller: name,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    labelText: sourceMode
-                        ? 'Rule name'
-                        : 'Place name · office, school, shop',
+          const SizedBox(height: 16),
+          for (final rule in rules)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Surface(
+                padding: const EdgeInsets.all(8),
+                child: ListTile(
+                  title: Text(rule['name'] as String),
+                  subtitle: Text(
+                    rule['source'] != null
+                        ? '${rule['enabled'] == true ? 'Running' : 'Paused'} · structured rule'
+                        : 'If inside ${rule['radius']} m → clock in\nElse → ${rule['else'] == 'clock_out' ? 'clock out' : 'continue'}',
+                  ),
+                  onTap: withFeedback(
+                    () => setState(() {
+                      editing = rule['id'] as String;
+                      loadSource(rule);
+                      name.text = rule['name'] as String;
+                      lat.text = rule['lat'].toString();
+                      lng.text = rule['lng'].toString();
+                      radius = (rule['radius'] as num).toDouble();
+                      exit = rule['else'] as String;
+                      kind = rule['kind'] as String;
+                      placed = true;
+                      place = rule;
+                    }),
+                  ),
+                  trailing: IconButton(
+                    tooltip: 'Delete condition',
+                    icon: const Icon(LucideIcons.trash2, size: 18),
+                    onPressed: withFeedback(() async {
+                      if (!await confirm(
+                            c,
+                            'Delete condition?',
+                            'Existing sessions stay recorded.',
+                          ) ||
+                          !c.mounted) {
+                        return;
+                      }
+                      await guarded(
+                        c,
+                        () async {
+                          rules.removeWhere((r) => r['id'] == rule['id']);
+                          config['rules'] = rules;
+                          await ref
+                              .read(databaseProvider)
+                              .pref('automation', jsonEncode(config));
+                          await AutomationSync.configure(
+                            await ref.read(databaseProvider).readAll(),
+                          );
+                        },
+                        success: 'Condition deleted',
+                        successIcon: DataAction.deleted.icon,
+                      );
+                    }),
                   ),
                 ),
               ),
-              if (requiresPlace)
-                Row(
+            ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Structured syntax'),
+            subtitle: const Text(
+              'Targets, conditions, actions and completion hints',
+            ),
+            value: sourceMode,
+            onChanged: ruleRunning && sourceMode
+                ? null
+                : (v) => setState(() {
+                    ActionFeedback.tap();
+                    sourceMode = v;
+                    if (v && code.text.trim().isEmpty) {
+                      code.text = RuleCompiler.visual(kind: kind, exit: exit);
+                    }
+                  }),
+          ),
+          block(
+            sourceMode
+                ? 'Rule name'
+                : editing == null
+                ? 'Choose a place'
+                : 'Edit condition',
+            Column(
+              children: [
+                spaced(
+                  TextField(
+                    controller: name,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      labelText: sourceMode
+                          ? 'Rule name'
+                          : 'Place name · office, school, shop',
+                    ),
+                  ),
+                ),
+                if (requiresPlace)
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: lat,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Latitude',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: lng,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Longitude',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                if (requiresPlace)
+                  TextButton.icon(
+                    onPressed: withFeedback(busy ? null : currentPlace),
+                    icon: const Icon(LucideIcons.locateFixed, size: 18),
+                    label: SkeletonValue(
+                      loading: busy,
+                      semanticsLabel: 'Finding location',
+                      child: const Text('Use current location'),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (requiresPlace)
+            LongPressDraggable<bool>(
+              data: true,
+              feedback: Material(
+                borderRadius: BorderRadius.circular(16),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(name.text.isEmpty ? 'Selected place' : name.text),
+                ),
+              ),
+              child: ListTile(
+                leading: const Icon(LucideIcons.gripVertical),
+                title: Text(
+                  name.text.isEmpty
+                      ? 'Drag selected place into If'
+                      : 'Drag ${name.text} into If',
+                ),
+              ),
+            ),
+          if (requiresPlace)
+            block(
+              'IF · Location is inside',
+              DragTarget<bool>(
+                onAcceptWithDetails: (_) => setState(() => placed = true),
+                builder: (c, candidates, rejected) => Column(
                   children: [
-                    Expanded(
-                      child: TextField(
-                        controller: lat,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                          signed: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Latitude',
-                        ),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Theme.of(c).colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        placed
+                            ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
+                            : 'Drop a location here',
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: lng,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                          signed: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Longitude',
-                        ),
-                      ),
+                    Slider(
+                      value: radius,
+                      min: 100,
+                      max: 1000,
+                      divisions: 18,
+                      label: '${radius.round()} m',
+                      onChanged: (v) => setState(() => radius = v),
                     ),
                   ],
                 ),
-              if (requiresPlace)
-                TextButton.icon(
-                  onPressed: withFeedback(busy ? null : currentPlace),
-                  icon: const Icon(LucideIcons.locateFixed, size: 18),
-                  label: SkeletonValue(
-                    loading: busy,
-                    semanticsLabel: 'Finding location',
-                    child: const Text('Use current location'),
-                  ),
+              ),
+            ),
+          if (sourceMode)
+            Surface(
+              padding: const EdgeInsets.all(16),
+              child: RuleCodeEditor(
+                controller: code,
+                settingFields: data.prefs.keys
+                    .map((k) => 'settings.$k')
+                    .where(
+                      (k) =>
+                          k != 'settings.automation' &&
+                          !k.startsWith('settings.purchaseNotice:') &&
+                          !k.startsWith('settings.ruleToast:') &&
+                          !k.startsWith('settings.deletedLog:'),
+                    ),
+                create: busy
+                    ? null
+                    : () => setState(() {
+                        editing = null;
+                        ruleRunning = false;
+                        placed = false;
+                        place = null;
+                        name.clear();
+                        lat.clear();
+                        lng.clear();
+                        code.text = 'target == app {\n  if (app.foreground == true) {\n    app.toast("Rule matched");\n  }\n}';
+                      }),
+                running: ruleRunning,
+                busy: busy,
+                run: () => saveRule(data, run: true),
+                stop: () => stopRule(data),
+              ),
+            ),
+          if (!sourceMode)
+            block(
+              'THEN · Clock in',
+              selectField('Session type', kind, [
+                'OJT',
+                'Work',
+                'Study',
+                'Personal',
+              ], (v) => setState(() => kind = v)),
+            ),
+          if (!sourceMode)
+            block(
+              'ELSE · Outside the radius',
+              selectField(
+                'Action',
+                exit == 'clock_out' ? 'Clock out' : 'Keep running',
+                ['Keep running', 'Clock out'],
+                (v) => setState(
+                  () => exit = v == 'Clock out' ? 'clock_out' : 'continue',
                 ),
-            ],
-          ),
-        ),
-        if (requiresPlace)
-          LongPressDraggable<bool>(
-            data: true,
-            feedback: Material(
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(name.text.isEmpty ? 'Selected place' : name.text),
               ),
             ),
-            child: ListTile(
-              leading: const Icon(LucideIcons.gripVertical),
-              title: Text(
-                name.text.isEmpty
-                    ? 'Drag selected place into If'
-                    : 'Drag ${name.text} into If',
-              ),
-            ),
-          ),
-        if (requiresPlace)
-          block(
-            'IF · Location is inside',
-            DragTarget<bool>(
-              onAcceptWithDetails: (_) => setState(() => placed = true),
-              builder: (c, candidates, rejected) => Column(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(c).colorScheme.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      placed
-                          ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
-                          : 'Drop a location here',
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  Slider(
-                    value: radius,
-                    min: 100,
-                    max: 1000,
-                    divisions: 18,
-                    label: '${radius.round()} m',
-                    onChanged: (v) => setState(() => radius = v),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        if (sourceMode)
-          Surface(
-            padding: const EdgeInsets.all(16),
-            child: RuleCodeEditor(
-              controller: code,
-              settingFields: data.prefs.keys
-                  .map((k) => 'settings.$k')
-                  .where(
-                    (k) =>
-                        k != 'settings.automation' &&
-                        !k.startsWith('settings.purchaseNotice:') &&
-                        !k.startsWith('settings.ruleToast:') &&
-                        !k.startsWith('settings.deletedLog:'),
-                  ),
-              create: busy
-                  ? null
-                  : () => setState(() {
-                      editing = null;
-                      ruleRunning = false;
-                      placed = false;
-                      place = null;
-                      name.clear();
-                      lat.clear();
-                      lng.clear();
-                      code.text = 'target == app {\n  if (app.foreground == true) {\n    app.toast("Rule matched");\n  }\n}';
-                    }),
-              running: ruleRunning,
-              busy: busy,
-              run: () => saveRule(data, run: true),
-              stop: () => stopRule(data),
-            ),
-          ),
-        if (!sourceMode)
-          block(
-            'THEN · Clock in',
-            selectField('Session type', kind, [
-              'OJT',
-              'Work',
-              'Study',
-              'Personal',
-            ], (v) => setState(() => kind = v)),
-          ),
-        if (!sourceMode)
-          block(
-            'ELSE · Outside the radius',
-            selectField(
-              'Action',
-              exit == 'clock_out' ? 'Clock out' : 'Keep running',
-              ['Keep running', 'Clock out'],
-              (v) => setState(
-                () => exit = v == 'Clock out' ? 'clock_out' : 'continue',
-              ),
-            ),
-          ),
-        FilledButton(
-          onPressed: withFeedback(
-            busy || (sourceMode && ruleRunning) ? null : () => saveRule(data),
-          ),
-          child: SkeletonValue(
-            loading: busy,
-            child: Text(
-              editing == null ? 'Save condition' : 'Update condition',
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Detect Finance transactions'),
-          subtitle: const Text(
-            'Recognized expense and income alerts become '
-            'editable Finance entries',
-          ),
-          value: data.prefs['purchaseScanning'] == 'true',
-          onChanged: (v) => toggle('purchaseScanning', v),
-        ),
-        OutlinedButton(
-          onPressed: withFeedback(() => apps(data)),
-          child: const Text('Choose finance apps'),
-        ),
-        if (status['notifications'] != true)
-          OutlinedButton(
+          FilledButton(
             onPressed: withFeedback(
-              () => guarded(context, () async {
-                await PermissionHints.request<void>(
-                  context,
-                  'notificationPermission',
-                );
-              }),
+              busy || (sourceMode && ruleRunning) ? null : () => saveRule(data),
             ),
-            child: const Text('Allow notification access'),
-          ),
-        const SizedBox(height: 12),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Detect Finance transactions from SMS'),
-          subtitle: const Text(
-            'Recognized transaction SMS become editable Finance entries',
-          ),
-          value: data.prefs['smsScanning'] == 'true',
-          onChanged: (v) => toggle('smsScanning', v),
-        ),
-        if (status['sms'] != true)
-          OutlinedButton(
-            onPressed: withFeedback(
-              () => guarded(context, () async {
-                await PermissionHints.request<bool>(
-                  context,
-                  'smsPermission',
-                );
-              }),
+            child: SkeletonValue(
+              loading: busy,
+              child: Text(
+                editing == null ? 'Save condition' : 'Update condition',
+              ),
             ),
-            child: const Text('Allow SMS access'),
           ),
-        if (data.prefs['purchaseScanning'] == 'true' &&
-            status['receipts'] != true)
+          const SizedBox(height: 20),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Detect Finance transactions'),
+            subtitle: const Text(
+              'Recognized expense and income alerts become '
+              'editable Finance entries',
+            ),
+            value: data.prefs['purchaseScanning'] == 'true',
+            onChanged: (v) => toggle('purchaseScanning', v),
+          ),
           OutlinedButton(
-            onPressed: withFeedback(() async {
-              await guarded(context, () async {
-                await PermissionHints.request<bool>(
-                  context,
-                  'receiptNotificationPermission',
-                );
-              });
-              await refresh();
-            }),
-            child: const Text('Allow saved-transaction notifications'),
+            onPressed: withFeedback(() => apps(data)),
+            child: const Text('Choose finance apps'),
           ),
-        const SizedBox(height: 8),
-        const Text(
-          'Only selected apps are scanned. OTPs and unrelated alerts are skipped. '
-          'Clear transaction amounts and available sender or merchant labels '
-          'are used; unclear messages are skipped.',
-          style: TextStyle(fontSize: 12),
-        ),
-      ],
+          if (status['notifications'] != true)
+            OutlinedButton(
+              onPressed: withFeedback(
+                () => guarded(context, () async {
+                  await PermissionHints.request<void>(
+                    context,
+                    'notificationPermission',
+                  );
+                }),
+              ),
+              child: const Text('Allow notification access'),
+            ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Detect Finance transactions from SMS'),
+            subtitle: const Text(
+              'Recognized transaction SMS become editable Finance entries',
+            ),
+            value: data.prefs['smsScanning'] == 'true',
+            onChanged: (v) => toggle('smsScanning', v),
+          ),
+          if (status['sms'] != true)
+            OutlinedButton(
+              onPressed: withFeedback(
+                () => guarded(context, () async {
+                  await PermissionHints.request<bool>(context, 'smsPermission');
+                }),
+              ),
+              child: const Text('Allow SMS access'),
+            ),
+          if (data.prefs['purchaseScanning'] == 'true' &&
+              status['receipts'] != true)
+            OutlinedButton(
+              onPressed: withFeedback(() async {
+                await guarded(context, () async {
+                  await PermissionHints.request<bool>(
+                    context,
+                    'receiptNotificationPermission',
+                  );
+                });
+                await refresh();
+              }),
+              child: const Text('Allow saved-transaction notifications'),
+            ),
+          const SizedBox(height: 8),
+          const Text(
+            'Only selected apps are scanned. OTPs and unrelated alerts are skipped. '
+            'Clear transaction amounts and available sender or merchant labels '
+            'are used; unclear messages are skipped.',
+            style: TextStyle(fontSize: 12),
+          ),
+          const KeyboardScrollSpacer(baseBottom: 24),
+        ],
+      ),
     );
   }
 }

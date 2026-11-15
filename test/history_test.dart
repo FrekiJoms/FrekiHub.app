@@ -8,7 +8,7 @@ import 'package:freki_hub/screens.dart';
 
 void main() {
   testWidgets(
-    'Sessions page shows summary, filters, sorting, list/table views and selection on narrow screen',
+    'Sessions compact layout shows inline summary, flat rows, filter sheet, sort, table toggle and contextual selection on narrow screen',
     (tester) async {
       tester.view.physicalSize = const Size(320, 720);
       tester.view.devicePixelRatio = 1;
@@ -47,6 +47,8 @@ void main() {
             home: MediaQuery(
               data: const MediaQueryData(
                 size: Size(320, 720),
+                padding: EdgeInsets.only(bottom: 24),
+                viewPadding: EdgeInsets.only(bottom: 24),
                 textScaler: TextScaler.linear(1.3),
                 disableAnimations: true,
               ),
@@ -57,103 +59,85 @@ void main() {
       );
       await tester.pumpAndSettle();
 
+      expect(find.text('TIME & FOCUS LEDGER'), findsOneWidget);
       expect(find.text('SESSIONS'), findsOneWidget);
-      expect(find.text('SESSION SUMMARY'), findsOneWidget);
       expect(find.text('2h 45m'), findsOneWidget);
-      await tester.drag(find.byType(ListView).first, const Offset(0, -180));
-      await tester.pumpAndSettle();
-      expect(find.text('2 records · 02:45:00 total'), findsOneWidget);
+      expect(find.text('2 RECORDS'), findsOneWidget);
       expect(find.text('Condition set'), findsOneWidget);
+      // Summary and flat list do not wrap records in Surface cards.
+      expect(find.byType(Surface), findsNothing);
+      // Single continuous scroll view without nested vertical ListView in list mode.
+      expect(find.byType(CustomScrollView), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
+      // Both records are visible immediately without scrolling.
+      expect(find.text('Algorithms review'), findsOneWidget);
+      expect(find.text('Automatic · Office'), findsOneWidget);
 
-      // Search filters rows and updates summary.
-      await tester.ensureVisible(find.byType(TextField));
-      await tester.pumpAndSettle();
+      // Search filters rows and updates inline summary and record count.
       await tester.enterText(find.byType(TextField), 'Algorithms');
       await tester.pumpAndSettle();
-      expect(find.text('FILTERED SESSIONS'), findsOneWidget);
-      await tester.ensureVisible(find.text('1 record · 00:45:00 total'));
-      await tester.pumpAndSettle();
-      expect(find.text('1 record · 00:45:00 total'), findsOneWidget);
-      await tester.ensureVisible(find.byTooltip('Clear search'));
-      await tester.pumpAndSettle();
+      expect(find.text('1 OF 2 RECORDS'), findsOneWidget);
+      expect(find.text('45m'), findsOneWidget);
       await tester.tap(find.byTooltip('Clear search'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('2 records · 02:45:00 total'));
-      await tester.pumpAndSettle();
-      expect(find.text('2 records · 02:45:00 total'), findsOneWidget);
+      expect(find.text('2 RECORDS'), findsOneWidget);
 
-      // Expand filters and filter by Type.
-      await tester.ensureVisible(find.text('Filters'));
+      // Open Filters sheet from search bar and filter by Type.
+      await tester.tap(find.byTooltip('Filters'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Filters'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Type'));
-      await tester.pumpAndSettle();
+      expect(find.text('Filters'), findsOneWidget);
+      expect(find.text('Date & time format'), findsOneWidget);
       await tester.tap(find.text('Type'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('OJT').last);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('1 record · 02:00:00 total'));
+      expect(find.text('Show 1 session'), findsOneWidget);
+      await tester.tap(find.text('Show 1 session'));
       await tester.pumpAndSettle();
-      expect(find.text('1 record · 02:00:00 total'), findsOneWidget);
-      await tester.ensureVisible(find.text('Reset'));
-      await tester.pumpAndSettle();
+      expect(find.text('1 OF 2 RECORDS'), findsOneWidget);
+
+      // Reset inline from toolbar.
       await tester.tap(find.text('Reset'));
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('2 records · 02:45:00 total'));
-      await tester.pumpAndSettle();
-      expect(find.text('2 records · 02:45:00 total'), findsOneWidget);
+      expect(find.text('2 RECORDS'), findsOneWidget);
 
       // Sort menu and direction toggle.
-      await tester.drag(find.byType(ListView).first, const Offset(0, 220));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Sort · Date'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Sort · Date'));
+      await tester.tap(find.text('Date'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Duration').last);
       await tester.pumpAndSettle();
-      expect(find.text('Sort · Duration'), findsOneWidget);
+      expect(find.text('Duration'), findsOneWidget);
       await tester.tap(find.byTooltip('Descending; switch to ascending'));
       await tester.pumpAndSettle();
       expect(find.byTooltip('Ascending; switch to descending'), findsOneWidget);
 
-      // Switch to Table view and back to List view via segmented control.
-      await tester.tap(find.byTooltip('Table view'));
+      // Switch to Table view and back to List view via compact options menu.
+      await tester.tap(find.byTooltip('View and selection options'));
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(ListView).first, const Offset(0, -180));
+      await tester.tap(find.text('Table view'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Scroll sideways for more columns'),
         findsOneWidget,
       );
-      await tester.ensureVisible(find.byTooltip('List view'));
+      await tester.tap(find.byTooltip('View and selection options'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('List view'));
+      await tester.tap(find.text('List view'));
       await tester.pumpAndSettle();
       expect(
         find.textContaining('Scroll sideways for more columns'),
         findsNothing,
       );
 
-      // Selection mode works in List view without forcing Table view.
-      await tester.ensureVisible(find.text('Select'));
+      // Contextual selection via long press on a flat row.
+      await tester.longPress(find.text('Algorithms review'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Select'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Tap sessions to select'));
-      await tester.pumpAndSettle();
-      expect(find.text('Tap sessions to select'), findsOneWidget);
+      expect(find.text('1 selected'), findsOneWidget);
+      expect(find.text('Delete 1'), findsOneWidget);
       await tester.tap(find.text('Select visible'));
       await tester.pumpAndSettle();
       expect(find.text('2 selected'), findsOneWidget);
       expect(find.text('Delete 2'), findsOneWidget);
-      await tester.scrollUntilVisible(
-        find.text('Done'),
-        -120,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(find.text('Delete 2'), findsNothing);
@@ -163,9 +147,9 @@ void main() {
   );
 
   testWidgets(
-    'Sessions bulk delete and Date & time format sheet persist changes',
+    'Sessions bulk delete and Date & time format sheet (via Filters) persist changes',
     (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
+      tester.view.physicalSize = const Size(412, 915);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
@@ -208,8 +192,21 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Change clock format via Date & time sheet.
-      await tester.tap(find.text('Date & time'));
+      // Verify compact section proportions on large mobile screen.
+      final headerTop = tester.getTopLeft(find.text('TIME & FOCUS LEDGER')).dy;
+      final summaryTop = tester.getTopLeft(find.text('1h 00m')).dy;
+      final searchTop = tester.getTopLeft(find.byType(TextField)).dy;
+      final toolbarTop = tester.getTopLeft(find.text('1 RECORD')).dy;
+      final firstRowTop = tester.getTopLeft(find.text('To remove')).dy;
+      expect(summaryTop - headerTop, lessThanOrEqualTo(125));
+      expect(searchTop - summaryTop, lessThanOrEqualTo(140));
+      expect(toolbarTop - searchTop, lessThanOrEqualTo(60));
+      expect(firstRowTop, lessThan(420));
+
+      // Change clock format via Date & time option inside Filters sheet.
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Date & time format'));
       await tester.pumpAndSettle();
       expect(find.text('CLOCK FORMAT'), findsOneWidget);
       await tester.tap(find.textContaining('12-hour ·'));
@@ -225,10 +222,12 @@ void main() {
       await tester.tap(find.byTooltip('Dismiss message'));
       await tester.pumpAndSettle();
 
-      // Bulk delete in List view.
-      await tester.tap(find.text('Select'));
+      // Contextual bulk delete via options menu in List view.
+      await tester.tap(find.byTooltip('View and selection options'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byType(ListTile).first);
+      await tester.tap(find.text('Select sessions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('To remove'));
       await tester.pumpAndSettle();
       expect(find.text('1 selected'), findsOneWidget);
       await tester.tap(find.text('Delete 1'));

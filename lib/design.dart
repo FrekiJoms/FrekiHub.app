@@ -440,6 +440,7 @@ class PageBody extends StatelessWidget {
                     ),
             )
           : const SizedBox.shrink();
+      final bottomPad = 126 + MediaQuery.paddingOf(c).bottom;
       final content = <Widget>[
         if (leading != null)
           Padding(padding: const EdgeInsets.only(bottom: 12), child: leading),
@@ -448,6 +449,7 @@ class PageBody extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 12),
             child: Entrance(index: i + 1, child: children[i]),
           ),
+        KeyboardScrollSpacer(baseBottom: bottomPad),
       ];
       if (compactHeader) {
         return Column(
@@ -467,34 +469,38 @@ class PageBody extends StatelessWidget {
                     ).createShader(
                       Rect.fromLTWH(bounds.left, bounds.top, bounds.width, 28),
                     ),
-                child: ListView(
-                  key: PageStorageKey(title ?? 'page'),
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
-                    horizontal,
-                    16,
-                    horizontal,
-                    126 + MediaQuery.paddingOf(c).bottom,
+                child: KeyboardFocusRevealer(
+                  child: ListView(
+                    key: PageStorageKey(title ?? 'page'),
+                    controller: scrollController,
+                    padding: EdgeInsets.fromLTRB(
+                      horizontal,
+                      16,
+                      horizontal,
+                      bottomPad,
+                    ),
+                    children: content,
                   ),
-                  children: content,
                 ),
               ),
             ),
           ],
         );
       }
-      return ListView(
-        key: PageStorageKey(title ?? 'page'),
-        controller: scrollController,
-        padding: EdgeInsets.fromLTRB(
-          horizontal,
-          hasHeader ? 80 : 16,
-          horizontal,
-          126 + MediaQuery.paddingOf(c).bottom,
+      return KeyboardFocusRevealer(
+        child: ListView(
+          key: PageStorageKey(title ?? 'page'),
+          controller: scrollController,
+          padding: EdgeInsets.fromLTRB(
+            horizontal,
+            hasHeader ? 80 : 16,
+            horizontal,
+            bottomPad,
+          ),
+          children: hasHeader
+              ? [header, const SizedBox(height: 16), ...content]
+              : [...content],
         ),
-        children: hasHeader
-            ? [header, const SizedBox(height: 16), ...content]
-            : [...content],
       );
     },
   );

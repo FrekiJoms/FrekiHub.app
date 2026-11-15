@@ -443,9 +443,7 @@ void main() {
     );
     expect(gcashCard, findsOneWidget);
 
-    final gesture = await tester.startGesture(
-      tester.getCenter(gcashCard),
-    );
+    final gesture = await tester.startGesture(tester.getCenter(gcashCard));
     await gesture.moveBy(const Offset(-120, 0));
     await tester.pump();
     await gesture.moveBy(const Offset(-200, 0));
@@ -459,7 +457,9 @@ void main() {
     final saved = await tester.runAsync(() => db.readAll());
     expect(jsonDecode(saved!.prefs['walletOrder']!), ['Maya', 'GCash']);
     expect(
-      find.byWidgetPredicate((w) => w is WalletCard && w.account.name == 'Maya'),
+      find.byWidgetPredicate(
+        (w) => w is WalletCard && w.account.name == 'Maya',
+      ),
       findsOneWidget,
     );
   });
@@ -515,7 +515,9 @@ void main() {
       await tester.pumpAndSettle();
 
       Rect rectFor(String name) => tester.getRect(
-        find.byWidgetPredicate((w) => w is WalletCard && w.account.name == name),
+        find.byWidgetPredicate(
+          (w) => w is WalletCard && w.account.name == name,
+        ),
       );
 
       final gcashRect = rectFor('GCash');
@@ -545,10 +547,12 @@ void main() {
       expect(pageController.page, 1.0);
 
       var saved = await tester.runAsync(() => db.readAll());
-      expect(
-        jsonDecode(saved!.prefs['walletOrder']!),
-        ['Maya', 'BPI', 'Cash', 'GCash'],
-      );
+      expect(jsonDecode(saved!.prefs['walletOrder']!), [
+        'Maya',
+        'BPI',
+        'Cash',
+        'GCash',
+      ]);
 
       // Swiping right returns GCash to the front without switching PageView tab.
       await tester.dragFrom(rectFor('Maya').center, const Offset(160, 0));
@@ -556,10 +560,12 @@ void main() {
       expect(pageController.page, 1.0);
 
       saved = await tester.runAsync(() => db.readAll());
-      expect(
-        jsonDecode(saved!.prefs['walletOrder']!),
-        ['GCash', 'Maya', 'BPI', 'Cash'],
-      );
+      expect(jsonDecode(saved!.prefs['walletOrder']!), [
+        'GCash',
+        'Maya',
+        'BPI',
+        'Cash',
+      ]);
     },
   );
 
@@ -739,50 +745,42 @@ void main() {
     },
   );
 
-  test(
-    'transfers move balances between wallets without affecting monthly income/expenses',
-    () async {
-      final db = AppDatabase.forTesting(NativeDatabase.memory());
-      try {
-        final today = dayKey(DateTime.now());
-        await db.pref('methods', jsonEncode(['GCash', 'Cash']));
-        await db
-            .into(db.entries)
-            .insert(dated('inc', today, 'income', 100000, 'GCash'));
-        await db.saveTransfer(
-          day: today,
-          amount: 35000,
-          currency: 'PHP',
-          fromMethod: 'GCash',
-          toMethod: 'Cash',
-          note: 'ATM cash out',
-        );
-        final data = await db.readAll();
-        expect(data.walletBalance('GCash'), 65000);
-        expect(data.walletBalance('Cash'), 35000);
+  test('transfers move balances between wallets without affecting monthly income/expenses', () async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    try {
+      final today = dayKey(DateTime.now());
+      await db.pref('methods', jsonEncode(['GCash', 'Cash']));
+      await db
+          .into(db.entries)
+          .insert(dated('inc', today, 'income', 100000, 'GCash'));
+      await db.saveTransfer(
+        day: today,
+        amount: 35000,
+        currency: 'PHP',
+        fromMethod: 'GCash',
+        toMethod: 'Cash',
+        note: 'ATM cash out',
+      );
+      final data = await db.readAll();
+      expect(data.walletBalance('GCash'), 65000);
+      expect(data.walletBalance('Cash'), 35000);
 
-        final month = financeMonth(
-          data,
-          DateTime.now(),
-          null,
-          const [],
-        );
-        expect(month.income, 100000);
-        expect(month.expenses, 0);
-        expect(month.net, 100000);
+      final month = financeMonth(data, DateTime.now(), null, const []);
+      expect(month.income, 100000);
+      expect(month.expenses, 0);
+      expect(month.net, 100000);
 
-        final pairKey = data.entries
-            .firstWhere((e) => e.kind == 'transfer_out')
-            .occurrence!;
-        await db.deleteTransfer(pairKey);
-        final afterDelete = await db.readAll();
-        expect(afterDelete.walletBalance('GCash'), 100000);
-        expect(afterDelete.walletBalance('Cash'), 0);
-      } finally {
-        await db.close();
-      }
-    },
-  );
+      final pairKey = data.entries
+          .firstWhere((e) => e.kind == 'transfer_out')
+          .occurrence!;
+      await db.deleteTransfer(pairKey);
+      final afterDelete = await db.readAll();
+      expect(afterDelete.walletBalance('GCash'), 100000);
+      expect(afterDelete.walletBalance('Cash'), 0);
+    } finally {
+      await db.close();
+    }
+  });
 
   testWidgets('WalletTransferSheet swaps wallets and saves atomic transfer', (
     tester,
@@ -835,4 +833,85 @@ void main() {
     await tester.pumpAndSettle();
     await tester.runAsync(() => db.close());
   });
+
+  testWidgets(
+    'deleting a wallet removes its card and clears scope on the first frame',
+    (tester) async {
+      tester.view.physicalSize = const Size(400, 840);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      await tester.runAsync(() async {
+        await db.pref('methods', jsonEncode(['Cash', 'GCash']));
+        await db.pref('walletOrder', jsonEncode(['Cash', 'GCash']));
+        await db
+            .into(db.entries)
+            .insert(
+              Entry(
+                id: 'e-gcash',
+                day: dayKey(DateTime.now()),
+                kind: 'income',
+                amount: 25000,
+                currency: 'PHP',
+                category: 'Salary',
+                method: 'GCash',
+                note: '',
+              ),
+            );
+      });
+      final initial = await tester.runAsync(() => db.readAll());
+      final accounts = walletAccounts(initial!);
+      String? scopedWallet = 'GCash';
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder: (context, setState) => SingleChildScrollView(
+                  child: WalletSection(
+                    data: initial,
+                    accounts: accounts,
+                    wallet: scopedWallet,
+                    onWallet: (next) => setState(() => scopedWallet = next),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final gcashCard = find.bySemanticsLabel(RegExp('^GCash wallet'));
+      expect(gcashCard, findsOneWidget);
+      expect(scopedWallet, 'GCash');
+
+      await tester.longPress(gcashCard);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Remove wallet'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove wallet'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pump();
+      await tester.pump();
+
+      // Card and active scope vanish immediately before any Drift stream update.
+      expect(gcashCard, findsNothing);
+      expect(scopedWallet, isNull);
+
+      await tester.pumpAndSettle();
+      final after = await tester.runAsync(() => db.readAll());
+      expect(after!.methods, isNot(contains('GCash')));
+      expect(after.hiddenWallets, contains('gcash'));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => db.close());
+    },
+  );
 }

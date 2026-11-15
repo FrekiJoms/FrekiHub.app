@@ -204,6 +204,12 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       _monthCardExpanded =
           widget.data.prefs['financeMonthCardExpanded'] != 'false';
     }
+    if (wallet != null &&
+        !widget.data.walletMethods.any(
+          (w) => w.toLowerCase() == wallet!.toLowerCase(),
+        )) {
+      wallet = null;
+    }
   }
 
   void _measureCard() {
@@ -256,6 +262,17 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     );
   }
 
+  List<Rule> _scopedRules(AppData data) =>
+      (wallet == null
+              ? data.rules.where((r) => r.currency == data.currency)
+              : data.rules.where(
+                  (r) =>
+                      r.currency == data.currency &&
+                      walletMethodName(r.method) == wallet,
+                ))
+          .toList()
+        ..sort((a, b) => a.position.compareTo(b.position));
+
   @override
   Widget build(BuildContext c) {
     final d = widget.data;
@@ -291,16 +308,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     }
     final categories = breakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final rules =
-        (wallet == null
-                ? d.rules.where((r) => r.currency == d.currency)
-                : d.rules.where(
-                    (r) =>
-                        r.currency == d.currency &&
-                        walletMethodName(r.method) == wallet,
-                  ))
-            .toList()
-          ..sort((a, b) => a.position.compareTo(b.position));
     final timelineRows = <_TimelineItem>[];
     final seenTransfers = <String>{};
     for (final e in d.scopedEntries(wallet: wallet, month: month)) {
@@ -328,7 +335,10 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             onTap: () => panel(
               c,
               e.occurrence != null
-                  ? WalletTransferSheet(data: d, existingOccurrence: e.occurrence)
+                  ? WalletTransferSheet(
+                      data: d,
+                      existingOccurrence: e.occurrence,
+                    )
                   : EntryForm(data: d, day: e.day, kind: 'expense', entry: e),
             ),
           ),
@@ -395,12 +405,13 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       return _timelineDesc ? -cmp : cmp;
     });
     final accounts = walletAccounts(d, null, committed);
-    final totalBalance = (wallet == null
-            ? accounts.where((a) => a.included)
-            : accounts.where(
-                (a) => a.name.toLowerCase() == wallet!.toLowerCase(),
-              ))
-        .fold<int>(0, (sum, a) => sum + a.balance);
+    final totalBalance =
+        (wallet == null
+                ? accounts.where((a) => a.included)
+                : accounts.where(
+                    (a) => a.name.toLowerCase() == wallet!.toLowerCase(),
+                  ))
+            .fold<int>(0, (sum, a) => sum + a.balance);
     return Stack(
       children: [
         PageBody(
@@ -439,47 +450,58 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                         icon: LucideIcons.calendarClock,
                         onTap: () => panel(
                           c,
-                          PanelContent(
-                            header: PanelHeading(
-                              title: wallet == null ? 'Plan' : 'Plan · $wallet',
-                              trailing: IconButton(
-                                tooltip: wallet == null
-                                    ? 'Add planner rule'
-                                    : 'Add planner rule for $wallet',
-                                onPressed: withFeedback(
-                                  () => panel(
-                                    c,
-                                    RuleForm(data: d, initialMethod: wallet),
+                          Consumer(
+                            builder: (c, ref, _) {
+                              final live = ref.watch(dataProvider).value ?? d;
+                              final rules = _scopedRules(live);
+                              return PanelContent(
+                                header: PanelHeading(
+                                  title: wallet == null
+                                      ? 'Plan'
+                                      : 'Plan · $wallet',
+                                  trailing: IconButton(
+                                    tooltip: wallet == null
+                                        ? 'Add planner rule'
+                                        : 'Add planner rule for $wallet',
+                                    onPressed: withFeedback(
+                                      () => panel(
+                                        c,
+                                        RuleForm(
+                                          data: live,
+                                          initialMethod: wallet,
+                                        ),
+                                      ),
+                                    ),
+                                    icon: const Icon(LucideIcons.plus),
                                   ),
                                 ),
-                                icon: const Icon(LucideIcons.plus),
-                              ),
-                            ),
-                            child: rules.isEmpty
-                                ? EmptyState(
-                                    wallet == null
-                                        ? 'A plan starts with one rule.'
-                                        : 'No rules for $wallet yet.',
-                                    wallet == null
-                                        ? 'Add payday savings, rent, or a daily allowance.'
-                                        : 'Add a rule to reserve money from this wallet.',
-                                    LucideIcons.calendarClock,
-                                  )
-                                : Column(
-                                    children: [
-                                      for (final r in rules)
-                                        ListTile(
-                                          contentPadding: EdgeInsets.zero,
-                                          title: Text(r.title),
-                                          subtitle: Text(
-                                            '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, d.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
-                                          ),
-                                          onTap: withFeedback(
-                                            () => ruleMenu(r),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
+                                child: rules.isEmpty
+                                    ? EmptyState(
+                                        wallet == null
+                                            ? 'A plan starts with one rule.'
+                                            : 'No rules for $wallet yet.',
+                                        wallet == null
+                                            ? 'Add payday savings, rent, or a daily allowance.'
+                                            : 'Add a rule to reserve money from this wallet.',
+                                        LucideIcons.calendarClock,
+                                      )
+                                    : Column(
+                                        children: [
+                                          for (final r in rules)
+                                            ListTile(
+                                              contentPadding: EdgeInsets.zero,
+                                              title: Text(r.title),
+                                              subtitle: Text(
+                                                '${r.cadence} · ${r.method} · ${r.basis == 'fixed' ? money(r.amount * r.quantity, live.currency) : '${editableMoney(r.amount, 'PHP')}% of ${r.basis} × ${r.quantity}'}',
+                                              ),
+                                              onTap: withFeedback(
+                                                () => ruleMenu(r),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                              );
+                            },
                           ),
                         ),
                       ),
