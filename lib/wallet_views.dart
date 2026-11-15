@@ -1513,9 +1513,7 @@ class _WalletAppIcons {
       }
       if (updated) version.value++;
     } catch (_) {
-      for (final name in names) {
-        _cache[name] = null;
-      }
+      // Allow retry on transient platform channel errors instead of caching null.
     } finally {
       _pending.removeAll(names);
     }

@@ -375,15 +375,55 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 }
             } ?: continue
             try {
-                val drawable = match.third.loadIcon(packageManager)
-                val size = 96
-                val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bitmap)
-                drawable.setBounds(0, 0, size, size)
-                drawable.draw(canvas)
+                val drawable = match.third.loadIcon(packageManager).mutate()
+                val rawSize = 144
+                val rawBitmap = Bitmap.createBitmap(rawSize, rawSize, Bitmap.Config.ARGB_8888)
+                val rawCanvas = Canvas(rawBitmap)
+                drawable.setBounds(0, 0, rawSize, rawSize)
+                drawable.draw(rawCanvas)
+
+                val pixels = IntArray(rawSize * rawSize)
+                rawBitmap.getPixels(pixels, 0, rawSize, 0, 0, rawSize, rawSize)
+                var minX = rawSize
+                var minY = rawSize
+                var maxX = -1
+                var maxY = -1
+                for (y in 0 until rawSize) {
+                    val row = y * rawSize
+                    for (x in 0 until rawSize) {
+                        val alpha = (pixels[row + x] ushr 24) and 0xFF
+                        if (alpha > 16) {
+                            if (x < minX) minX = x
+                            if (x > maxX) maxX = x
+                            if (y < minY) minY = y
+                            if (y > maxY) maxY = y
+                        }
+                    }
+                }
+
+                val outSize = 96
+                val outBitmap = Bitmap.createBitmap(outSize, outSize, Bitmap.Config.ARGB_8888)
+                val outCanvas = Canvas(outBitmap)
+                if (maxX >= minX && maxY >= minY) {
+                    val cropW = (maxX - minX + 1).toFloat()
+                    val cropH = (maxY - minY + 1).toFloat()
+                    val scale = minOf(outSize / cropW, outSize / cropH)
+                    val dstW = cropW * scale
+                    val dstH = cropH * scale
+                    val left = (outSize - dstW) / 2f
+                    val top = (outSize - dstH) / 2f
+                    val src = android.graphics.Rect(minX, minY, maxX + 1, maxY + 1)
+                    val dst = android.graphics.RectF(left, top, left + dstW, top + dstH)
+                    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG)
+                    outCanvas.drawBitmap(rawBitmap, src, dst, paint)
+                } else {
+                    outCanvas.drawBitmap(rawBitmap, null, android.graphics.RectF(0f, 0f, outSize.toFloat(), outSize.toFloat()), null)
+                }
+                rawBitmap.recycle()
+
                 val stream = ByteArrayOutputStream()
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-                bitmap.recycle()
+                outBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+                outBitmap.recycle()
                 result[key] = stream.toByteArray()
             } catch (_: Exception) {
             }
@@ -394,12 +434,26 @@ private var smsPermissionResult: MethodChannel.Result? = null
     private fun walletAliases(lower: String): List<String> = when {
         lower.contains("gotyme") || lower.contains("go tyme") -> listOf("gotyme", "gotyme bank", "go tyme")
         lower.contains("maribank") || lower.contains("mari bank") || lower.contains("seabank") -> listOf("maribank", "mari bank", "seabank")
-        lower.contains("hellomoney") || lower.contains("hello money") -> listOf("hellomoney", "hello money")
+        lower.contains("hellomoney") || lower.contains("hello money") || lower.contains("aub") -> listOf("hellomoney", "hello money", "aub")
         lower.contains("maya") || lower.contains("paymaya") -> listOf("maya", "paymaya")
         lower.contains("gcash") -> listOf("gcash")
         lower.contains("unionbank") || lower.contains("union bank") -> listOf("unionbank", "union bank")
         lower.contains("security bank") -> listOf("security bank", "securitybank")
         lower.contains("landbank") || lower.contains("land bank") -> listOf("landbank", "land bank")
+        lower.contains("bpi") -> listOf("bpi", "bpi mobile")
+        lower.contains("bdo") -> listOf("bdo", "bdo online", "bdo pay")
+        lower.contains("metrobank") || lower.contains("metro") -> listOf("metrobank")
+        lower.contains("rcbc") -> listOf("rcbc", "rcbc pulz")
+        lower.contains("chinabank") -> listOf("chinabank", "china bank")
+        lower.contains("eastwest") -> listOf("eastwest", "eastwest easyway")
+        lower.contains("pnb") -> listOf("pnb", "pnb digital")
+        lower.contains("grab") -> listOf("grab", "grabpay")
+        lower.contains("shopee") -> listOf("shopee", "shopeepay")
+        lower.contains("paypal") -> listOf("paypal")
+        lower.contains("wise") -> listOf("wise")
+        lower.contains("atome") -> listOf("atome")
+        lower.contains("tonik") -> listOf("tonik")
+        lower.contains("cimb") -> listOf("cimb", "cimb bank ph")
         else -> listOf(lower)
     }
 }
