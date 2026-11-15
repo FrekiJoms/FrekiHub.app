@@ -51,6 +51,8 @@ flutter analyze
 | --- | --- |
 | Startup/readiness/reactive cache | `test/startup_test.dart` |
 | Today clock/reduced motion/resume/time changes | `test/today_clock_test.dart` (painted hands, second boundaries, date rollover, backward time adjustment, elapsed time and live-time captions) |
+| Sessions list, summary, filters, sorting, table and bulk delete | `test/history_test.dart` (summary card, search, filters, choice-menu sort, list/table segmented toggle, inline selection/bulk delete, date/time format sheet, narrow 1.3× text) |
+| Calendar views, animations, gestures and DayPanel | `test/calendar_test.dart` (Year/Month/Week/Day narrow 1.3× layout & labels, smooth Month week collapse tap/drag, horizontal swipe & Today jump, overlapping Week lanes, `DayPanel` chronological sheet); `test/audit_ui_test.dart` (remount restore & leap-day clamping) |
 | Home clock-out confirmation | `test/home_session_confirmation_test.dart` (compact actions, live duration, note prefill/editing, cancel/Back discarding edits, confirmation, repeated activation and both motion settings) |
 | Shared adaptive drawers/components | `test/sheets_test.dart` (content fit, 70% expansion, dismissal, fixed slots, lazy lists and content changes); `test/layout_test.dart` (opening frames, nested selector/date picker, keyboard and cancellation) |
 | Date/time wheel current-value action | `test/pickers_test.dart` (animated/reduced-motion jumps, selected wheel positions, Confirm gating, date bounds, leap-day correction and cancellation) |

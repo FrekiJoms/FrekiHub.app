@@ -423,67 +423,73 @@ class _AppShellState extends ConsumerState<AppShell>
                             parent: _jumpFadeController,
                             curve: Curves.easeOut,
                           ),
-                          child: Offstage(
-                            offstage: index >= 4,
-                            child: NotificationListener<ScrollNotification>(
-                            onNotification: (n) {
-                              if (n.depth != 0) return false;
-                              if (n is ScrollStartNotification) {
-                                _swiping.value = true;
-                              } else if (n is ScrollEndNotification) {
-                                _swiping.value = false;
-                                final settled = _tabController.hasClients
-                                    ? (_tabController.page?.round() ?? lastTab)
-                                    : lastTab;
-                                final currentTab = index <= 3 ? index : lastTab;
-                                if (settled != currentTab && !_tabAnimating) {
-                                  setState(() {
-                                    slideDirection = settled > currentTab
-                                        ? 1
-                                        : -1;
-                                    index = settled;
-                                    lastTab = settled;
-                                  });
-                                }
-                              }
-                              return false;
-                            },
-                            child: PageView(
-                              controller: _tabController,
-                              physics: index >= 4
-                                  ? const NeverScrollableScrollPhysics()
-                                  : const ClampingScrollPhysics(),
-                              onPageChanged: (_) {},
-                              children: _buildTabPages(data),
+                          child: TickerMode(
+                            enabled: index < 4,
+                            child: IgnorePointer(
+                              ignoring: index >= 4,
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (n) {
+                                  if (n.depth != 0) return false;
+                                  if (n is ScrollStartNotification) {
+                                    _swiping.value = true;
+                                  } else if (n is ScrollEndNotification) {
+                                    _swiping.value = false;
+                                    final settled = _tabController.hasClients
+                                        ? (_tabController.page?.round() ??
+                                              lastTab)
+                                        : lastTab;
+                                    final currentTab = index <= 3
+                                        ? index
+                                        : lastTab;
+                                    if (settled != currentTab &&
+                                        !_tabAnimating) {
+                                      setState(() {
+                                        slideDirection = settled > currentTab
+                                            ? 1
+                                            : -1;
+                                        index = settled;
+                                        lastTab = settled;
+                                      });
+                                    }
+                                  }
+                                  return false;
+                                },
+                                child: PageView(
+                                  controller: _tabController,
+                                  physics: index >= 4
+                                      ? const NeverScrollableScrollPhysics()
+                                      : const ClampingScrollPhysics(),
+                                  onPageChanged: (_) {},
+                                  children: _buildTabPages(data),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
                     Positioned.fill(
                       child: IgnorePointer(
                         ignoring: index < 4,
                         child: AnimatedSwitcher(
                           duration: Motion.duration(c),
-                          reverseDuration: Motion.duration(c, 200),
+                          reverseDuration: Motion.duration(c, 220),
                           switchInCurve: Motion.curve,
                           switchOutCurve: Motion.curve,
                           transitionBuilder: (child, animation) {
-                            final incoming =
-                                child.key != const ValueKey('none');
+                            if (child.key == const ValueKey('none')) {
+                              return const SizedBox.shrink();
+                            }
+                            final edgeX = child.key == const ValueKey(5)
+                                ? -0.08
+                                : 0.08;
                             return IgnorePointer(
-                              ignoring: !incoming,
+                              ignoring: child.key != ValueKey(index),
                               child: FadeTransition(
                                 opacity: animation,
                                 child: SlideTransition(
                                   position: Tween<Offset>(
-                                    begin: Offset(
-                                      (incoming ? 1 : -1) *
-                                          slideDirection *
-                                          .12,
-                                      0,
-                                    ),
+                                    begin: Offset(edgeX, 0),
                                     end: Offset.zero,
                                   ).animate(animation),
                                   child: child,

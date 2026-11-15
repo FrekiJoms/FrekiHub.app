@@ -238,56 +238,270 @@ Future<bool> deleteSession(BuildContext c, WidgetRef ref, Session s) async {
   }
 }
 
+Color sessionTypeColor(String kind, bool dark) => switch (kind) {
+  'OJT' => dark ? const Color(0xFF7092FF) : const Color(0xFF3E63DD),
+  'Work' => dark ? const Color(0xFF54B684) : const Color(0xFF287D55),
+  'Study' => dark ? const Color(0xFFA78BE8) : const Color(0xFF7152BD),
+  'Personal' => dark ? const Color(0xFFDF9E58) : const Color(0xFFB46A24),
+  _ => dark ? const Color(0xFF9AA39C) : const Color(0xFF5E665F),
+};
+
+IconData sessionTypeIcon(String kind, {bool running = false}) {
+  if (running) return LucideIcons.timer;
+  return switch (kind) {
+    'OJT' => LucideIcons.briefcase,
+    'Work' => LucideIcons.laptop,
+    'Study' => LucideIcons.bookOpen,
+    'Personal' => LucideIcons.user,
+    _ => LucideIcons.clock3,
+  };
+}
+
+String sessionDurationLabel(int seconds) {
+  if (seconds <= 0) return '0m';
+  if (seconds < 60) return '${seconds}s';
+  final minutes = seconds ~/ 60;
+  if (minutes < 60) return '${minutes}m';
+  final hours = minutes ~/ 60;
+  final remMinutes = minutes % 60;
+  return '${hours}h ${remMinutes.toString().padLeft(2, '0')}m';
+}
+
 Widget sessionTile(
   BuildContext c,
   WidgetRef ref,
   AppData data,
-  Session s,
-) => Surface(
-  padding: EdgeInsets.zero,
-  child: ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-    onTap: withFeedback(
-      () => panel(c, SessionForm(data: data, session: s, day: s.day)),
+  Session s, {
+  bool selecting = false,
+  bool selected = false,
+  VoidCallback? onTapOverride,
+}) {
+  final theme = Theme.of(c);
+  final colors = theme.colorScheme;
+  final dark = theme.brightness == Brightness.dark;
+  final running = s.ended == null;
+  final accent = running
+      ? (dark ? const Color(0xFF55C486) : const Color(0xFF1E8E5A))
+      : sessionTypeColor(s.kind, dark);
+  final conditionName = s.note.startsWith('Automatic · ')
+      ? s.note.substring('Automatic · '.length)
+      : null;
+
+  return AnimatedContainer(
+    duration: Motion.duration(c, 160),
+    curve: Motion.curve,
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(22),
+      border: selecting && selected
+          ? Border.all(color: colors.primary, width: 1.5)
+          : null,
     ),
-    leading: Icon(s.ended == null ? LucideIcons.timer : LucideIcons.clock3),
-    title: Text(sessionDate(data, s)),
-    subtitle: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '${s.kind} · ${clockTime(data, s.started)} — ${s.ended == null ? 'running' : clockTime(data, s.ended!)}${s.note.isEmpty ? '' : '\n${s.note}'}',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (s.note.startsWith('Automatic · '))
-          TextButton.icon(
-            onPressed: withFeedback(
-              () => openSyntaxBuilder(
-                c,
-                conditionName: s.note.substring('Automatic · '.length),
-              ),
-            ),
-            icon: const Icon(LucideIcons.workflow, size: 14),
-            label: const Text('Condition set', style: TextStyle(fontSize: 11)),
+    child: Surface(
+      padding: EdgeInsets.zero,
+      borderRadius: const BorderRadius.all(Radius.circular(22)),
+      child: Material(
+        color: selecting && selected
+            ? colors.primary.withValues(alpha: .06)
+            : Colors.transparent,
+        child: ListTile(
+          horizontalTitleGap: 12,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 6,
           ),
-      ],
+          onTap: withFeedback(
+            onTapOverride ??
+                () => panel(c, SessionForm(data: data, session: s, day: s.day)),
+          ),
+          onLongPress: !selecting && conditionName != null
+              ? withFeedback(
+                  () => openSyntaxBuilder(c, conditionName: conditionName),
+                )
+              : null,
+          leading: selecting
+              ? Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected ? colors.primary : Colors.transparent,
+                    border: Border.all(
+                      color: selected ? colors.primary : colors.outlineVariant,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: selected
+                      ? Icon(
+                          LucideIcons.check,
+                          size: 14,
+                          color: colors.onPrimary,
+                        )
+                      : null,
+                )
+              : Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(11),
+                    border: Border.all(color: accent.withValues(alpha: .18)),
+                  ),
+                  child: Icon(
+                    sessionTypeIcon(s.kind, running: running),
+                    size: 17,
+                    color: accent,
+                  ),
+                ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  sessionDate(data, s),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -.2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                elapsed(durationOf(s)),
+                style: TextStyle(
+                  fontFamily: 'Geist Mono',
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: running ? accent : colors.onSurface,
+                ),
+              ),
+              if (!selecting) ...[
+                const SizedBox(width: 3),
+                Icon(
+                  LucideIcons.chevronRight,
+                  size: 14,
+                  color: colors.onSurfaceVariant.withValues(alpha: .45),
+                ),
+              ],
+            ],
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (running) ...[
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: accent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Text(
+                          s.kind,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: accent,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    '${clockTime(data, s.started)} – ${running ? 'Running' : clockTime(data, s.ended!)}',
+                    style: TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 12,
+                      color: running ? accent : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              if (s.note.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    s.note,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      height: 1.35,
+                      color: colors.onSurface.withValues(alpha: .82),
+                    ),
+                  ),
+                ),
+              if (conditionName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Material(
+                    color: accent.withValues(alpha: .1),
+                    borderRadius: BorderRadius.circular(99),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(99),
+                      onTap: withFeedback(
+                        () =>
+                            openSyntaxBuilder(c, conditionName: conditionName),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.workflow, size: 12, color: accent),
+                            const SizedBox(width: 5),
+                            Flexible(
+                              child: Text(
+                                'Condition set',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     ),
-    trailing: Text(
-      elapsed(durationOf(s)),
-      style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 12),
-    ),
-    onLongPress: s.note.startsWith('Automatic · ')
-        ? withFeedback(
-            () => openSyntaxBuilder(
-              c,
-              conditionName: s.note.substring('Automatic · '.length),
-            ),
-          )
-        : null,
-  ),
-);
+  );
+}
+
 void openQuickAdd(BuildContext c, AppData data, String day, String kind) {
   ActionFeedback.tap();
   if (kind == 'session') {
