@@ -1497,6 +1497,12 @@ class _WalletMark extends StatelessWidget {
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             )
+          else if (account.skin.assetPath != null)
+            Image.asset(
+              account.skin.assetPath!,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            )
           else
             Center(
               child: Text(
@@ -2085,26 +2091,37 @@ class _SkinTile extends StatelessWidget {
           ),
           child: Column(
             children: [
-              Container(
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: skin.colors,
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: skin.colors,
+                    ),
+                  ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (skin.assetPath != null)
+                        Image.asset(
+                          skin.assetPath!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+                        ),
+                      if (selected)
+                        const Center(
+                          child: Icon(
+                            LucideIcons.check,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                child: selected
-                    ? const Align(
-                        alignment: Alignment.center,
-                        child: Icon(
-                          LucideIcons.check,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      )
-                    : null,
               ),
               const SizedBox(height: 4),
               Text(

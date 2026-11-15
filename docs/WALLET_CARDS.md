@@ -68,7 +68,7 @@ One wallet order is shared by rows, multi and stack views.
 
 ## Card artwork
 
-`WalletSkin` provides original presets for common Philippine wallets and generic accounts: GCash, Maya, BPI, Metrobank, RCBC, BDO, ShopeePay, PayPal, Wise, Atome, UnionBank, Cash, Bank, Card and Ink. A method name selects a matching preset; an unknown name uses the neutral Ink card.
+`WalletSkin` provides built-in presets for common Philippine wallets and generic accounts: GCash, Maya, MariBank, GoTyme, GoTyme FIFA 26, HelloMoney, BPI, Metrobank, RCBC, BDO, ShopeePay, PayPal, Wise, Atome, UnionBank, Cash, Bank, Card and Ink. A method name selects a matching preset; an unknown name uses the neutral Ink card. GCash, Maya, MariBank, GoTyme, GoTyme FIFA 26, HelloMoney and Cash also bundle card artwork under `assets/wallet-cards/` via `WalletSkin.assetPath`.
 
 Per-wallet design preferences:
 

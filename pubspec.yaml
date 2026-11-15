@@ -76,6 +76,7 @@ flutter:
     - assets/icons/LUCIDE_LICENSE
     - assets/sounds/clock-in.wav
     - assets/sounds/clock-out.wav
+    - assets/wallet-cards/
   fonts:
     - family: Geist
       fonts:

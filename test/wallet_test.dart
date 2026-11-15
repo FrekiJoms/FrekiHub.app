@@ -101,12 +101,23 @@ void main() {
 
   test('card artwork follows the method name unless a preset is stored', () {
     expect(WalletSkin.byName('GCash').id, 'gcash');
+    expect(WalletSkin.byName('Maya').id, 'maya');
+    expect(WalletSkin.byName('MariBank').id, 'maribank');
+    expect(WalletSkin.byName('SeaBank').id, 'maribank');
+    expect(WalletSkin.byName('GoTyme').id, 'gotyme');
+    expect(WalletSkin.byName('HelloMoney').id, 'hellomoney');
     expect(WalletSkin.byName('BPI Savings').id, 'bpi');
     expect(WalletSkin.byName('UnionBank').id, 'unionbank');
     expect(WalletSkin.byName('Something new').id, 'ink');
     expect(WalletSkin.resolve('GCash', 'bdo').id, 'bdo');
+    expect(WalletSkin.resolve('GoTyme', 'gotyme_fifa').id, 'gotyme_fifa');
     expect(WalletSkin.resolve('GCash', 'custom').id, 'gcash');
     expect(WalletSkin.resolve('GCash', 'unknown').id, 'gcash');
+    expect(WalletSkin.byId('maya').assetPath, 'assets/wallet-cards/maya.png');
+    expect(
+      WalletSkin.byId('gotyme_fifa').assetPath,
+      'assets/wallet-cards/gotyme_fifa.png',
+    );
   });
 
   test('wallet accounts use saved include and custom image preferences', () {
@@ -373,6 +384,7 @@ void main() {
     expect(find.text('MONTH NET · GCASH'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Savings'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Savings'));
     await tester.pumpAndSettle();
     expect(find.text('SAVED · GCASH'), findsOneWidget);
@@ -381,6 +393,7 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.ensureVisible(find.text('Plan'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Plan'));
     await tester.pumpAndSettle();
     expect(find.text('Plan · GCash'), findsOneWidget);

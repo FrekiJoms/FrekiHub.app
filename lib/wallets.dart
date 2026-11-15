@@ -28,6 +28,7 @@ class WalletSkin {
   final Color ink, accent;
   final WalletPattern pattern;
   final bool dark;
+  final String? assetPath;
   const WalletSkin({
     required this.id,
     required this.label,
@@ -37,6 +38,7 @@ class WalletSkin {
     required this.pattern,
     this.network = 'none',
     this.dark = true,
+    this.assetPath,
   });
 
   static const presets = <WalletSkin>[
@@ -48,15 +50,57 @@ class WalletSkin {
       accent: Colors.white,
       pattern: WalletPattern.rings,
       network: 'visa',
+      assetPath: 'assets/wallet-cards/gcash.png',
     ),
     WalletSkin(
       id: 'maya',
       label: 'Maya',
-      colors: [Color(0xff121112), Color(0xffe3127d)],
+      colors: [Color(0xff07080a), Color(0xff101316)],
       ink: Colors.white,
-      accent: Color(0xffffd1e8),
+      accent: Color(0xff2cf498),
       pattern: WalletPattern.wave,
-      network: 'visa',
+      network: 'none',
+      assetPath: 'assets/wallet-cards/maya.png',
+    ),
+    WalletSkin(
+      id: 'maribank',
+      label: 'MariBank',
+      colors: [Color(0xffff4800), Color(0xffff6314)],
+      ink: Colors.white,
+      accent: Colors.white,
+      pattern: WalletPattern.wave,
+      network: 'none',
+      assetPath: 'assets/wallet-cards/maribank.png',
+    ),
+    WalletSkin(
+      id: 'gotyme',
+      label: 'GoTyme',
+      colors: [Color(0xff061317), Color(0xff00bce0)],
+      ink: Colors.white,
+      accent: Color(0xff00e5ff),
+      pattern: WalletPattern.stripes,
+      network: 'none',
+      assetPath: 'assets/wallet-cards/gotyme.png',
+    ),
+    WalletSkin(
+      id: 'gotyme_fifa',
+      label: 'GoTyme FIFA 26',
+      colors: [Color(0xff050607), Color(0xff181b20)],
+      ink: Colors.white,
+      accent: Color(0xffd4af37),
+      pattern: WalletPattern.glow,
+      network: 'none',
+      assetPath: 'assets/wallet-cards/gotyme_fifa.png',
+    ),
+    WalletSkin(
+      id: 'hellomoney',
+      label: 'HelloMoney',
+      colors: [Color(0xffed120a), Color(0xffff3b30)],
+      ink: Colors.white,
+      accent: Color(0xffffd84d),
+      pattern: WalletPattern.arcs,
+      network: 'none',
+      assetPath: 'assets/wallet-cards/hellomoney.png',
     ),
     WalletSkin(
       id: 'bpi',
@@ -144,11 +188,12 @@ class WalletSkin {
     WalletSkin(
       id: 'cash',
       label: 'Cash',
-      colors: [Color(0xffc6ad7f), Color(0xff6f5a36)],
+      colors: [Color(0xff133829), Color(0xff2d6e52)],
       ink: Colors.white,
-      accent: Color(0xfffff1c9),
+      accent: Color(0xffffe699),
       pattern: WalletPattern.glow,
       network: 'none',
+      assetPath: 'assets/wallet-cards/cash.png',
     ),
     WalletSkin(
       id: 'bank',
@@ -198,6 +243,19 @@ class WalletSkin {
       return byId('gcash');
     }
     if (name.contains('maya')) return byId('maya');
+    if (name.contains('maribank') ||
+        name.contains('mari bank') ||
+        name.contains('seabank')) {
+      return byId('maribank');
+    }
+    if (name.contains('gotyme') || name.contains('go tyme')) {
+      return byId('gotyme');
+    }
+    if (name.contains('hellomoney') ||
+        name.contains('hello money') ||
+        name.contains('aub')) {
+      return byId('hellomoney');
+    }
     if (name.contains('bpi')) return byId('bpi');
     if (name.contains('metro')) return byId('metrobank');
     if (name.contains('rcbc')) return byId('rcbc');
@@ -472,6 +530,18 @@ class WalletCard extends StatelessWidget {
                             errorBuilder: (_, _, _) => const SizedBox.shrink(),
                           ),
                         ),
+                      ),
+                    ),
+                  )
+                else if (account.skin.assetPath != null)
+                  Positioned.fill(
+                    child: Image.asset(
+                      account.skin.assetPath!,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.medium,
+                      errorBuilder: (_, _, _) => CustomPaint(
+                        painter: _WalletPatternPainter(account.skin),
                       ),
                     ),
                   )
