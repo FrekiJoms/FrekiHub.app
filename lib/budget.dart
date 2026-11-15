@@ -302,7 +302,39 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
             .toList()
           ..sort((a, b) => a.position.compareTo(b.position));
     final timelineRows = <_TimelineItem>[];
+    final seenTransfers = <String>{};
     for (final e in d.scopedEntries(wallet: wallet, month: month)) {
+      if (e.kind == 'transfer_out' || e.kind == 'transfer_in') {
+        final pairKey =
+            AppDatabase.transferPrefix(e.occurrence) ?? e.occurrence ?? e.id;
+        if (wallet == null && !seenTransfers.add(pairKey)) continue;
+        final from = e.kind == 'transfer_out' ? e.method : e.category;
+        final to = e.kind == 'transfer_out' ? e.category : e.method;
+        timelineRows.add(
+          _TimelineItem(
+            day: e.day,
+            title: e.note.isEmpty
+                ? (wallet == null
+                      ? '$from → $to'
+                      : (e.kind == 'transfer_out'
+                            ? 'Transfer to $to'
+                            : 'Transfer from $from'))
+                : e.note,
+            detail: 'Transfer · $from → $to',
+            amount: e.amount,
+            kind: wallet == null ? 'transfer' : e.kind,
+            planned: false,
+            status: 'actual',
+            onTap: () => panel(
+              c,
+              e.occurrence != null
+                  ? WalletTransferSheet(data: d, existingOccurrence: e.occurrence)
+                  : EntryForm(data: d, day: e.day, kind: 'expense', entry: e),
+            ),
+          ),
+        );
+        continue;
+      }
       timelineRows.add(
         _TimelineItem(
           day: e.day,
@@ -1028,12 +1060,16 @@ class _TimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final isIncome = item.kind == 'income';
-    final isExpense = item.kind == 'expense';
+    final isIncome = item.kind == 'income' || item.kind == 'transfer_in';
+    final isExpense = item.kind == 'expense' || item.kind == 'transfer_out';
     final isSavings = item.kind == 'savings';
+    final isTransfer = item.kind == 'transfer';
     final Color amountColor;
     final String sign;
-    if (isIncome) {
+    if (isTransfer) {
+      amountColor = scheme.onSurfaceVariant;
+      sign = '';
+    } else if (isIncome) {
       amountColor = const Color(0xFF2E7D32);
       sign = '+';
     } else if (isExpense) {

@@ -228,7 +228,7 @@ class AppDatabase extends _$AppDatabase {
           ? "'Clocked out'"
           : update
           ? "'Updated ' || NEW.kind"
-          : "CASE NEW.kind WHEN 'expense' THEN 'Purchased ' || CASE WHEN NEW.note != '' THEN NEW.note ELSE NEW.category END WHEN 'income' THEN 'Received income' ELSE 'Saved money' END";
+          : "CASE NEW.kind WHEN 'expense' THEN 'Purchased ' || CASE WHEN NEW.note != '' THEN NEW.note ELSE NEW.category END WHEN 'income' THEN 'Received income' WHEN 'transfer_out' THEN 'Transferred to ' || NEW.category WHEN 'transfer_in' THEN 'Transferred from ' || NEW.category ELSE 'Saved money' END";
       final details = session
           ? "json_object('kind', NEW.kind, 'note', NEW.note, 'position', $position)"
           : "json_object('currency', NEW.currency, 'amount', NEW.amount, 'method', NEW.method, 'note', NEW.note, 'position', $position)";
@@ -488,6 +488,84 @@ class AppDatabase extends _$AppDatabase {
     );
     await pref('status:${current.key}', 'planned');
   });
+
+  /// Extracts the shared `'transfer:<id>:'` prefix from a transfer leg's
+  /// occurrence key (`'transfer:<id>:out'` or `'transfer:<id>:in'`).
+  static String? transferPrefix(String? occurrence) {
+    if (occurrence == null || !occurrence.startsWith('transfer:')) return null;
+    final lastColon = occurrence.lastIndexOf(':');
+    if (lastColon <= 'transfer:'.length) return null;
+    return occurrence.substring(0, lastColon + 1);
+  }
+
+  /// Records or updates an atomic wallet-to-wallet transfer as two linked entries.
+  Future<void> saveTransfer({
+    required String day,
+    required int amount,
+    required String currency,
+    required String fromMethod,
+    required String toMethod,
+    String note = '',
+    String? existingOccurrence,
+  }) async {
+    validateRecordAmount(amount);
+    final from = fromMethod.trim();
+    final to = toMethod.trim();
+    if (from.isEmpty || to.isEmpty) {
+      throw const FormatException('Choose both wallets.');
+    }
+    if (from.toLowerCase() == to.toLowerCase()) {
+      throw const FormatException(
+        'Source and destination wallets must be different.',
+      );
+    }
+    final prefix =
+        transferPrefix(existingOccurrence) ?? 'transfer:${newId()}:';
+    await transaction(() async {
+      if (existingOccurrence != null) {
+        await (delete(
+          entries,
+        )..where((t) => t.occurrence.like('$prefix%')))
+            .go();
+      }
+      await into(entries).insert(
+        Entry(
+          id: newId(),
+          day: day,
+          kind: 'transfer_out',
+          amount: amount,
+          currency: currency,
+          category: to,
+          method: from,
+          note: note.trim(),
+          occurrence: '${prefix}out',
+        ),
+      );
+      await into(entries).insert(
+        Entry(
+          id: newId(),
+          day: day,
+          kind: 'transfer_in',
+          amount: amount,
+          currency: currency,
+          category: from,
+          method: to,
+          note: note.trim(),
+          occurrence: '${prefix}in',
+        ),
+      );
+    });
+  }
+
+  /// Deletes both legs of a wallet transfer atomically.
+  Future<void> deleteTransfer(String occurrence) {
+    final prefix = transferPrefix(occurrence);
+    if (prefix == null) {
+      return (delete(entries)..where((t) => t.occurrence.equals(occurrence)))
+          .go();
+    }
+    return (delete(entries)..where((t) => t.occurrence.like('$prefix%'))).go();
+  }
   Future<String> backup() async {
     final payload = await transaction(() async {
       final d = await readAll();
@@ -658,7 +736,13 @@ class AppDatabase extends _$AppDatabase {
       if (e.amount < 0 ||
           e.amount > 9000000000000000 ||
           !currencyDigits.containsKey(e.currency) ||
-          !['income', 'expense', 'savings'].contains(e.kind)) {
+          ![
+            'income',
+            'expense',
+            'savings',
+            'transfer_in',
+            'transfer_out',
+          ].contains(e.kind)) {
         throw const FormatException('Invalid transaction.');
       }
     }
@@ -794,10 +878,13 @@ class AppData {
         continue;
       }
       final name = byLower[lower] ?? raw;
+      final signed = (e.kind == 'income' || e.kind == 'transfer_in')
+          ? e.amount
+          : -e.amount;
       result.update(
         name,
-        (value) => value + (e.kind == 'income' ? e.amount : -e.amount),
-        ifAbsent: () => e.kind == 'income' ? e.amount : -e.amount,
+        (value) => value + signed,
+        ifAbsent: () => signed,
       );
     }
     return result;

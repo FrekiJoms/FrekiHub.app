@@ -865,16 +865,32 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
           ),
         ),
-        ...es.map(
-          (e) => card(
-            e.category,
-            '${e.kind} · ${money(e.amount, e.currency)}${e.note.isEmpty ? '' : ' · ${e.note}'}',
+        ...es.map((e) {
+          final isTransfer =
+              e.kind == 'transfer_in' || e.kind == 'transfer_out';
+          return card(
+            isTransfer
+                ? (e.kind == 'transfer_out'
+                      ? '${e.method} → ${e.category}'
+                      : '${e.category} → ${e.method}')
+                : e.category,
+            '${isTransfer ? 'transfer' : e.kind} · ${money(e.amount, e.currency)}${e.note.isEmpty ? '' : ' · ${e.note}'}',
             () => panel(
               c,
-              EntryForm(data: widget.data, day: e.day, kind: e.kind, entry: e),
+              isTransfer && e.occurrence != null
+                  ? WalletTransferSheet(
+                      data: widget.data,
+                      existingOccurrence: e.occurrence,
+                    )
+                  : EntryForm(
+                      data: widget.data,
+                      day: e.day,
+                      kind: isTransfer ? 'expense' : e.kind,
+                      entry: e,
+                    ),
             ),
-          ),
-        ),
+          );
+        }),
       ],
     );
   }
@@ -924,25 +940,45 @@ class DayPanel extends ConsumerWidget {
           if (entries.isEmpty)
             const Text('No transactions recorded.')
           else
-            ...entries.map(
-              (e) => ListTile(
+            ...entries.map((e) {
+              final isTransfer =
+                  e.kind == 'transfer_in' || e.kind == 'transfer_out';
+              return ListTile(
                 contentPadding: EdgeInsets.zero,
                 onTap: withFeedback(
                   () => panel(
                     c,
-                    EntryForm(data: d, day: day, kind: e.kind, entry: e),
+                    isTransfer && e.occurrence != null
+                        ? WalletTransferSheet(
+                            data: d,
+                            existingOccurrence: e.occurrence,
+                          )
+                        : EntryForm(
+                            data: d,
+                            day: day,
+                            kind: isTransfer ? 'expense' : e.kind,
+                            entry: e,
+                          ),
                   ),
                 ),
                 leading: Icon(
-                  e.kind == 'income'
+                  isTransfer
+                      ? LucideIcons.arrowLeftRight
+                      : e.kind == 'income'
                       ? LucideIcons.arrowDownLeft
                       : e.kind == 'savings'
                       ? LucideIcons.piggyBank
                       : LucideIcons.arrowUpRight,
                 ),
-                title: Text(e.category),
+                title: Text(
+                  isTransfer
+                      ? (e.kind == 'transfer_out'
+                            ? '${e.method} → ${e.category}'
+                            : '${e.category} → ${e.method}')
+                      : e.category,
+                ),
                 subtitle: Text(
-                  '${e.kind} · ${e.method}${e.note.isEmpty ? '' : '\n${e.note}'}',
+                  '${isTransfer ? 'transfer' : e.kind} · ${e.method}${e.note.isEmpty ? '' : '\n${e.note}'}',
                 ),
                 trailing: Text(
                   money(e.amount, e.currency),
@@ -951,8 +987,8 @@ class DayPanel extends ConsumerWidget {
                     fontSize: 12,
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
         ],
       ),
     );

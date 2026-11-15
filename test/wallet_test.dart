@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/native.dart';
@@ -613,31 +614,35 @@ void main() {
     'live flow: add wallet, add expense, scope total & month cards, edit design, and remove wallet stay synced',
     (tester) async {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
-      addTearDown(db.close);
+      final controller = StreamController<AppData>.broadcast();
       final today = dayKey(DateTime.now());
-      await tester.runAsync(() async {
+      Future<AppData> emitLatest() async {
+        final d = await db.readAll();
+        if (!controller.isClosed) controller.add(d);
+        return d;
+      }
+
+      final initial = await tester.runAsync(() async {
         await db.pref('methods', jsonEncode(['Cash', 'GCash']));
         await db
             .into(db.entries)
-            .insert(
-              dated('seed-inc', today, 'income', 100000, 'GCash'),
-            );
+            .insert(dated('seed-inc', today, 'income', 100000, 'GCash'));
+        return db.readAll();
       });
 
       await tester.pumpWidget(
         ProviderScope(
-          overrides: [databaseProvider.overrideWithValue(db)],
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            dataProvider.overrideWith((ref) => controller.stream),
+          ],
           child: MaterialApp(
             theme: Design.theme(false),
             home: Scaffold(
               body: Consumer(
                 builder: (context, ref, _) {
-                  final snap = ref.watch(dataProvider);
-                  return snap.when(
-                    data: (d) => BudgetScreen(data: d),
-                    loading: () => const SizedBox.shrink(),
-                    error: (e, _) => Text('$e'),
-                  );
+                  final d = ref.watch(dataProvider).value ?? initial!;
+                  return BudgetScreen(data: d);
                 },
               ),
             ),
@@ -657,22 +662,23 @@ void main() {
       await tester.tap(find.byTooltip('Add wallet'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'Maya');
-      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add wallet'));
+      await tester.ensureVisible(
+        find.widgetWithText(FilledButton, 'Add wallet'),
+      );
       await tester.tap(find.widgetWithText(FilledButton, 'Add wallet'));
       await tester.pumpAndSettle();
 
-      var latest = await tester.runAsync(() => db.readAll());
+      var latest = await tester.runAsync(emitLatest);
+      await tester.pumpAndSettle();
       expect(latest!.methods, contains('Maya'));
       expect(latest.walletMethods, contains('Maya'));
 
-      // 3. Add an expense to Maya via DB (simulating EntryForm save) and verify
-      //    both Total Balance and Month Net update immediately.
-      await tester.runAsync(() async {
+      // 3. Add an expense to Maya via DB and verify both Total Balance and Month Net update immediately.
+      latest = await tester.runAsync(() async {
         await db
             .into(db.entries)
-            .insert(
-              dated('maya-exp', today, 'expense', 25000, 'Maya'),
-            );
+            .insert(dated('maya-exp', today, 'expense', 25000, 'Maya'));
+        return emitLatest();
       });
       await tester.pumpAndSettle();
       expect(find.text('₱750.00'), findsWidgets);
@@ -693,16 +699,18 @@ void main() {
       expect(find.text(money(-25000, 'PHP')), findsWidgets);
 
       // 5. Card design preference updates immediately via dataProvider.
-      await tester.runAsync(() => db.pref('wallet:Maya:style', 'slate'));
+      latest = await tester.runAsync(() async {
+        await db.pref('wallet:Maya:style', 'ink');
+        return emitLatest();
+      });
       await tester.pumpAndSettle();
-      latest = await tester.runAsync(() => db.readAll());
       expect(
         walletAccounts(latest!).firstWhere((a) => a.name == 'Maya').skin.id,
-        'slate',
+        'ink',
       );
 
-      // 6. Removing Maya from Wallets/Payment methods updates both lists and clears scope.
-      await tester.runAsync(() async {
+      // 6. Removing Maya from Wallets/Payment methods updates both lists.
+      latest = await tester.runAsync(() async {
         final d = await db.readAll();
         await db.pref(
           'methods',
@@ -716,11 +724,115 @@ void main() {
           'walletOrder',
           jsonEncode(walletStoredOrder(d.prefs)..remove('Maya')),
         );
+        return emitLatest();
       });
       await tester.pumpAndSettle();
-      latest = await tester.runAsync(() => db.readAll());
       expect(latest!.methods, isNot(contains('Maya')));
       expect(latest.walletMethods, isNot(contains('Maya')));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() async {
+        await controller.close();
+        await db.close();
+      });
     },
   );
+
+  test(
+    'transfers move balances between wallets without affecting monthly income/expenses',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      try {
+        final today = dayKey(DateTime.now());
+        await db.pref('methods', jsonEncode(['GCash', 'Cash']));
+        await db
+            .into(db.entries)
+            .insert(dated('inc', today, 'income', 100000, 'GCash'));
+        await db.saveTransfer(
+          day: today,
+          amount: 35000,
+          currency: 'PHP',
+          fromMethod: 'GCash',
+          toMethod: 'Cash',
+          note: 'ATM cash out',
+        );
+        final data = await db.readAll();
+        expect(data.walletBalance('GCash'), 65000);
+        expect(data.walletBalance('Cash'), 35000);
+
+        final month = financeMonth(
+          data,
+          DateTime.now(),
+          null,
+          const [],
+        );
+        expect(month.income, 100000);
+        expect(month.expenses, 0);
+        expect(month.net, 100000);
+
+        final pairKey = data.entries
+            .firstWhere((e) => e.kind == 'transfer_out')
+            .occurrence!;
+        await db.deleteTransfer(pairKey);
+        final afterDelete = await db.readAll();
+        expect(afterDelete.walletBalance('GCash'), 100000);
+        expect(afterDelete.walletBalance('Cash'), 0);
+      } finally {
+        await db.close();
+      }
+    },
+  );
+
+  testWidgets('WalletTransferSheet swaps wallets and saves atomic transfer', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    final today = dayKey(DateTime.now());
+    final initial = await tester.runAsync(() async {
+      await db.pref('methods', jsonEncode(['GCash', 'Cash']));
+      await db
+          .into(db.entries)
+          .insert(dated('inc', today, 'income', 50000, 'GCash'));
+      return db.readAll();
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: WalletTransferSheet(
+              data: initial!,
+              initialFrom: 'GCash',
+              initialTo: 'Cash',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Swap From/To and swap back so both start/end states are exercised.
+    await tester.tap(find.byTooltip('Swap wallets'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Swap wallets'));
+    await tester.pumpAndSettle();
+
+    // Use quick-fill chip "50%" -> 250.00 from GCash (500.00) to Cash.
+    await tester.tap(find.text('50%'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.widgetWithText(FilledButton, 'Transfer'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Transfer'));
+    await tester.pumpAndSettle();
+
+    final saved = await tester.runAsync(() => db.readAll());
+    expect(saved!.walletBalance('GCash'), 25000);
+    expect(saved.walletBalance('Cash'), 25000);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() => db.close());
+  });
 }

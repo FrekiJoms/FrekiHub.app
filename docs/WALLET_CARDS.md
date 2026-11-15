@@ -24,7 +24,7 @@ FrekiHub keeps those interaction ideas but not Agila's proprietary artwork. Buil
 4. **Wallet views**
    - **Rows**: compact list with balance, inclusion state, planned amount and drag handle.
    - **Multi**: two columns on phones, three on wide layouts, full card art per wallet.
-   - **Stack**: up to four layered cards. The front card accepts a swipe in any direction; it flies out along the gesture and moves to the back of the stack. Previous/next buttons perform the same reorder without a gesture.
+   - **Stack**: up to four layered cards in a pocket cascade where cards behind peek above the front card with graduated scaling, elevation shadows and non-offscreen scrims. Swiping left glides the front card out and tucks it to the back while the next card promotes smoothly into focus; swiping right brings the previous card forward from behind. Previous/next buttons perform the same animated reorder, and vertical scrolling passes through to the page.
 5. **Card menu** (ellipsis or long press): scope Finance to the wallet, edit design, move to front, include/exclude from the top total, add another wallet.
 6. **Wallet detail**: large card, balance, lifetime saved, planned outflows, design shortcut, scope shortcut and the eight most recent movements.
 
@@ -63,7 +63,7 @@ One wallet order is shared by rows, multi and stack views.
 - New methods that are not in the saved order are appended, ordered by absolute balance and then name.
 - The order is restored on the next launch; unknown or removed method names are ignored.
 - A failed order write shows the error pill and restores the previous visible order instead of pretending the change was saved.
-- The swipe animation follows the drag/fling direction. With reduced motion enabled, the same reorder completes without the flight animation.
+- The horizontal swipe animation follows the gesture continuously and preserves vertical scrolling and parent tab swipes; tapping previous/next runs the same transition. With reduced motion enabled, the same reorder completes without the flight animation.
 - Card view (`rows`, `grid`, `stack`), the amount-mask toggle and the card order are remembered. The Finance wallet scope is intentionally not persisted and resets to **All wallets** on launch.
 
 ## Card artwork
@@ -83,15 +83,20 @@ Custom artwork uses the existing image picker. Images are copied into app suppor
 
 `budget.wallet_count` reports the number of wallets in the display currency, including saved methods and methods referenced by current-currency transactions. Planner rules already expose their `method`; Finance now uses that method for scoping, commitments and new-rule defaults. Per-wallet design keys remain readable through the generic `data.get("settings.wallet…")` preference path; balances are not duplicated into rule snapshots beyond the existing budget fields. No wallet or allocation table was added.
 
+## Wallet-to-wallet transfers
+
+Transfers are stored without a schema migration as two linked `entries` rows committed together in one database transaction (`kind: 'transfer_out'` on the source wallet and `kind: 'transfer_in'` on the destination wallet), with unique paired `occurrence` keys (`transfer:<id>:out` and `transfer:<id>:in`). `walletBalances` subtracts `transfer_out` and adds `transfer_in`, while `financeMonth` continues summing only `income`, `expense` and `savings` so transfers do not inflate monthly income or spending. When `All wallets` is active, paired transfer legs collapse to one timeline row (`From → To`); when scoped to one wallet, that wallet's signed leg appears. Transfers can be started from the wallet toolbar, wallet detail sheet or wallet menu via `WalletTransferSheet`, which animates wallet swaps (`AnimatedRotation` and `AnimatedSwitcher`, respecting `MediaQuery.disableAnimationsOf`) and previews post-transfer balances live.
+
 ## Code map
 
-- `lib/data.dart` — `walletMethods`, `walletBalances`, `walletBalance`, `walletEntries`, `scopedEntries`, `savingsByWallet`, `orderedWalletNames`, backup image filtering.
+- `lib/data.dart` — `walletMethods`, `walletBalances`, `walletBalance`, `walletEntries`, `scopedEntries`, `savingsByWallet`, `orderedWalletNames`, `saveTransfer`, `deleteTransfer`, backup image filtering.
 - `lib/wallets.dart` — view enum, skins, card renderer, artwork picker, account/commitment helpers, `FinanceMonth` month math.
-- `lib/wallet_views.dart` — Finance total/month cards, scope picker, toolbar, rows/grid/stack, detail/menu/design/add sheets.
-- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and timeline.
-- `lib/forms.dart` — planner form's wallet default when Finance is scoped.
+- `lib/wallet_views.dart` — Finance total/month cards (top balance card follows active `wallet` scope), scope picker, toolbar, rows/grid/stack, detail/menu/design/add/transfer sheets.
+- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and transfer-aware timeline.
+- `lib/calendar.dart` — renders and opens transfers in `WalletTransferSheet` from day detail panels.
+- `lib/forms.dart` — planner form's wallet default when Finance is scoped, synchronized payment method options.
 - `lib/rule_language.dart` — `budget.wallet_count` catalog field and snapshot value.
-- `test/wallet_test.dart` — balance, currency, scope, commitment, goal-contribution, order, skin, backup and stack-swipe persistence checks.
+- `test/wallet_test.dart` — balance, currency, scope, commitment, goal-contribution, order, skin, backup, stack-swipe, live sync flow and wallet transfer checks.
 
 ## Verification boundaries
 

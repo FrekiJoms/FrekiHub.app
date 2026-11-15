@@ -256,6 +256,10 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             Navigator.pop(sheet);
             _moveToFront(account);
           },
+          onTransfer: () {
+            Navigator.pop(sheet);
+            _transfer(account.name);
+          },
           onFocus: widget.onWallet == null
               ? null
               : () {
@@ -280,6 +284,10 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
         onFront: () {
           Navigator.pop(sheet);
           _moveToFront(account);
+        },
+        onTransfer: () {
+          Navigator.pop(sheet);
+          _transfer(account.name);
         },
         onIncluded: (value) {
           Navigator.pop(sheet);
@@ -308,6 +316,25 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
 
   Future<void> _addWallet() =>
       panel(context, _AddWalletSheet(data: widget.data));
+
+  Future<void> _transfer([String? fromWallet]) async {
+    final accounts = _accounts();
+    if (accounts.length < 2) {
+      toast(
+        context,
+        'Add another wallet first to transfer money.',
+        error: true,
+      );
+      return;
+    }
+    await panel(
+      context,
+      WalletTransferSheet(
+        data: widget.data,
+        initialFrom: fromWallet ?? widget.wallet,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext c) {
@@ -365,6 +392,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           view: view,
           onView: _setView,
           onAdd: _addWallet,
+          onTransfer: () => _transfer(),
         ),
         const SizedBox(height: 10),
         if (accounts.isEmpty)
@@ -1054,11 +1082,13 @@ class _WalletToolbar extends StatelessWidget {
   final WalletView view;
   final ValueChanged<WalletView> onView;
   final VoidCallback onAdd;
+  final VoidCallback onTransfer;
   const _WalletToolbar({
     required this.count,
     required this.view,
     required this.onView,
     required this.onAdd,
+    required this.onTransfer,
   });
 
   @override
@@ -1126,6 +1156,16 @@ class _WalletToolbar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 4),
+        IconButton(
+          tooltip: 'Transfer money',
+          onPressed: withFeedback(onTransfer),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(38, 38),
+            maximumSize: const Size(38, 38),
+            padding: EdgeInsets.zero,
+          ),
+          icon: const Icon(LucideIcons.arrowLeftRight, size: 17),
+        ),
         IconButton(
           tooltip: 'Add wallet',
           onPressed: onAdd,
@@ -2166,7 +2206,7 @@ class _WalletDetail extends StatelessWidget {
   final String currency;
   final bool masked;
   final bool selected;
-  final VoidCallback onEdit, onFront;
+  final VoidCallback onEdit, onFront, onTransfer;
   final VoidCallback? onFocus;
   const _WalletDetail({
     required this.account,
@@ -2176,6 +2216,7 @@ class _WalletDetail extends StatelessWidget {
     required this.selected,
     required this.onEdit,
     required this.onFront,
+    required this.onTransfer,
     required this.onFocus,
   });
 
@@ -2248,6 +2289,12 @@ class _WalletDetail extends StatelessWidget {
           ),
         const SizedBox(height: 4),
         OutlinedButton.icon(
+          onPressed: onTransfer,
+          icon: const Icon(LucideIcons.arrowLeftRight, size: 18),
+          label: const Text('Transfer money'),
+        ),
+        const SizedBox(height: 4),
+        OutlinedButton.icon(
           onPressed: onEdit,
           icon: const Icon(LucideIcons.sparkles, size: 18),
           label: const Text('Edit card design'),
@@ -2276,36 +2323,54 @@ class _WalletDetail extends StatelessWidget {
           )
         else
           for (final entry in entries.take(8))
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: Icon(
-                entry.kind == 'income'
-                    ? LucideIcons.arrowDownLeft
-                    : entry.kind == 'savings'
-                    ? LucideIcons.piggyBank
-                    : LucideIcons.arrowUpRight,
-                size: 18,
-              ),
-              title: Text(
-                entry.note.isEmpty ? entry.category : entry.note,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Text(
-                '${entry.day} · ${entry.category}',
-                style: const TextStyle(fontSize: 11),
-              ),
-              trailing: Text(
-                '${entry.kind == 'income' ? '+' : '−'}${money(entry.amount, currency)}',
-                style: TextStyle(
-                  fontFamily: 'Geist Mono',
-                  fontSize: 11,
-                  color: entry.kind == 'income'
-                      ? Theme.of(c).colorScheme.onSurface
-                      : Theme.of(c).colorScheme.onSurfaceVariant,
-                ),
-              ),
+            Builder(
+              builder: (context) {
+                final isIn =
+                    entry.kind == 'income' || entry.kind == 'transfer_in';
+                final isTransfer =
+                    entry.kind == 'transfer_in' ||
+                    entry.kind == 'transfer_out';
+                final title = isTransfer
+                    ? (entry.note.isEmpty
+                          ? (entry.kind == 'transfer_in'
+                                ? 'From ${entry.category}'
+                                : 'To ${entry.category}')
+                          : entry.note)
+                    : (entry.note.isEmpty ? entry.category : entry.note);
+                final sub = isTransfer
+                    ? '${entry.day} · ${entry.kind == 'transfer_in' ? 'Transfer from ${entry.category}' : 'Transfer to ${entry.category}'}'
+                    : '${entry.day} · ${entry.category}';
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  leading: Icon(
+                    isTransfer
+                        ? LucideIcons.arrowLeftRight
+                        : entry.kind == 'income'
+                        ? LucideIcons.arrowDownLeft
+                        : entry.kind == 'savings'
+                        ? LucideIcons.piggyBank
+                        : LucideIcons.arrowUpRight,
+                    size: 18,
+                  ),
+                  title: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(sub, style: const TextStyle(fontSize: 11)),
+                  trailing: Text(
+                    '${isIn ? '+' : '−'}${money(entry.amount, currency)}',
+                    style: TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 11,
+                      color: isIn
+                          ? Theme.of(c).colorScheme.onSurface
+                          : Theme.of(c).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                );
+              },
             ),
       ],
     ),
@@ -2353,7 +2418,7 @@ class _DetailStat extends StatelessWidget {
 class _WalletMenu extends StatelessWidget {
   final WalletAccount account;
   final bool selected;
-  final VoidCallback onEdit, onFront, onAdd;
+  final VoidCallback onEdit, onFront, onAdd, onTransfer;
   final VoidCallback? onFocus, onRemove;
   final ValueChanged<bool> onIncluded;
   const _WalletMenu({
@@ -2363,6 +2428,7 @@ class _WalletMenu extends StatelessWidget {
     required this.onFront,
     required this.onIncluded,
     required this.onAdd,
+    required this.onTransfer,
     required this.onFocus,
     this.onRemove,
   });
@@ -2392,6 +2458,16 @@ class _WalletMenu extends StatelessWidget {
             ),
             onTap: onFocus,
           ),
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(LucideIcons.arrowLeftRight, size: 20),
+          title: const Text('Transfer money'),
+          subtitle: const Text(
+            'Move funds to another wallet without counting as income or spend.',
+            style: TextStyle(fontSize: 11),
+          ),
+          onTap: onTransfer,
+        ),
         ListTile(
           contentPadding: EdgeInsets.zero,
           leading: const Icon(LucideIcons.sparkles, size: 20),
@@ -3114,6 +3190,545 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class WalletTransferSheet extends ConsumerStatefulWidget {
+  final AppData data;
+  final String? initialFrom;
+  final String? initialTo;
+  final String? initialDay;
+  final String? existingOccurrence;
+  const WalletTransferSheet({
+    super.key,
+    required this.data,
+    this.initialFrom,
+    this.initialTo,
+    this.initialDay,
+    this.existingOccurrence,
+  });
+
+  @override
+  ConsumerState<WalletTransferSheet> createState() =>
+      _WalletTransferSheetState();
+}
+
+class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
+  late final TextEditingController _amount;
+  late final TextEditingController _note;
+  late String _from;
+  late String _to;
+  late String _day;
+  double _swapTurns = 0;
+  bool _busy = false;
+
+  bool get _isEdit => widget.existingOccurrence != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final names = widget.data.orderedWalletNames(
+      walletStoredOrder(widget.data.prefs),
+    );
+    Entry? outLeg;
+    Entry? inLeg;
+    final targetPrefix = AppDatabase.transferPrefix(widget.existingOccurrence);
+    if (targetPrefix != null) {
+      for (final e in widget.data.entries) {
+        if (AppDatabase.transferPrefix(e.occurrence) != targetPrefix) continue;
+        if (e.kind == 'transfer_out') outLeg ??= e;
+        if (e.kind == 'transfer_in') inLeg ??= e;
+      }
+    }
+    _day = outLeg?.day ?? inLeg?.day ?? widget.initialDay ?? dayKey(DateTime.now());
+    _from =
+        outLeg?.method ??
+        widget.initialFrom ??
+        (names.isNotEmpty ? names.first : 'Cash');
+    _to =
+        inLeg?.method ??
+        widget.initialTo ??
+        names.firstWhere(
+          (n) => n.toLowerCase() != _from.toLowerCase(),
+          orElse: () => names.length > 1 ? names[1] : _from,
+        );
+    if (_from.toLowerCase() == _to.toLowerCase() && names.length > 1) {
+      _to = names.firstWhere(
+        (n) => n.toLowerCase() != _from.toLowerCase(),
+        orElse: () => _to,
+      );
+    }
+    final seedAmount = outLeg?.amount ?? inLeg?.amount ?? 0;
+    _amount = TextEditingController(
+      text: seedAmount > 0 ? editableMoney(seedAmount, widget.data.currency) : '',
+    );
+    _note = TextEditingController(text: outLeg?.note ?? inLeg?.note ?? '');
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  int _typedMinor() {
+    try {
+      final raw = _amount.text.trim();
+      if (raw.isEmpty) return 0;
+      return parseMoney(raw, widget.data.currency);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  void _swap() {
+    if (_busy || _from == _to) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      final prevFrom = _from;
+      _from = _to;
+      _to = prevFrom;
+      _swapTurns += 0.5;
+    });
+  }
+
+  Future<void> _pickWallet({required bool isFrom}) async {
+    if (_busy) return;
+    final accounts = walletAccounts(widget.data);
+    final current = isFrom ? _from : _to;
+    final picked = await panel<String>(
+      context,
+      PanelContent(
+        header: PanelHeading(
+          title: isFrom ? 'Transfer from' : 'Transfer to',
+        ),
+        footer: AppButton(
+          label: 'Cancel',
+          secondary: true,
+          onPressed: () => Navigator.pop(context),
+        ),
+        child: Column(
+          children: [
+            for (final a in accounts)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: _WalletMark(account: a, size: 36),
+                title: Text(a.name),
+                subtitle: Text(
+                  money(a.balance, widget.data.currency),
+                  style: const TextStyle(fontFamily: 'Geist Mono', fontSize: 11),
+                ),
+                trailing: a.name.toLowerCase() == current.toLowerCase()
+                    ? const Icon(LucideIcons.check, size: 18)
+                    : null,
+                onTap: () => Navigator.pop(context, a.name),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null || !mounted) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      if (isFrom) {
+        if (picked.toLowerCase() == _to.toLowerCase()) {
+          _to = _from;
+          _swapTurns += 0.5;
+        }
+        _from = picked;
+      } else {
+        if (picked.toLowerCase() == _from.toLowerCase()) {
+          _from = _to;
+          _swapTurns += 0.5;
+        }
+        _to = picked;
+      }
+    });
+  }
+
+  Future<void> _pickDay() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: calendarDate(_day),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _day = dayKey(picked));
+  }
+
+  Future<void> _submit() async {
+    if (_busy) return;
+    try {
+      final minor = parseMoney(_amount.text, widget.data.currency);
+      if (minor <= 0) {
+        throw const FormatException('Enter an amount greater than zero.');
+      }
+      if (_from.toLowerCase() == _to.toLowerCase()) {
+        throw const FormatException('Choose two different wallets.');
+      }
+      setState(() => _busy = true);
+      final db = ref.read(databaseProvider);
+      await db.saveTransfer(
+        day: _day,
+        amount: minor,
+        currency: widget.data.currency,
+        fromMethod: _from,
+        toMethod: _to,
+        note: _note.text.trim(),
+        existingOccurrence: widget.existingOccurrence,
+      );
+      if (mounted) {
+        dataToast(
+          context,
+          'Transfer',
+          _isEdit ? DataAction.updated : DataAction.saved,
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        toast(
+          context,
+          e is FormatException
+              ? e.message
+              : 'Could not save transfer. Try again.',
+          error: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    final occ = widget.existingOccurrence;
+    if (occ == null || _busy) return;
+    if (!await confirm(
+      context,
+      'Delete transfer?',
+      'Both the outgoing and incoming wallet entries will be removed.',
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(databaseProvider).deleteTransfer(occ);
+      if (mounted) {
+        dataToast(context, 'Transfer', DataAction.deleted);
+        Navigator.pop(context);
+      }
+    } catch (_) {
+      if (mounted) {
+        toast(context, 'Could not delete transfer. Try again.', error: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext c) {
+    final accounts = walletAccounts(widget.data);
+    WalletAccount findAccount(String name) => accounts.firstWhere(
+      (a) => a.name.toLowerCase() == name.toLowerCase(),
+      orElse: () => WalletAccount(
+        name: name,
+        balance: widget.data.walletBalance(name),
+        skin: WalletSkin.byName(name),
+        imagePath: null,
+        scale: 1,
+        dx: 0,
+        dy: 0,
+        included: true,
+        movements: 0,
+      ),
+    );
+    final fromAccount = findAccount(_from);
+    final toAccount = findAccount(_to);
+    final currency = widget.data.currency;
+    final dur = Motion.duration(c, 220);
+
+    return PanelContent(
+      header: PanelHeading(
+        title: _isEdit ? 'Edit transfer' : 'Transfer money',
+        leading: Chrome(
+          padding: const EdgeInsets.all(10),
+          child: const Icon(LucideIcons.arrowLeftRight, size: 20),
+        ),
+      ),
+      footer: PanelActions(
+        children: [
+          AppButton(
+            label: _isEdit ? 'Save transfer' : 'Transfer',
+            icon: LucideIcons.arrowLeftRight,
+            busy: _busy,
+            onPressed: _submit,
+          ),
+          if (_isEdit)
+            AppButton(
+              label: 'Delete transfer',
+              secondary: true,
+              destructive: true,
+              onPressed: _busy ? null : _delete,
+            ),
+        ],
+      ),
+      child: ValueListenableBuilder<TextEditingValue>(
+        valueListenable: _amount,
+        builder: (c, _, _) {
+          final delta = _typedMinor();
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: dur,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.96, end: 1).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: _TransferWalletTile(
+                        key: ValueKey('from-$_from'),
+                        role: 'FROM',
+                        account: fromAccount,
+                        delta: -delta,
+                        currency: currency,
+                        onTap: () => _pickWallet(isFrom: true),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    child: Center(
+                      child: Semantics(
+                        button: true,
+                        label: 'Swap source and destination wallets',
+                        child: Chrome(
+                          padding: EdgeInsets.zero,
+                          child: IconButton(
+                            tooltip: 'Swap wallets',
+                            onPressed: _busy ? null : _swap,
+                            icon: AnimatedRotation(
+                              turns: MediaQuery.disableAnimationsOf(c)
+                                  ? 0
+                                  : _swapTurns,
+                              duration: Motion.duration(c, 260),
+                              curve: Curves.easeOutCubic,
+                              child: const Icon(
+                                LucideIcons.arrowLeftRight,
+                                size: 17,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: dur,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      transitionBuilder: (child, anim) => FadeTransition(
+                        opacity: anim,
+                        child: ScaleTransition(
+                          scale: Tween<double>(begin: 0.96, end: 1).animate(anim),
+                          child: child,
+                        ),
+                      ),
+                      child: _TransferWalletTile(
+                        key: ValueKey('to-$_to'),
+                        role: 'TO',
+                        account: toAccount,
+                        delta: delta,
+                        currency: currency,
+                        onTap: () => _pickWallet(isFrom: false),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _amount,
+                autofocus: !_isEdit,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Amount ($currency)',
+                  prefixText: '${moneySymbol(currency)} ',
+                ),
+                onSubmitted: (_) => _submit(),
+              ),
+              if (fromAccount.balance > 0) ...[
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (final ratio in const [
+                      ('25%', 0.25),
+                      ('50%', 0.5),
+                      ('All', 1.0),
+                    ])
+                      ActionChip(
+                        label: Text(ratio.$1),
+                        onPressed: _busy
+                            ? null
+                            : () {
+                                final target = (fromAccount.balance * ratio.$2)
+                                    .round();
+                                if (target <= 0) return;
+                                final text = editableMoney(target, currency);
+                                _amount.value = TextEditingValue(
+                                  text: text,
+                                  selection: TextSelection.collapsed(
+                                    offset: text.length,
+                                  ),
+                                );
+                              },
+                      ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 12),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(LucideIcons.calendar, size: 18),
+                title: const Text('Date'),
+                subtitle: Text(
+                  DateFormat('EEEE, d MMMM yyyy').format(calendarDate(_day)),
+                ),
+                onTap: _busy ? null : _pickDay,
+              ),
+              TextField(
+                controller: _note,
+                maxLength: 80,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  labelText: 'Note (optional)',
+                  hintText: 'e.g. Cash-in, savings top-up',
+                  counterText: '',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TransferWalletTile extends StatelessWidget {
+  final String role;
+  final WalletAccount account;
+  final int delta;
+  final String currency;
+  final VoidCallback onTap;
+  const _TransferWalletTile({
+    super.key,
+    required this.role,
+    required this.account,
+    required this.delta,
+    required this.currency,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext c) {
+    final theme = Theme.of(c);
+    final nextBalance = account.balance + delta;
+    final overdraft = role == 'FROM' && delta != 0 && nextBalance < 0;
+    final positive = role == 'TO' && delta > 0;
+    final previewColor = overdraft
+        ? theme.colorScheme.error
+        : positive
+        ? const Color(0xFF2E7D32)
+        : theme.colorScheme.onSurfaceVariant;
+    return Surface(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    role,
+                    style: TextStyle(
+                      fontSize: 9,
+                      letterSpacing: 1.4,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    LucideIcons.chevronDown,
+                    size: 13,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _WalletMark(account: account, size: 28),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      account.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: AnimatedSwitcher(
+                  duration: Motion.duration(c, 160),
+                  child: Text(
+                    delta == 0
+                        ? money(account.balance, currency)
+                        : money(nextBalance, currency),
+                    key: ValueKey('$role-${delta == 0 ? account.balance : nextBalance}'),
+                    style: TextStyle(
+                      fontFamily: 'Geist Mono',
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: delta == 0
+                          ? theme.colorScheme.onSurface
+                          : previewColor,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
