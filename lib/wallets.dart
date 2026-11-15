@@ -498,6 +498,8 @@ class WalletCard extends StatelessWidget {
             final f = (width / 180).clamp(.74, 1.38);
             final pad = 12.0 * f;
             final ink = account.skin.ink;
+            final hasImage =
+                account.hasCustomArtwork || account.skin.assetPath != null;
             final amount = masked
                 ? walletMaskedAmount(currency)
                 : money(account.balance, currency);
@@ -579,8 +581,10 @@ class WalletCard extends StatelessWidget {
                   top: pad,
                   child: Row(
                     children: [
-                      _WalletChip(scale: f, dark: account.skin.dark),
-                      SizedBox(width: 7 * f),
+                      if (!hasImage) ...[
+                        _WalletChip(scale: f, dark: account.skin.dark),
+                        SizedBox(width: 7 * f),
+                      ],
                       Expanded(
                         child: Text(
                           account.name.toUpperCase(),
@@ -686,11 +690,12 @@ class WalletCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      _WalletNetwork(
-                        network: account.skin.network,
-                        color: ink,
-                        scale: f,
-                      ),
+                      if (!hasImage)
+                        _WalletNetwork(
+                          network: account.skin.network,
+                          color: ink,
+                          scale: f,
+                        ),
                     ],
                   ),
                 ),
