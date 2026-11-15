@@ -506,7 +506,28 @@ class _ManageListState extends ConsumerState<_ManageList> {
           : items.firstWhere((item) => !next.contains(item), orElse: () => '');
     });
     await guarded(context, () async {
-      await ref.read(databaseProvider).pref(widget.setting, jsonEncode(next));
+      final db = ref.read(databaseProvider);
+      await db.transaction(() async {
+        await db.pref(widget.setting, jsonEncode(next));
+        if (widget.setting == 'methods') {
+          final data = await db.readAll();
+          final hidden = {...data.hiddenWallets};
+          final removed = items.where((item) => !next.contains(item)).toList();
+          for (final item in removed) {
+            hidden.add(item.trim().toLowerCase());
+          }
+          for (final item in next) {
+            hidden.remove(item.trim().toLowerCase());
+          }
+          await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
+          if (removed.isNotEmpty) {
+            final order = List<String>.from(
+              jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
+            )..removeWhere((w) => removed.contains(w));
+            await db.pref('walletOrder', jsonEncode(order));
+          }
+        }
+      });
       if (!mounted) return;
       setState(() {
         items = next;

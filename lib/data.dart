@@ -732,21 +732,48 @@ class AppData {
   List<String> get methods =>
       list('methods', ['Cash', 'GCash', 'Maya', 'Bank', 'Card']);
 
-  /// Wallets are the saved payment methods plus any method still referenced by
-  /// a transaction, so separated balances always add up to [balance].
+  /// Wallets explicitly removed by the user so historical entries do not
+  /// resurrect them on Finance unless re-added.
+  Set<String> get hiddenWallets {
+    try {
+      final raw = jsonDecode(prefs['hiddenWallets']!) as List;
+      return raw.map((e) => e.toString().trim().toLowerCase()).toSet();
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Wallets are the saved payment methods plus any active method referenced by
+  /// a transaction, excluding removed wallets and messaging transports.
   List<String> get walletMethods {
-    final names = <String>{...methods};
+    final hidden = hiddenWallets;
+    final names = <String>{
+      for (final m in methods)
+        if (!_isMessagingMethod(m)) m,
+    };
     for (final e in entries.where((e) => e.currency == currency)) {
-      names.add(walletMethodName(e.method));
+      final name = walletMethodName(e.method);
+      final lower = name.toLowerCase();
+      if (_isMessagingMethod(name) || hidden.contains(lower)) continue;
+      names.add(name);
     }
     return names.toList();
   }
 
+  static bool _isMessagingMethod(String name) {
+    final lower = name.trim().toLowerCase();
+    return lower == 'messaging' || lower == 'messages';
+  }
+
   /// One pass over the current currency's ledger, keyed by payment method.
   Map<String, int> get walletBalances {
+    final hidden = hiddenWallets;
     final result = <String, int>{for (final name in walletMethods) name: 0};
     for (final e in entries.where((e) => e.currency == currency)) {
       final name = walletMethodName(e.method);
+      if (_isMessagingMethod(name) || hidden.contains(name.toLowerCase())) {
+        continue;
+      }
       result.update(
         name,
         (value) => value + (e.kind == 'income' ? e.amount : -e.amount),

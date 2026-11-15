@@ -423,7 +423,9 @@ class _AppShellState extends ConsumerState<AppShell>
                             parent: _jumpFadeController,
                             curve: Curves.easeOut,
                           ),
-                          child: NotificationListener<ScrollNotification>(
+                          child: Offstage(
+                            offstage: index >= 4,
+                            child: NotificationListener<ScrollNotification>(
                             onNotification: (n) {
                               if (n.depth != 0) return false;
                               if (n is ScrollStartNotification) {
@@ -458,6 +460,7 @@ class _AppShellState extends ConsumerState<AppShell>
                         ),
                       ),
                     ),
+                  ),
                     Positioned.fill(
                       child: IgnorePointer(
                         ignoring: index < 4,
@@ -489,8 +492,9 @@ class _AppShellState extends ConsumerState<AppShell>
                             );
                           },
                           child: index >= 4
-                              ? KeyedSubtree(
+                              ? ColoredBox(
                                   key: ValueKey(index),
+                                  color: Theme.of(c).scaffoldBackgroundColor,
                                   child: index == 5
                                       ? CalendarScreen(data: data)
                                       : SettingsScreen(data: data),

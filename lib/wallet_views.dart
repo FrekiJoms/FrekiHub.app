@@ -2275,7 +2275,10 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
       final order = [...stored, value];
       final db = ref.read(databaseProvider);
       await db.transaction(() async {
+        final hidden = {...widget.data.hiddenWallets}
+          ..remove(value.toLowerCase());
         await db.pref('methods', jsonEncode(methods));
+        await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
         await db.pref('walletOrder', jsonEncode(order));
         await db.pref('wallet:$value:style', WalletSkin.byName(value).id);
       });
