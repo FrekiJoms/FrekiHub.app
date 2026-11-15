@@ -678,9 +678,9 @@ void main() {
       expect(find.text('₱750.00'), findsWidgets);
 
       // 4. Scope Finance to Maya and verify BOTH Total Balance and Month Net cards scope to Maya.
-      await tester.ensureVisible(find.text('All wallets'));
+      await tester.ensureVisible(find.text('All wallets').first);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('All wallets'));
+      await tester.tap(find.text('All wallets').first);
       await tester.pumpAndSettle();
       final mayaChoice = find.text('Maya').last;
       await tester.ensureVisible(mayaChoice);
@@ -690,7 +690,7 @@ void main() {
 
       expect(find.text('WALLET BALANCE · MAYA'), findsOneWidget);
       expect(find.text('MONTH NET · MAYA'), findsOneWidget);
-      expect(find.text('-₱250.00'), findsWidgets);
+      expect(find.text(money(-25000, 'PHP')), findsWidgets);
 
       // 5. Card design preference updates immediately via dataProvider.
       await tester.runAsync(() => db.pref('wallet:Maya:style', 'slate'));
