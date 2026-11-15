@@ -21,7 +21,7 @@ public final class FinanceNotificationParser {
     private static final Pattern HARD_OUTGOING = Pattern.compile(
             "(?i)\\b(?:debited|deducted|debit alert|purchased|purchase(?: successful| of)|withdrawn|withdrawal|cash[\\s-]?out|sent to|transferred to|transfer to|payment to|charged at|spent|bought|paid at|paid to (?!your account)|you sent|you have sent|successfully sent|sent successfully)\\b");
     private static final Pattern OUTGOING = Pattern.compile(
-            "(?i)\\b(?:paid|purchased|purchase(?: successful| of)|payment successful|successful payment|debited|deducted|sent|spent|charged|withdrawn|withdrawal|cash[\\s-]?out|transferred to|transfer to|payment to|bought|you sent|you have sent|successfully sent|successfully transferred|transfer successful|transfer completed|sent successfully|cash out|money sent)\\b");
+            "(?i)\\b(?:paid|purchased|purchase(?: successful| of)|payment successful|successful payment|debited|deducted|sent|spent|charged|withdrawn|withdrawal|cash[\\s-]?out|debit transaction|transferred to|transfer to|payment to|bought|you sent|you have sent|successfully sent|successfully transferred|transfer successful|transfer completed|sent successfully|cash out|money sent)\\b");
     private static final Pattern COMPLETED_PAYMENT = Pattern.compile(
             "(?i)\\bpayment\\b.{0,60}\\b(?:successful|succeeded|completed|confirmed|processed)\\b|\\b(?:successful|succeeded|completed|confirmed|processed)\\b.{0,60}\\bpayment\\b");
     private static final Pattern INCOME_SOURCE = Pattern.compile(

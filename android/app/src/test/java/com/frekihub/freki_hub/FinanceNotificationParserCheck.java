@@ -59,6 +59,10 @@ public final class FinanceNotificationParserCheck {
                 "expense", "250.00", "PHP", "MARIA");
         expect("Transfer successful! You received P500 from PEDRO. Available balance P1,000.00",
                 "income", "500", "PHP", "PEDRO");
-        System.out.println("25 finance notification parser checks passed");
+        expect("Maribank debit transaction of PHP 150.00 at Coffee Shop",
+                "expense", "150.00", "PHP", "Coffee Shop");
+        expect("MariBank debit transaction of PHP1,234.56",
+                "expense", "1234.56", "PHP", "Item not specified");
+        System.out.println("27 finance notification parser checks passed");
     }
 }
