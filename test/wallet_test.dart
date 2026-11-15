@@ -462,4 +462,265 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets(
+    'wallet stack peeks cards behind, supports bidirectional swipe in PageView, and preserves vertical scroll',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await tester.runAsync(() => db.readAll());
+      final data = AppData(const [], const [], const [], {
+        'methods': jsonEncode(['GCash', 'Maya', 'BPI', 'Cash']),
+        'walletOrder': jsonEncode(['GCash', 'Maya', 'BPI', 'Cash']),
+        'walletView': 'stack',
+      });
+      final pageController = PageController(initialPage: 1);
+      final scrollController = ScrollController();
+      addTearDown(pageController.dispose);
+      addTearDown(scrollController.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(
+              body: PageView(
+                controller: pageController,
+                children: [
+                  const SizedBox.expand(),
+                  Center(
+                    child: SizedBox(
+                      width: 360,
+                      height: 640,
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            WalletSection(data: data),
+                            const SizedBox(height: 600),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      Rect rectFor(String name) => tester.getRect(
+        find.byWidgetPredicate((w) => w is WalletCard && w.account.name == name),
+      );
+
+      final gcashRect = rectFor('GCash');
+      final mayaRect = rectFor('Maya');
+      final bpiRect = rectFor('BPI');
+      final cashRect = rectFor('Cash');
+
+      // Each card behind peeks cleanly above the card in front and tapers slightly.
+      expect(gcashRect.top, greaterThan(mayaRect.top));
+      expect(mayaRect.top, greaterThan(bpiRect.top));
+      expect(bpiRect.top, greaterThan(cashRect.top));
+      expect(gcashRect.width, greaterThan(mayaRect.width));
+      expect(mayaRect.width, greaterThan(bpiRect.width));
+      expect(bpiRect.width, greaterThan(cashRect.width));
+
+      // Vertical drag on the front card scrolls the page without reordering.
+      await tester.dragFrom(gcashRect.center, const Offset(0, -140));
+      await tester.pumpAndSettle();
+      expect(scrollController.offset, greaterThan(40));
+      expect(pageController.page, 1.0);
+      scrollController.jumpTo(0);
+      await tester.pumpAndSettle();
+
+      // Swiping left advances to Maya without switching PageView tab.
+      await tester.dragFrom(rectFor('GCash').center, const Offset(-160, 0));
+      await tester.pumpAndSettle();
+      expect(pageController.page, 1.0);
+
+      var saved = await tester.runAsync(() => db.readAll());
+      expect(
+        jsonDecode(saved!.prefs['walletOrder']!),
+        ['Maya', 'BPI', 'Cash', 'GCash'],
+      );
+
+      // Swiping right returns GCash to the front without switching PageView tab.
+      await tester.dragFrom(rectFor('Maya').center, const Offset(160, 0));
+      await tester.pumpAndSettle();
+      expect(pageController.page, 1.0);
+
+      saved = await tester.runAsync(() => db.readAll());
+      expect(
+        jsonDecode(saved!.prefs['walletOrder']!),
+        ['GCash', 'Maya', 'BPI', 'Cash'],
+      );
+    },
+  );
+
+  testWidgets('wallet stack buttons and reduced motion reorder cleanly', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    await tester.runAsync(() => db.readAll());
+    final data = AppData(const [], const [], const [], {
+      'methods': jsonEncode(['GCash', 'Maya', 'BPI']),
+      'walletOrder': jsonEncode(['GCash', 'Maya', 'BPI']),
+      'walletView': 'stack',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 360,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: WalletSection(data: data),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Next wallet'));
+    await tester.pumpAndSettle();
+    var saved = await tester.runAsync(() => db.readAll());
+    expect(jsonDecode(saved!.prefs['walletOrder']!), ['Maya', 'BPI', 'GCash']);
+
+    await tester.tap(find.byTooltip('Previous wallet'));
+    await tester.pumpAndSettle();
+    saved = await tester.runAsync(() => db.readAll());
+    expect(jsonDecode(saved!.prefs['walletOrder']!), ['GCash', 'Maya', 'BPI']);
+  });
+
+  testWidgets(
+    'live flow: add wallet, add expense, scope total & month cards, edit design, and remove wallet stay synced',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      final today = dayKey(DateTime.now());
+      await tester.runAsync(() async {
+        await db.pref('methods', jsonEncode(['Cash', 'GCash']));
+        await db
+            .into(db.entries)
+            .insert(
+              dated('seed-inc', today, 'income', 100000, 'GCash'),
+            );
+      });
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(
+              body: Consumer(
+                builder: (context, ref, _) {
+                  final snap = ref.watch(dataProvider);
+                  return snap.when(
+                    data: (d) => BudgetScreen(data: d),
+                    loading: () => const SizedBox.shrink(),
+                    error: (e, _) => Text('$e'),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // 1. Total balance and Month net start synchronized for all wallets.
+      expect(find.text('TOTAL BALANCE'), findsWidgets);
+      expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+      expect(find.text('₱1,000.00'), findsWidgets);
+
+      // 2. Add a new wallet/payment method from Finance "+" button.
+      await tester.ensureVisible(find.byTooltip('Add wallet'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Add wallet'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Maya');
+      await tester.ensureVisible(find.widgetWithText(FilledButton, 'Add wallet'));
+      await tester.tap(find.widgetWithText(FilledButton, 'Add wallet'));
+      await tester.pumpAndSettle();
+
+      var latest = await tester.runAsync(() => db.readAll());
+      expect(latest!.methods, contains('Maya'));
+      expect(latest.walletMethods, contains('Maya'));
+
+      // 3. Add an expense to Maya via DB (simulating EntryForm save) and verify
+      //    both Total Balance and Month Net update immediately.
+      await tester.runAsync(() async {
+        await db
+            .into(db.entries)
+            .insert(
+              dated('maya-exp', today, 'expense', 25000, 'Maya'),
+            );
+      });
+      await tester.pumpAndSettle();
+      expect(find.text('₱750.00'), findsWidgets);
+
+      // 4. Scope Finance to Maya and verify BOTH Total Balance and Month Net cards scope to Maya.
+      await tester.ensureVisible(find.text('All wallets'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('All wallets'));
+      await tester.pumpAndSettle();
+      final mayaChoice = find.text('Maya').last;
+      await tester.ensureVisible(mayaChoice);
+      await tester.pumpAndSettle();
+      await tester.tap(mayaChoice);
+      await tester.pumpAndSettle();
+
+      expect(find.text('WALLET BALANCE · MAYA'), findsOneWidget);
+      expect(find.text('MONTH NET · MAYA'), findsOneWidget);
+      expect(find.text('-₱250.00'), findsWidgets);
+
+      // 5. Card design preference updates immediately via dataProvider.
+      await tester.runAsync(() => db.pref('wallet:Maya:style', 'slate'));
+      await tester.pumpAndSettle();
+      latest = await tester.runAsync(() => db.readAll());
+      expect(
+        walletAccounts(latest!).firstWhere((a) => a.name == 'Maya').skin.id,
+        'slate',
+      );
+
+      // 6. Removing Maya from Wallets/Payment methods updates both lists and clears scope.
+      await tester.runAsync(() async {
+        final d = await db.readAll();
+        await db.pref(
+          'methods',
+          jsonEncode(d.methods.where((m) => m != 'Maya').toList()),
+        );
+        await db.pref(
+          'hiddenWallets',
+          jsonEncode([...d.hiddenWallets, 'maya']),
+        );
+        await db.pref(
+          'walletOrder',
+          jsonEncode(walletStoredOrder(d.prefs)..remove('Maya')),
+        );
+      });
+      await tester.pumpAndSettle();
+      latest = await tester.runAsync(() => db.readAll());
+      expect(latest!.methods, isNot(contains('Maya')));
+      expect(latest.walletMethods, isNot(contains('Maya')));
+    },
+  );
 }

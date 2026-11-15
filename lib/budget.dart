@@ -818,7 +818,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'TOTAL BALANCE',
+                  wallet == null ? 'TOTAL BALANCE' : wallet!.toUpperCase(),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .5),
                     fontSize: 7,
