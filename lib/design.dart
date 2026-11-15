@@ -612,7 +612,6 @@ class _PillNavigationState extends State<PillNavigation>
       });
   Rect? from, target;
   List<Rect?> _tabRects = List<Rect?>.filled(4, null);
-  OverlayEntry? menu;
   OverlayEntry? _radialEntry;
   OverlayEntry? _tooltipEntry;
   int? hovered;
@@ -845,20 +844,20 @@ class _PillNavigationState extends State<PillNavigation>
   ) {
     final arcSpan = count <= 1
         ? 0.0
-        : math.min(math.pi * 0.80, (count - 1) * (math.pi / 5.0));
+        : math.min(math.pi * 0.84, (count - 1) * (math.pi / 4.6));
     final startAngle = -math.pi / 2 - arcSpan / 2;
     final angle = count <= 1
         ? -math.pi / 2
         : startAngle + index * (arcSpan / (count - 1));
     final maxHorizontal = math.min(
-      origin.dx - padding.left - 36.0,
-      screen.width - padding.right - origin.dx - 36.0,
+      origin.dx - padding.left - 34.0,
+      screen.width - padding.right - origin.dx - 34.0,
     );
-    final radius = math.min(114.0, maxHorizontal / 0.95).clamp(84.0, 124.0);
-    final minX = padding.left + 34.0;
-    final maxX = math.max(minX, screen.width - padding.right - 34.0);
-    final minY = padding.top + 34.0;
-    final maxY = math.max(minY, screen.height - padding.bottom - 34.0);
+    final radius = math.min(118.0, maxHorizontal / 0.94).clamp(90.0, 126.0);
+    final minX = padding.left + 32.0;
+    final maxX = math.max(minX, screen.width - padding.right - 32.0);
+    final minY = padding.top + 32.0;
+    final maxY = math.max(minY, screen.height - padding.bottom - 32.0);
     final targetX = (origin.dx + radius * math.cos(angle)).clamp(minX, maxX);
     final targetY = (origin.dy + radius * math.sin(angle)).clamp(minY, maxY);
     return Offset(targetX - origin.dx, targetY - origin.dy);
@@ -873,14 +872,14 @@ class _PillNavigationState extends State<PillNavigation>
     if (disableAnimations || count <= 1) {
       return (linear: t, spring: t);
     }
-    final stagger = math.min(0.075, 0.36 / (count - 1));
+    final stagger = math.min(0.055, 0.24 / (count - 1));
     final span = 1.0 - stagger * (count - 1);
     final start = index * stagger;
     final u = ((t - start) / span).clamp(0.0, 1.0);
     final reversing =
         _radialClosing || _radialController.status == AnimationStatus.reverse;
     final spring = reversing
-        ? 1.0 - Motion.settle.transform(1.0 - u)
+        ? 1.0 - Curves.easeInCubic.transform(1.0 - u)
         : Motion.settle.transform(u);
     return (linear: u, spring: spring);
   }
@@ -898,13 +897,14 @@ class _PillNavigationState extends State<PillNavigation>
 
   void _removeRadialEntry() {
     _radialClosing = false;
+    hovered = null;
     _radialEntry?.remove();
     _radialEntry = null;
     if (mounted) setState(() {});
   }
 
   void toggleRadialMenu() {
-    if (_longPressActive || menu != null) return;
+    if (_longPressActive) return;
     if (isRadialOpen) {
       closeRadialMenu(feedback: true);
     } else {
@@ -913,8 +913,7 @@ class _PillNavigationState extends State<PillNavigation>
   }
 
   void openRadialMenu() {
-    if (_longPressActive || menu != null || !mounted) return;
-    closeMenu();
+    if (!mounted) return;
     ActionFeedback.tap();
     final overlay = Overlay.maybeOf(context);
     if (overlay == null) return;
@@ -940,6 +939,7 @@ class _PillNavigationState extends State<PillNavigation>
   void closeRadialMenu({bool immediate = false, bool feedback = false}) {
     if (_radialEntry == null) return;
     if (feedback) ActionFeedback.tap();
+    hovered = null;
     if (immediate || !mounted || MediaQuery.disableAnimationsOf(context)) {
       _radialController.stop();
       _radialController.value = 0.0;
@@ -951,6 +951,26 @@ class _PillNavigationState extends State<PillNavigation>
     _radialController.reverseDuration = Motion.duration(context, 340);
     _radialController.reverse();
     if (mounted) setState(() {});
+  }
+
+  void _updateRadialHover(Offset globalPosition) {
+    int? next;
+    for (var i = 0; i < optionKeys.length; i++) {
+      final box =
+          optionKeys[i].currentContext?.findRenderObject() as RenderBox?;
+      if (box != null &&
+          box.hasSize &&
+          (box.localToGlobal(Offset.zero) & box.size)
+              .inflate(6)
+              .contains(globalPosition)) {
+        next = i;
+        break;
+      }
+    }
+    if (next == hovered) return;
+    hovered = next;
+    if (next != null) ActionFeedback.tap();
+    _radialEntry?.markNeedsBuild();
   }
 
   Widget _buildPlusOrb(BuildContext c, {required bool active}) {
@@ -1017,197 +1037,189 @@ class _PillNavigationState extends State<PillNavigation>
     final disableAnimations = media.disableAnimations;
     final scheme = Theme.of(overlayContext).colorScheme;
     final dark = Theme.of(overlayContext).brightness == Brightness.dark;
-    const itemWidth = 66.0;
-    const itemHeight = 58.0;
+    final origin = _resolvePlusCenter(overlayContext);
+    const orbSize = 48.0;
+    final targets = List<Offset>.generate(
+      actions.length,
+      (i) => _radialOffset(i, actions.length, screen, safePadding, origin),
+      growable: false,
+    );
+    final orbBodies = List<Widget>.generate(
+      actions.length,
+      (i) => RepaintBoundary(
+        child: _RadialActionOrb(
+          key: optionKeys[i],
+          size: orbSize,
+          icon: actionIcons[i],
+          hovered: hovered == i,
+          scheme: scheme,
+          dark: dark,
+        ),
+      ),
+      growable: false,
+    );
     return Material(
       type: MaterialType.transparency,
-      child: AnimatedBuilder(
-        animation: _radialController,
-        builder: (c, _) {
-          final origin = _resolvePlusCenter(overlayContext);
-          return Stack(
-            key: const ValueKey('radial-action-menu'),
-            clipBehavior: Clip.none,
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
+      child: Stack(
+        key: const ValueKey('radial-action-menu'),
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _radialController,
+              builder: (c, _) {
+                final t = _radialController.value.clamp(0.0, 1.0);
+                final scrimAlpha = (dark ? 0.34 : 0.16) * Curves.easeOut.transform(t);
+                return GestureDetector(
                   behavior: HitTestBehavior.translucent,
                   onTap: () => closeRadialMenu(feedback: true),
-                ),
-              ),
-              for (var i = 0; i < actions.length; i++)
-                Builder(
-                  builder: (c) {
-                    final targetOffset = _radialOffset(
-                      i,
-                      actions.length,
-                      screen,
-                      safePadding,
-                      origin,
-                    );
-                    final progress = _radialItemProgress(
-                      i,
-                      actions.length,
-                      disableAnimations,
-                    );
-                    final offset = Offset.lerp(
-                      Offset.zero,
-                      targetOffset,
-                      progress.spring,
-                    )!;
-                    final center = origin + offset;
-                    final scale = progress.spring.clamp(0.0, 1.15);
-                    final opacity = Curves.easeOut
-                        .transform(progress.linear)
-                        .clamp(0.0, 1.0);
-                    return Positioned(
-                      left: center.dx - itemWidth / 2,
-                      top: center.dy - itemHeight / 2,
-                      width: itemWidth,
-                      height: itemHeight,
-                      child: IgnorePointer(
-                        ignoring: _radialClosing || progress.linear < 0.05,
-                        child: Opacity(
-                          opacity: opacity,
-                          child: Transform.scale(
-                            scale: scale,
-                            alignment: Alignment.center,
-                            child: Semantics(
-                              button: true,
-                              label: actionLabels[i],
-                              child: GestureDetector(
-                                key: ValueKey('radial-action-${actions[i]}'),
-                                behavior: HitTestBehavior.opaque,
-                                onTap: () {
-                                  if (_radialClosing) return;
-                                  final selectedAction = actions[i];
-                                  closeRadialMenu();
-                                  _triggerQuickAdd(selectedAction);
-                                },
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: dark ? .34 : .16,
-                                            ),
-                                            blurRadius: 16,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                          BoxShadow(
-                                            color: Colors.black.withValues(
-                                              alpha: dark ? .20 : .08,
-                                            ),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: ClipOval(
-                                        child: GlassContainer(
-                                          useOwnLayer: true,
-                                          shape:
-                                              const LiquidRoundedSuperellipse(
-                                                borderRadius: 20,
-                                              ),
-                                          settings: const LiquidGlassSettings(
-                                            blur: 16,
-                                            thickness: 16,
-                                          ),
-                                          padding: EdgeInsets.zero,
-                                          child: Container(
-                                            width: 40,
-                                            height: 40,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: scheme.surface.withValues(
-                                                alpha: dark ? .68 : .78,
-                                              ),
-                                              border: Border.all(
-                                                color: Colors.white.withValues(
-                                                  alpha: dark ? .20 : .68,
-                                                ),
-                                                width: 0.8,
-                                              ),
-                                            ),
-                                            child: Center(
-                                              child: Icon(
-                                                actionIcons[i],
-                                                size: 18,
-                                                color: scheme.onSurface,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 5,
-                                        vertical: 1.5,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: scheme.surface.withValues(
-                                          alpha: dark ? .82 : .90,
-                                        ),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: Colors.white.withValues(
-                                            alpha: dark ? .12 : .55,
-                                          ),
-                                          width: 0.6,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        actionLabels[i],
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 9.5,
-                                          height: 1.1,
-                                          fontWeight: FontWeight.w600,
-                                          color: scheme.onSurface,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
+                  onPanStart: (d) => _updateRadialHover(d.globalPosition),
+                  onPanUpdate: (d) => _updateRadialHover(d.globalPosition),
+                  onPanEnd: (d) {
+                    _updateRadialHover(d.globalPosition);
+                    final selection = hovered;
+                    closeRadialMenu();
+                    if (selection != null) _triggerQuickAdd(actions[selection]);
                   },
+                  child: ColoredBox(
+                    color: Colors.black.withValues(alpha: scrimAlpha),
+                  ),
+                );
+              },
+            ),
+          ),
+          for (var i = 0; i < actions.length; i++)
+            Positioned(
+              left: origin.dx + targets[i].dx - orbSize / 2,
+              top: origin.dy + targets[i].dy - orbSize / 2,
+              width: orbSize,
+              height: orbSize,
+              child: AnimatedBuilder(
+                animation: _radialController,
+                child: Semantics(
+                  button: true,
+                  selected: hovered == i,
+                  label: actionLabels[i],
+                  child: GestureDetector(
+                    key: ValueKey('radial-action-${actions[i]}'),
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (_) {
+                      if (_radialClosing) return;
+                      if (hovered != i) {
+                        hovered = i;
+                        ActionFeedback.tap();
+                        _radialEntry?.markNeedsBuild();
+                      }
+                    },
+                    onTapCancel: () {
+                      if (hovered == i) {
+                        hovered = null;
+                        _radialEntry?.markNeedsBuild();
+                      }
+                    },
+                    onTap: () {
+                      if (_radialClosing) return;
+                      final selectedAction = actions[i];
+                      closeRadialMenu();
+                      _triggerQuickAdd(selectedAction);
+                    },
+                    child: orbBodies[i],
+                  ),
                 ),
-              Positioned(
-                left: origin.dx - 19,
-                top: origin.dy - 19,
-                width: 38,
-                height: 38,
-                child: GestureDetector(
-                  key: const ValueKey('radial-close-button'),
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () => closeRadialMenu(feedback: true),
-                  onLongPressStart: _handleLongPressStart,
-                  onLongPressMoveUpdate: _handleLongPressMove,
-                  onLongPressCancel: _handleLongPressCancel,
-                  onLongPressEnd: _handleLongPressEnd,
-                  child: Center(
-                    child: _buildPlusOrb(overlayContext, active: true),
+                builder: (c, child) {
+                  final progress = _radialItemProgress(
+                    i,
+                    actions.length,
+                    disableAnimations,
+                  );
+                  final dx = targets[i].dx * (progress.spring - 1.0);
+                  final dy = targets[i].dy * (progress.spring - 1.0);
+                  final scale = progress.spring.clamp(0.0, 1.15);
+                  final opacity = Curves.easeOut
+                      .transform(progress.linear)
+                      .clamp(0.0, 1.0);
+                  return IgnorePointer(
+                    ignoring: _radialClosing || progress.linear < 0.08,
+                    child: Transform.translate(
+                      offset: Offset(dx, dy),
+                      child: Transform.scale(
+                        scale: scale,
+                        alignment: Alignment.center,
+                        child: Opacity(opacity: opacity, child: child),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          if (hovered != null)
+            Positioned(
+              left: (origin.dx - 96).clamp(
+                safePadding.left + 12.0,
+                math.max(safePadding.left + 12.0, screen.width - safePadding.right - 204.0),
+              ),
+              top: math.max(safePadding.top + 12.0, origin.dy - 62.0),
+              width: 192,
+              child: IgnorePointer(
+                child: Center(
+                  child: Container(
+                    key: const ValueKey('radial-active-label'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 7,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surface.withValues(alpha: dark ? .94 : .97),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: scheme.outlineVariant.withValues(
+                          alpha: dark ? .45 : .65,
+                        ),
+                        width: 0.9,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: dark ? .40 : .14),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      actionLabels[hovered!],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        height: 1.15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -0.1,
+                        color: scheme.onSurface,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ],
-          );
-        },
+            ),
+          Positioned(
+            left: origin.dx - 19,
+            top: origin.dy - 19,
+            width: 38,
+            height: 38,
+            child: GestureDetector(
+              key: const ValueKey('radial-close-button'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => closeRadialMenu(feedback: true),
+              onLongPressStart: _handleLongPressStart,
+              onLongPressMoveUpdate: _handleLongPressMove,
+              onLongPressCancel: _handleLongPressCancel,
+              onLongPressEnd: _handleLongPressEnd,
+              child: Center(
+                child: _buildPlusOrb(overlayContext, active: true),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1215,130 +1227,47 @@ class _PillNavigationState extends State<PillNavigation>
   void _handleLongPressStart(LongPressStartDetails d) {
     _setPlusPressed(false);
     _longPressActive = true;
-    closeRadialMenu(immediate: true);
-    openMenu();
+    hovered = null;
+    if (!isRadialOpen) {
+      openRadialMenu();
+    }
+    _updateRadialHover(d.globalPosition);
   }
 
   void _handleLongPressMove(LongPressMoveUpdateDetails d) {
-    if (menu != null) updateMenu(d.globalPosition);
+    if (_radialEntry != null) {
+      _updateRadialHover(d.globalPosition);
+    }
   }
 
   void _handleLongPressCancel() {
     _setPlusPressed(false);
     _longPressActive = false;
-    closeMenu();
+    closeRadialMenu();
   }
 
   void _handleLongPressEnd(LongPressEndDetails d) {
     _setPlusPressed(false);
-    if (menu == null) {
+    if (_radialEntry == null) {
       _longPressActive = false;
       return;
     }
-    updateMenu(d.globalPosition);
+    _updateRadialHover(d.globalPosition);
     final selection = hovered;
-    closeMenu();
     _longPressActive = false;
+    closeRadialMenu();
     if (selection != null) _triggerQuickAdd(actions[selection]);
   }
 
   void _handlePointerCancel(PointerCancelEvent _) {
     _setPlusPressed(false);
-    if (_longPressActive || menu != null) {
+    if (_longPressActive) {
       _handleLongPressCancel();
     }
   }
 
-  void closeMenu() {
-    menu?.remove();
-    menu = null;
-    hovered = null;
-  }
-
-  void openMenu() {
-    closeMenu();
-    ActionFeedback.tap();
-    final box = track.currentContext!.findRenderObject() as RenderBox;
-    final origin = box.localToGlobal(Offset.zero);
-    final screen = MediaQuery.sizeOf(context);
-    final width = math.min(280.0, screen.width - 32);
-    menu = OverlayEntry(
-      builder: (c) => Positioned(
-        left: (origin.dx + box.size.width / 2 - width / 2).clamp(
-          16.0,
-          screen.width - width - 16,
-        ),
-        bottom: screen.height - origin.dy + 12,
-        width: width,
-        child: Material(
-          key: const ValueKey('quick-add-menu'),
-          color: Theme.of(c).colorScheme.surfaceContainerHigh,
-          elevation: FloatingDepth.elevation,
-          shadowColor: FloatingDepth.color(c),
-          borderRadius: BorderRadius.circular(24),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(8),
-                  child: Text(
-                    'Drag to add · release to select',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ),
-                for (var i = 0; i < actions.length; i++)
-                  AnimatedContainer(
-                    key: optionKeys[i],
-                    duration: Motion.duration(c, 150),
-                    decoration: BoxDecoration(
-                      color: hovered == i
-                          ? Theme.of(c).colorScheme.primaryContainer
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: SizedBox(
-                      height: 48,
-                      child: Row(
-                        children: [
-                          const SizedBox(width: 14),
-                          Icon(actionIcons[i], size: 20),
-                          const SizedBox(width: 14),
-                          Text(actionLabels[i]),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context).insert(menu!);
-  }
-
-  void updateMenu(Offset position) {
-    int? next;
-    for (var i = 0; i < optionKeys.length; i++) {
-      final box =
-          optionKeys[i].currentContext?.findRenderObject() as RenderBox?;
-      if (box != null &&
-          (box.localToGlobal(Offset.zero) & box.size).contains(position)) {
-        next = i;
-      }
-    }
-    if (next == hovered) return;
-    hovered = next;
-    if (next != null) ActionFeedback.tap();
-    menu?.markNeedsBuild();
-  }
-
   @override
   void dispose() {
-    closeMenu();
     closeRadialMenu(immediate: true);
     _removeTooltip();
     _radialControllerInstance?.dispose();
@@ -1407,147 +1336,184 @@ class _PillNavigationState extends State<PillNavigation>
       },
       child: Listener(
         onPointerCancel: _handlePointerCancel,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onLongPressStart: (d) {
-            final box = track.currentContext!.findRenderObject() as RenderBox;
-            final local = box.globalToLocal(d.globalPosition);
-            if ((local.dx - box.size.width / 2).abs() <= 34) {
-              _handleLongPressStart(d);
-            }
-          },
-          onLongPressMoveUpdate: _handleLongPressMove,
-          onLongPressCancel: _handleLongPressCancel,
-          onLongPressEnd: _handleLongPressEnd,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? .34 : .14),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? .34 : .14),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: dark ? .20 : .08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: ValueListenableBuilder<bool>(
+              valueListenable:
+                  widget.swiping ?? const AlwaysStoppedAnimation(false),
+              builder: (context, swiping, child) => GlassContainer(
+                useOwnLayer: true,
+                shape: const LiquidRoundedSuperellipse(borderRadius: 28),
+                settings: LiquidGlassSettings(
+                  blur: swiping ? 0 : 18,
+                  thickness: swiping ? 8 : 18,
                 ),
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? .20 : .08),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
+                padding: EdgeInsets.zero,
+                child: child!,
+              ),
+              child: Container(
+                height: 46,
+                width: 252,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  color: scheme.surface.withValues(alpha: dark ? .52 : .62),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: dark ? .12 : .55),
+                    width: 0.8,
+                  ),
                 ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: ValueListenableBuilder<bool>(
-                valueListenable:
-                    widget.swiping ?? const AlwaysStoppedAnimation(false),
-                builder: (context, swiping, child) => GlassContainer(
-                  useOwnLayer: true,
-                  shape: const LiquidRoundedSuperellipse(borderRadius: 28),
-                  settings: LiquidGlassSettings(
-                    blur: swiping ? 0 : 18,
-                    thickness: swiping ? 8 : 18,
-                  ),
-                  padding: EdgeInsets.zero,
-                  child: child!,
-                ),
-                child: Container(
-                  height: 46,
-                  width: 252,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(28),
-                    color: scheme.surface.withValues(alpha: dark ? .52 : .62),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: dark ? .12 : .55),
-                      width: 0.8,
-                    ),
-                  ),
-                  child: Stack(
-                    key: track,
-                    clipBehavior: Clip.none,
-                    alignment: Alignment.center,
-                    children: [
-                      AnimatedBuilder(
-                        animation: Listenable.merge([
-                          motion,
-                          if (widget.tabController != null)
-                            widget.tabController!,
-                        ]),
-                        builder: (c, _) {
-                          final rect = current;
-                          if (rect == null) return const SizedBox.shrink();
-                          const underlineWidth = 14.0;
-                          const underlineHeight = 3.0;
-                          return Positioned(
-                            left: rect.left,
-                            width: rect.width,
-                            top: rect.bottom - 5,
-                            height: underlineHeight,
-                            child: IgnorePointer(
-                              child: Center(
-                                child: Container(
-                                  width: underlineWidth,
-                                  height: underlineHeight,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF34C759),
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      Row(
-                        children: [
-                          _buildTabItem(c, 0),
-                          _buildTabItem(c, 1),
-                          Semantics(
-                            button: true,
-                            toggled: isRadialOpen,
-                            label: isRadialOpen
-                                ? 'Close quick actions'
-                                : 'Quick actions',
-                            child: GestureDetector(
-                              key: const ValueKey('nav-plus-button'),
-                              behavior: HitTestBehavior.opaque,
-                              onTapDown: (_) => _setPlusPressed(true),
-                              onTapCancel: () => _setPlusPressed(false),
-                              onTapUp: (_) => _setPlusPressed(false),
-                              onTap: toggleRadialMenu,
-                              onLongPressStart: _handleLongPressStart,
-                              onLongPressMoveUpdate: _handleLongPressMove,
-                              onLongPressCancel: _handleLongPressCancel,
-                              onLongPressEnd: _handleLongPressEnd,
-                              child: SizedBox(
-                                key: _plusKey,
-                                width: 38,
-                                height: 38,
-                                child: AnimatedScale(
-                                  scale: _plusPress,
-                                  duration: Motion.duration(c, 120),
-                                  curve: Curves.easeOutCubic,
-                                  child: Center(
-                                    child: _buildPlusOrb(
-                                      c,
-                                      active: isRadialOpen,
-                                    ),
-                                  ),
+                child: Stack(
+                  key: track,
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        motion,
+                        if (widget.tabController != null) widget.tabController!,
+                      ]),
+                      builder: (c, _) {
+                        final rect = current;
+                        if (rect == null) return const SizedBox.shrink();
+                        const underlineWidth = 14.0;
+                        const underlineHeight = 3.0;
+                        return Positioned(
+                          left: rect.left,
+                          width: rect.width,
+                          top: rect.bottom - 5,
+                          height: underlineHeight,
+                          child: IgnorePointer(
+                            child: Center(
+                              child: Container(
+                                width: underlineWidth,
+                                height: underlineHeight,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF34C759),
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ),
                           ),
-                          _buildTabItem(c, 2),
-                          _buildTabItem(c, 3),
-                        ],
-                      ),
-                    ],
-                  ),
+                        );
+                      },
+                    ),
+                    Row(
+                      children: [
+                        _buildTabItem(c, 0),
+                        _buildTabItem(c, 1),
+                        Semantics(
+                          button: true,
+                          toggled: isRadialOpen,
+                          label: isRadialOpen
+                              ? 'Close quick actions'
+                              : 'Quick actions',
+                          child: GestureDetector(
+                            key: const ValueKey('nav-plus-button'),
+                            behavior: HitTestBehavior.opaque,
+                            onTapDown: (_) => _setPlusPressed(true),
+                            onTapCancel: () => _setPlusPressed(false),
+                            onTapUp: (_) => _setPlusPressed(false),
+                            onTap: toggleRadialMenu,
+                            onLongPressStart: _handleLongPressStart,
+                            onLongPressMoveUpdate: _handleLongPressMove,
+                            onLongPressCancel: _handleLongPressCancel,
+                            onLongPressEnd: _handleLongPressEnd,
+                            child: SizedBox(
+                              key: _plusKey,
+                              width: 38,
+                              height: 38,
+                              child: AnimatedScale(
+                                scale: _plusPress,
+                                duration: Motion.duration(c, 120),
+                                curve: Curves.easeOutCubic,
+                                child: Center(
+                                  child: _buildPlusOrb(c, active: isRadialOpen),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        _buildTabItem(c, 2),
+                        _buildTabItem(c, 3),
+                      ],
+                    ),
+                  ],
                 ),
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RadialActionOrb extends StatelessWidget {
+  final double size;
+  final IconData icon;
+  final bool hovered;
+  final ColorScheme scheme;
+  final bool dark;
+
+  const _RadialActionOrb({
+    super.key,
+    required this.size,
+    required this.icon,
+    required this.hovered,
+    required this.scheme,
+    required this.dark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.scale(
+      scale: hovered ? 1.12 : 1.0,
+      alignment: Alignment.center,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: hovered
+              ? scheme.primaryContainer
+              : scheme.surface.withValues(alpha: dark ? .92 : .96),
+          border: Border.all(
+            color: hovered
+                ? scheme.primary.withValues(alpha: .85)
+                : scheme.outlineVariant.withValues(alpha: dark ? .45 : .65),
+            width: hovered ? 1.5 : 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? .36 : .14),
+              blurRadius: hovered ? 14 : 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Center(
+            child: Icon(
+              icon,
+              size: 22,
+              color: hovered ? scheme.onPrimaryContainer : scheme.onSurface,
             ),
           ),
         ),
