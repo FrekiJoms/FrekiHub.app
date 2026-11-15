@@ -1095,7 +1095,7 @@ class _WalletRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext c) {
-    _WalletAppIcons.prefetch(accounts.map((a) => a.name));
+    _WalletAppIcons.prefetch(accounts);
     return Surface(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     child: ReorderableListView.builder(
@@ -1477,29 +1477,38 @@ class _WalletAppIcons {
   static final Set<String> _pending = {};
   static final ValueNotifier<int> version = ValueNotifier<int>(0);
 
-  static Uint8List? iconFor(String name) {
+  static String _requestToken(String name, String? packageName) {
+    final pkg = packageName?.trim() ?? '';
+    return pkg.isEmpty ? name : '$name|$pkg';
+  }
+
+  static Uint8List? iconFor(String name, {String? packageName}) {
     final key = name.trim();
     if (key.isEmpty) return null;
     if (!_cache.containsKey(key) && !_pending.contains(key)) {
-      _load([key]);
+      _load([(name: key, token: _requestToken(key, packageName))]);
     }
     return _cache[key];
   }
 
-  static void prefetch(Iterable<String> names) {
-    final missing = names
-        .map((n) => n.trim())
-        .where((n) => n.isNotEmpty && !_cache.containsKey(n) && !_pending.contains(n))
-        .toList();
+  static void prefetch(Iterable<WalletAccount> accounts) {
+    final missing = <({String name, String token})>[];
+    for (final a in accounts) {
+      final key = a.name.trim();
+      if (key.isNotEmpty && !_cache.containsKey(key) && !_pending.contains(key)) {
+        missing.add((name: key, token: _requestToken(key, a.packageName)));
+      }
+    }
     if (missing.isNotEmpty) _load(missing);
   }
 
-  static Future<void> _load(List<String> names) async {
+  static Future<void> _load(List<({String name, String token})> items) async {
+    final names = items.map((e) => e.name).toList();
     _pending.addAll(names);
     try {
       final fetched = await NativeSession.channel.invokeMapMethod<String, Uint8List>(
         'walletAppIcons',
-        names,
+        items.map((e) => e.token).toList(),
       );
       var updated = false;
       for (final name in names) {
@@ -1544,7 +1553,10 @@ class _WalletMark extends StatelessWidget {
     builder: (context, _, _) {
       final appIcon = account.hasCustomArtwork
           ? null
-          : _WalletAppIcons.iconFor(account.name);
+          : _WalletAppIcons.iconFor(
+              account.name,
+              packageName: account.packageName,
+            );
       if (appIcon != null) {
         return SizedBox(
           width: size,

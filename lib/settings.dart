@@ -525,9 +525,25 @@ class _ManageListState extends ConsumerState<_ManageList> {
               jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
             )..removeWhere((w) => removed.contains(w));
             await db.pref('walletOrder', jsonEncode(order));
+            final config = AutomationSync.config(data);
+            final apps = Set<String>.from(config['apps'] as List? ?? []);
+            var appsChanged = false;
+            for (final item in removed) {
+              final pkg = data.prefs['wallet:$item:package'];
+              if (pkg != null && apps.remove(pkg)) {
+                appsChanged = true;
+              }
+            }
+            if (appsChanged) {
+              config['apps'] = apps.toList();
+              await db.pref('automation', jsonEncode(config));
+            }
           }
         }
       });
+      if (widget.setting == 'methods') {
+        await AutomationSync.configure(await db.readAll());
+      }
       if (!mounted) return;
       setState(() {
         items = next;
@@ -540,6 +556,123 @@ class _ManageListState extends ConsumerState<_ManageList> {
       );
     });
     if (mounted) setState(() => saving = false);
+  }
+
+  Future<void> _pickInstalledApp() async {
+    if (saving) return;
+    setState(() => saving = true);
+    try {
+      final installed =
+          (await NativeSession.channel.invokeListMethod('notificationApps') ??
+                  [])
+              .map((a) => Map<String, dynamic>.from(a as Map))
+              .toList();
+      if (!mounted) return;
+      setState(() => saving = false);
+      var query = '';
+      final picked = await panel<Map<String, dynamic>>(
+        context,
+        StatefulBuilder(
+          builder: (c, setLocal) {
+            final filtered = query.trim().isEmpty
+                ? installed
+                : installed.where((app) {
+                    final n = (app['name'] as String? ?? '').toLowerCase();
+                    final p = (app['package'] as String? ?? '').toLowerCase();
+                    final q = query.trim().toLowerCase();
+                    return n.contains(q) || p.contains(q);
+                  }).toList();
+            return PanelContent(
+              header: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const PanelHeading(title: 'Pick payment app'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    onChanged: (v) => setLocal(() => query = v),
+                    decoration: const InputDecoration(
+                      labelText: 'Search installed apps',
+                      prefixIcon: Icon(LucideIcons.search, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              footer: AppButton(
+                label: 'Cancel',
+                secondary: true,
+                onPressed: () => Navigator.pop(c),
+              ),
+              scrollable: true,
+              child: ListView.builder(
+                itemCount: filtered.length,
+                itemBuilder: (c, i) {
+                  final app = filtered[i];
+                  final appName = (app['name'] as String? ?? '').trim();
+                  final pkg = (app['package'] as String? ?? '').trim();
+                  final added = items.any(
+                    (s) => s.toLowerCase() == appName.toLowerCase(),
+                  );
+                  return ListTile(
+                    title: Text(appName),
+                    subtitle: Text(
+                      pkg,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: added
+                        ? const Icon(LucideIcons.check, size: 18)
+                        : null,
+                    onTap: () => Navigator.pop(c, app),
+                  );
+                },
+              ),
+            );
+          },
+        ),
+      );
+      if (picked == null || !mounted) return;
+      final appName = (picked['name'] as String? ?? '').trim();
+      final pkg = (picked['package'] as String? ?? '').trim();
+      if (appName.isEmpty || pkg.isEmpty) return;
+
+      setState(() => saving = true);
+      final db = ref.read(databaseProvider);
+      final nextMethods = items.any(
+        (s) => s.toLowerCase() == appName.toLowerCase(),
+      )
+          ? items
+          : [...items, appName];
+      await db.transaction(() async {
+        final data = await db.readAll();
+        final hidden = {...data.hiddenWallets}
+          ..remove(appName.toLowerCase());
+        await db.pref('methods', jsonEncode(nextMethods));
+        await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
+        await db.pref('wallet:$appName:package', pkg);
+        await db.pref('wallet:$appName:style', WalletSkin.byName(appName).id);
+        final config = AutomationSync.config(data);
+        final apps = Set<String>.from(config['apps'] as List? ?? []);
+        apps.add(pkg);
+        config['apps'] = apps.toList();
+        await db.pref('automation', jsonEncode(config));
+        await db.pref('purchaseScanning', true);
+      });
+      await AutomationSync.configure(await db.readAll());
+      if (mounted) {
+        await PermissionHints.request<bool>(context, 'notificationPermission');
+      }
+      if (!mounted) return;
+      setState(() {
+        items = nextMethods;
+        saving = false;
+      });
+      dataToast(context, 'Payment method', DataAction.saved);
+    } catch (e) {
+      if (mounted) {
+        setState(() => saving = false);
+        toast(context, 'Could not load installed apps.', error: true);
+      }
+    }
   }
 
   @override
@@ -580,6 +713,17 @@ class _ManageListState extends ConsumerState<_ManageList> {
             ),
           ),
         ),
+        if (widget.setting == 'methods') ...[
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: withFeedback(saving ? null : _pickInstalledApp),
+              icon: const Icon(LucideIcons.smartphone, size: 18),
+              label: const Text('Pick installed app'),
+            ),
+          ),
+        ],
       ],
     ),
     footer: AppButton(label: 'Done', onPressed: () => Navigator.pop(c)),

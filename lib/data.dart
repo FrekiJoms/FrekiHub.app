@@ -729,8 +729,7 @@ class AppData {
     'Savings',
     'Other',
   ]);
-  List<String> get methods =>
-      list('methods', ['Cash', 'GCash', 'Maya', 'Bank', 'Card']);
+  List<String> get methods => list('methods', ['Cash']);
 
   /// Wallets explicitly removed by the user so historical entries do not
   /// resurrect them on Finance unless re-added.

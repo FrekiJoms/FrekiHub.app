@@ -280,6 +280,7 @@ class WalletAccount {
   final double scale, dx, dy;
   final bool included;
   final int movements;
+  final String? packageName;
 
   /// Planned money that still leaves this wallet in the selected month.
   final int committed;
@@ -293,6 +294,7 @@ class WalletAccount {
     required this.dy,
     required this.included,
     required this.movements,
+    this.packageName,
     this.committed = 0,
   });
 
@@ -318,10 +320,14 @@ List<WalletAccount> walletAccounts(
   final names =
       ordered ?? data.orderedWalletNames(walletStoredOrder(data.prefs));
   final balances = data.walletBalances;
+  final canonicalByLower = <String, String>{
+    for (final name in names) name.toLowerCase(): name,
+  };
   final movements = <String, int>{};
   for (final entry in data.entries) {
     if (entry.currency != data.currency) continue;
-    final name = walletMethodName(entry.method);
+    final raw = walletMethodName(entry.method);
+    final name = canonicalByLower[raw.toLowerCase()] ?? raw;
     movements[name] = (movements[name] ?? 0) + 1;
   }
   return [
@@ -338,6 +344,7 @@ List<WalletAccount> walletAccounts(
         dy: double.tryParse(data.prefs['wallet:$name:dy'] ?? '') ?? 0,
         included: data.prefs['wallet:$name:include'] != 'false',
         movements: movements[name] ?? 0,
+        packageName: data.prefs['wallet:$name:package'],
         committed: committed[name] ?? 0,
       ),
   ];

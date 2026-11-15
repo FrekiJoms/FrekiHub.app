@@ -362,12 +362,16 @@ private var smsPermissionResult: MethodChannel.Result? = null
         }
         val result = mutableMapOf<String, ByteArray>()
         for (rawName in names) {
-            val key = rawName.trim()
+            val parts = rawName.split("|", limit = 2)
+            val key = parts[0].trim()
             if (key.isEmpty()) continue
+            val pkgHint = parts.getOrNull(1)?.trim()?.lowercase()
             val lower = key.lowercase()
-            if (lower == "cash" || lower == "bank" || lower == "card" || lower == "other") continue
+            if (pkgHint.isNullOrEmpty() && (lower == "cash" || lower == "bank" || lower == "card" || lower == "other")) continue
             val aliases = walletAliases(lower)
-            val match = launcherApps.firstOrNull { (label, _, _) ->
+            val match = (if (!pkgHint.isNullOrEmpty()) {
+                launcherApps.firstOrNull { (_, pkg, _) -> pkg == pkgHint }
+            } else null) ?: launcherApps.firstOrNull { (label, _, _) ->
                 aliases.any { alias -> label.equals(alias, ignoreCase = true) }
             } ?: launcherApps.firstOrNull { (label, pkg, _) ->
                 aliases.any { alias ->
