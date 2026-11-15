@@ -124,7 +124,11 @@ private var smsPermissionResult: MethodChannel.Result? = null
                     else if (smsPermissionResult != null) result.error("busy", "A permission request is already open", null)
                     else { smsPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.READ_SMS), 77) }
                 }
-                "notificationPermission" -> { startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); result.success(null) }
+                "notificationPermission" -> {
+                    val allowed = getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java))
+                    if (!allowed) startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    result.success(allowed)
+                }
                 "mapCurrentLocation" -> MapLocation.request(this) { location, error ->
                     if (location == null) result.error("location", error, null)
                     else result.success(org.json.JSONObject().put("lat", location.latitude).put("lng", location.longitude).put("accuracy", location.accuracy).put("locationTime", location.time).toString())

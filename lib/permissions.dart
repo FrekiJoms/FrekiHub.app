@@ -124,6 +124,7 @@ abstract final class PermissionHints {
         ? NativeSession.channel.invokeMethod<T>('permissionSettings', method)
         : NativeSession.channel.invokeMethod<T>(method),
     manage: manage,
+    skipActionWhenAllowed: !manage,
     hint: hint,
   );
 
@@ -132,6 +133,7 @@ abstract final class PermissionHints {
     String method,
     Future<T?> Function() action, {
     bool manage = false,
+    bool skipActionWhenAllowed = false,
     PermissionHintSpec? hint,
   }) async {
     final spec = specs[method];
@@ -151,6 +153,8 @@ abstract final class PermissionHints {
           PermissionHint(spec: hint ?? spec, allowed: allowed),
         );
         if (accepted != true || !context.mounted) return null;
+      } else if (skipActionWhenAllowed) {
+        return true is T ? true as T : null;
       }
       return await action();
     } finally {
