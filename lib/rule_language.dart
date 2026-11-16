@@ -40,6 +40,7 @@ abstract final class RuleCatalog {
             'location.lng',
             'location.accuracy',
             'location.sample_age_seconds',
+            'location.dwell_minutes',
             'budget.goal',
             'map.center_lat',
             'map.center_lng',
@@ -142,6 +143,8 @@ abstract final class RuleCatalog {
     'location.lng': 'Last sampled longitude',
     'location.accuracy': 'Sample accuracy in metres',
     'location.sample_age_seconds': 'Age of the last location sample',
+    'location.dwell_minutes':
+        'Minutes continuously stayed in the current area (resets on move)',
     'budget.goal': 'Savings goal in display currency',
     'app.page': 'Current app page',
     'app.foreground': 'App is visible',
@@ -260,6 +263,8 @@ abstract final class RuleCatalog {
       'activity_logs.last.title': data.prefs['lastActivityTitle'] ?? '',
       'location.enabled': data.prefs['locationEnabled'] == 'true',
       'location.name': data.prefs['locationName'] ?? '',
+      'location.dwell_minutes':
+          int.tryParse(data.prefs['locationDwellMinutes'] ?? '') ?? 0,
       'notifications.purchases_enabled':
           data.prefs['purchaseScanning'] == 'true',
       'notifications.sms_enabled': data.prefs['smsScanning'] == 'true',

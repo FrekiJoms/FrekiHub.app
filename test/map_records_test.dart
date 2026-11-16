@@ -220,5 +220,21 @@ void main() {
     expect(routes, hasLength(2));
     expect(routes[0].records.map((r) => r.id).toList(), ['1', '2']);
     expect(routes[1].records.map((r) => r.id).toList(), ['3', '4']);
+
+    final stay = MapRecord(
+      {
+        'id': 'stay-1',
+        'time': base.millisecondsSinceEpoch,
+        'action': 'location_stay',
+        'title': 'Stayed 30+ min',
+        'location': 'Cafe',
+      },
+      const {'dwellMinutes': 30},
+      const {},
+      14.55,
+      121.02,
+      base,
+    );
+    expect(stay.category, 'Locations');
   });
 }

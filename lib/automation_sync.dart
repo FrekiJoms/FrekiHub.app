@@ -117,6 +117,14 @@ abstract final class AutomationSync {
           await db.pref('locationName', event['location']);
           await db.pref('locationDetails', jsonEncode(event));
           await db.pref('locationSampleTime', fix.sampled);
+          if (action == 'location_stay' && event['dwellMinutes'] is num) {
+            await db.pref(
+              'locationDwellMinutes',
+              (event['dwellMinutes'] as num).toInt(),
+            );
+          } else if (action == 'location') {
+            await db.pref('locationDwellMinutes', 0);
+          }
         }
         if (action == 'auto_clock_in') {
           final sessionId = event['sessionId'] as String;
@@ -326,23 +334,59 @@ abstract final class AutomationSync {
   }
 
   static final List<({String label, RegExp pattern})> _providerPatterns = [
-    (label: 'Maya', pattern: RegExp(r'\b(?:maya|paymaya)\b', caseSensitive: false)),
+    (
+      label: 'Maya',
+      pattern: RegExp(r'\b(?:maya|paymaya)\b', caseSensitive: false),
+    ),
     (label: 'GCash', pattern: RegExp(r'\bgcash\b', caseSensitive: false)),
-    (label: 'MariBank', pattern: RegExp(r'\b(?:maribank|mari\s+bank|seabank|sea\s+bank)\b', caseSensitive: false)),
-    (label: 'GoTyme', pattern: RegExp(r'\b(?:gotyme|go\s+tyme)\b', caseSensitive: false)),
-    (label: 'HelloMoney', pattern: RegExp(r'\b(?:hellomoney|hello\s+money)\b', caseSensitive: false)),
+    (
+      label: 'MariBank',
+      pattern: RegExp(
+        r'\b(?:maribank|mari\s+bank|seabank|sea\s+bank)\b',
+        caseSensitive: false,
+      ),
+    ),
+    (
+      label: 'GoTyme',
+      pattern: RegExp(r'\b(?:gotyme|go\s+tyme)\b', caseSensitive: false),
+    ),
+    (
+      label: 'HelloMoney',
+      pattern: RegExp(
+        r'\b(?:hellomoney|hello\s+money)\b',
+        caseSensitive: false,
+      ),
+    ),
     (label: 'BPI', pattern: RegExp(r'\bbpi\b', caseSensitive: false)),
-    (label: 'Metrobank', pattern: RegExp(r'\bmetrobank\b', caseSensitive: false)),
+    (
+      label: 'Metrobank',
+      pattern: RegExp(r'\bmetrobank\b', caseSensitive: false),
+    ),
     (label: 'BDO', pattern: RegExp(r'\bbdo\b', caseSensitive: false)),
-    (label: 'UnionBank', pattern: RegExp(r'\b(?:unionbank|union\s+bank)\b', caseSensitive: false)),
-    (label: 'LandBank', pattern: RegExp(r'\b(?:landbank|land\s+bank)\b', caseSensitive: false)),
+    (
+      label: 'UnionBank',
+      pattern: RegExp(r'\b(?:unionbank|union\s+bank)\b', caseSensitive: false),
+    ),
+    (
+      label: 'LandBank',
+      pattern: RegExp(r'\b(?:landbank|land\s+bank)\b', caseSensitive: false),
+    ),
     (label: 'RCBC', pattern: RegExp(r'\brcbc\b', caseSensitive: false)),
-    (label: 'Security Bank', pattern: RegExp(r'\bsecurity\s+bank\b', caseSensitive: false)),
+    (
+      label: 'Security Bank',
+      pattern: RegExp(r'\bsecurity\s+bank\b', caseSensitive: false),
+    ),
     (label: 'PNB', pattern: RegExp(r'\bpnb\b', caseSensitive: false)),
-    (label: 'Chinabank', pattern: RegExp(r'\bchinabank\b', caseSensitive: false)),
+    (
+      label: 'Chinabank',
+      pattern: RegExp(r'\bchinabank\b', caseSensitive: false),
+    ),
     (label: 'EastWest', pattern: RegExp(r'\beastwest\b', caseSensitive: false)),
     (label: 'PayPal', pattern: RegExp(r'\bpaypal\b', caseSensitive: false)),
     (label: 'GrabPay', pattern: RegExp(r'\bgrabpay\b', caseSensitive: false)),
-    (label: 'ShopeePay', pattern: RegExp(r'\bshopeepay\b', caseSensitive: false)),
+    (
+      label: 'ShopeePay',
+      pattern: RegExp(r'\bshopeepay\b', caseSensitive: false),
+    ),
   ];
 }

@@ -111,10 +111,14 @@ object RuleProgram {
         values.put("device.volume", if (maximum > 0) audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100.0 / maximum else 0)
         values.put("device.ringer_mode", when (audio.ringerMode) { android.media.AudioManager.RINGER_MODE_SILENT -> "silent"; android.media.AudioManager.RINGER_MODE_VIBRATE -> "vibrate"; else -> "normal" })
         val sample = JSONObject(Automation.prefs(c).getString("lastLocation", "{}")!!)
+        val sampleAgeMs = System.currentTimeMillis() - sample.optLong("locationTime")
         if (sample.has("lat") && sample.has("lng")) {
             values.put("location.lat", sample.getDouble("lat")).put("location.lng", sample.getDouble("lng"))
                 .put("location.accuracy", sample.optDouble("accuracy"))
-                .put("location.sample_age_seconds", maxOf(0, (System.currentTimeMillis() - sample.optLong("locationTime")) / 1000))
+                .put("location.sample_age_seconds", maxOf(0, sampleAgeMs / 1000))
+                .put("location.dwell_minutes", if (Automation.config(c).optBoolean("locationEnabled") && sampleAgeMs < 120000L) Automation.dwellMinutes(c) else 0)
+        } else {
+            values.put("location.dwell_minutes", 0)
         }
         for (i in 0 until minOf(targets.length(), 16)) {
             val target = targets.getJSONObject(i)

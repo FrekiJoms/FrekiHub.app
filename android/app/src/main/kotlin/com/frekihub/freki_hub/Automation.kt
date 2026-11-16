@@ -14,6 +14,11 @@ import org.json.*
 import java.util.UUID
 
 object Automation {
+    private const val STAY_DWELL_MS = 30 * 60 * 1000L
+    private const val STAY_RADIUS_MIN_M = 60f
+    private const val STAY_CONTINUITY_MAX_MS = 45 * 60 * 1000L
+    private const val STAY_PROMPT_COOLDOWN_MS = 6 * 60 * 60 * 1000L
+
     fun prefs(c: Context) = c.getSharedPreferences("automation", Context.MODE_PRIVATE)
     @Synchronized fun emit(c: Context, event: JSONObject) {
         RuntimeEvents.emit(c, event)
@@ -56,7 +61,7 @@ object Automation {
             val fences = mutableListOf<Geofence>()
             for (i in 0 until rules.length()) {
                 val r = rules.getJSONObject(i)
-                if (r.optBoolean("enabled", true) && (r.optJSONObject("program")?.optBoolean("needsLocation", true) != false)) fences.add(Geofence.Builder().setRequestId(r.getString("id")).setCircularRegion(r.getDouble("lat"), r.getDouble("lng"), r.getDouble("radius").toFloat()).setExpirationDuration(Geofence.NEVER_EXPIRE).setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT).build())
+                if (r.optBoolean("enabled", true) && (r.optJSONObject("program")?.optBoolean("needsLocation", true) != false)) fences.add(Geofence.Builder().setRequestId(r.getString("id")).setCircularRegion(r.getDouble("lat"), r.getDouble("lng"), r.getDouble("radius").toFloat()).setExpirationDuration(Geofence.NEVER_EXPIRE).setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT or Geofence.GEOFENCE_TRANSITION_DWELL).setLoiteringDelay(STAY_DWELL_MS.toInt()).build())
             }
             if (fences.isNotEmpty()) {
                 try { client.addGeofences(GeofencingRequest.Builder().setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER).addGeofences(fences).build(), intent).addOnSuccessListener { prefs(c).edit().putString("configured", fingerprint).commit() }.addOnFailureListener { emit(c, JSONObject().put("time", System.currentTimeMillis()).put("action", "error").put("title", "Location rules unavailable").put("details", it.message)) } }
@@ -77,11 +82,91 @@ object Automation {
         for (i in 0 until rules.length()) { val r = rules.getJSONObject(i); val result = FloatArray(1); Location.distanceBetween(location.latitude, location.longitude, r.getDouble("lat"), r.getDouble("lng"), result); if (result[0] <= r.getDouble("radius")) { name = r.getString("name"); break } }
         return JSONObject().put("location", name).put("lat", location.latitude).put("lng", location.longitude).put("accuracy", location.accuracy).put("locationTime", location.time)
     }
+    @Synchronized fun updateStay(c: Context, location: Location, minimumDwellMs: Long = 0L): Pair<Boolean, Long> {
+        val now = System.currentTimeMillis()
+        if (!location.hasAccuracy() || location.accuracy > 100f || now - location.time > 120000L) return Pair(false, 0L)
+        val stored = JSONObject(prefs(c).getString("stayState", "{}")!!)
+        val hasAnchor = stored.has("lat") && stored.has("lng") && stored.has("started")
+        val withinContinuity = hasAnchor && now - stored.optLong("lastTime", 0L) <= STAY_CONTINUITY_MAX_MS
+        val sameArea = if (withinContinuity) {
+            val dist = FloatArray(1)
+            Location.distanceBetween(location.latitude, location.longitude, stored.getDouble("lat"), stored.getDouble("lng"), dist)
+            dist[0] <= maxOf(STAY_RADIUS_MIN_M, location.accuracy)
+        } else false
+        if (sameArea) {
+            var started = stored.optLong("started", now)
+            if (minimumDwellMs > 0L && now - started < minimumDwellMs) {
+                started = now - minimumDwellMs
+            }
+            stored.put("started", started).put("lastTime", now)
+            prefs(c).edit().putString("stayState", stored.toString()).commit()
+            return Pair(false, maxOf(0L, now - started))
+        }
+        val started = if (minimumDwellMs > 0L) now - minimumDwellMs else now
+        val freshState = JSONObject()
+            .put("lat", location.latitude)
+            .put("lng", location.longitude)
+            .put("started", started)
+            .put("lastTime", now)
+            .put("logged30", false)
+            .put("prompted", false)
+        prefs(c).edit().putString("stayState", freshState.toString()).commit()
+        return Pair(true, maxOf(0L, now - started))
+    }
+
+    fun dwellMinutes(c: Context): Int {
+        val stored = JSONObject(prefs(c).getString("stayState", "{}")!!)
+        if (!stored.has("started") || !stored.has("lastTime")) return 0
+        val now = System.currentTimeMillis()
+        if (now - stored.optLong("lastTime", 0L) > STAY_CONTINUITY_MAX_MS) return 0
+        return ((now - stored.optLong("started", now)) / 60_000L).toInt().coerceAtLeast(0)
+    }
+
+    private fun insideAnyRule(c: Context, location: Location): Boolean {
+        val rules = config(c).optJSONArray("rules") ?: return false
+        val dist = FloatArray(1)
+        for (i in 0 until rules.length()) {
+            val r = rules.getJSONObject(i)
+            if (!r.optBoolean("enabled", true)) continue
+            Location.distanceBetween(location.latitude, location.longitude, r.getDouble("lat"), r.getDouble("lng"), dist)
+            if (dist[0] <= r.getDouble("radius")) return true
+        }
+        return false
+    }
+
     fun logLocation(c: Context, location: Location) {
-        if (System.currentTimeMillis() - location.time > 120000) return
-        val event = locationJson(c, location).put("time", System.currentTimeMillis()).put("action", "location").put("title", "Visited")
-        prefs(c).edit().putString("lastLocation", event.toString()).commit()
-        if (config(c).optBoolean("logging") && !RuntimeEvents.samplesPaused(c)) emit(c, event)
+        val now = System.currentTimeMillis()
+        if (now - location.time > 120000L) return
+        val (moved, dwellMs) = updateStay(c, location)
+        val base = locationJson(c, location).put("time", now)
+        prefs(c).edit().putString("lastLocation", JSONObject(base.toString()).put("action", "location").put("title", "Visited").toString()).commit()
+        if (!config(c).optBoolean("logging") || RuntimeEvents.samplesPaused(c)) return
+        if (moved) {
+            emit(c, JSONObject(base.toString()).put("action", "location").put("title", "Visited"))
+            return
+        }
+        if (dwellMs >= STAY_DWELL_MS) {
+            val stay = JSONObject(prefs(c).getString("stayState", "{}")!!)
+            if (!stay.optBoolean("logged30")) {
+                stay.put("logged30", true)
+                prefs(c).edit().putString("stayState", stay.toString()).commit()
+                emit(c, JSONObject(base.toString()).put("action", "location_stay").put("title", "Stayed 30+ min").put("dwellMinutes", (dwellMs / 60_000L).toInt()))
+            }
+            val hasRunningSession = c.getSharedPreferences("session", Context.MODE_PRIVATE).getString("id", null) != null
+            val cooldownElapsed = now - prefs(c).getLong("lastStayPromptAt", 0L) >= STAY_PROMPT_COOLDOWN_MS
+            if (!stay.optBoolean("prompted") && !hasRunningSession && !insideAnyRule(c, location) && cooldownElapsed) {
+                val posted = RuleNotifications.post(
+                    c,
+                    "Still in this area?",
+                    "Stayed 30+ min here. Open FrekiHub to start a session or save a place rule.",
+                    "stay:${stay.optLong("started", now)}"
+                )
+                if (posted) {
+                    stay.put("prompted", true)
+                    prefs(c).edit().putString("stayState", stay.toString()).putLong("lastStayPromptAt", now).commit()
+                }
+            }
+        }
     }
     fun recheck(c: Context, location: Location) {
         val rules = config(c).optJSONArray("rules") ?: return
@@ -127,7 +212,7 @@ class ZoneReceiver : BroadcastReceiver() {
         val event = GeofencingEvent.fromIntent(intent) ?: return
         if (event.hasError()) return
         val rules = Automation.config(c).optJSONArray("rules") ?: return
-        for (fence in event.triggeringGeofences.orEmpty()) for (i in 0 until rules.length()) { val rule = rules.getJSONObject(i); if (rule.getString("id") == fence.requestId) { val enter = event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER; if (enter && Automation.prefs(c).getBoolean("inside:" + rule.getString("id"), false)) continue; Automation.transition(c, rule, enter, event.triggeringLocation); if (!enter || event.triggeringLocation?.let { it.accuracy <= rule.getDouble("radius") } == true) Automation.prefs(c).edit().putBoolean("inside:" + rule.getString("id"), enter).commit() } }
+        for (fence in event.triggeringGeofences.orEmpty()) for (i in 0 until rules.length()) { val rule = rules.getJSONObject(i); if (rule.getString("id") == fence.requestId) { val dwell = event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_DWELL; val enter = event.geofenceTransition == Geofence.GEOFENCE_TRANSITION_ENTER || dwell; if (dwell) { event.triggeringLocation?.let { Automation.updateStay(c, it, 30 * 60 * 1000L) } } else if (enter && Automation.prefs(c).getBoolean("inside:" + rule.getString("id"), false)) continue; Automation.transition(c, rule, enter, event.triggeringLocation); if (!enter || event.triggeringLocation?.let { it.accuracy <= rule.getDouble("radius") } == true) Automation.prefs(c).edit().putBoolean("inside:" + rule.getString("id"), enter).commit() } }
     }
 }
 class LocationLogJob : JobService() {

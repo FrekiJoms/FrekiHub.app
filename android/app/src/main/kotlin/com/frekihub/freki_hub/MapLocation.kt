@@ -13,11 +13,18 @@ import android.os.SystemClock
 
 /** Bounded foreground-only lookup; does not log or evaluate automation rules. */
 object MapLocation {
+    private const val MAX_AGE_MS = 120_000L
+    private const val INSTANT_CACHE_AGE_MS = 30_000L
+    private const val INSTANT_CACHE_ACCURACY_M = 25f
+    private const val TARGET_LIVE_ACCURACY_M = 20f
+    private const val CALIBRATION_GRACE_MS = 3_000L
+    private const val TIMEOUT_MS = 20_000L
+
     private fun fresh(location: Location?): Boolean {
         if (location == null || !location.hasAccuracy() || !location.accuracy.isFinite() || location.accuracy < 0) return false
         val age = SystemClock.elapsedRealtimeNanos() - location.elapsedRealtimeNanos
         val wallAge = System.currentTimeMillis() - location.time
-        return age in 0..120_000_000_000L && wallAge in -1000L..120000L &&
+        return age in 0..MAX_AGE_MS * 1_000_000L && wallAge in -1000L..MAX_AGE_MS &&
             location.latitude.isFinite() && location.longitude.isFinite() &&
             location.latitude in -90.0..90.0 && location.longitude in -180.0..180.0
     }
@@ -31,7 +38,7 @@ object MapLocation {
         return manager.getProviders(true)
             .filter { it in setOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.FUSED_PROVIDER) }
             .mapNotNull { provider -> try { manager.getLastKnownLocation(provider) } catch (_: Exception) { null } }
-            .filter { fresh(it) && at - it.time in -1000L..120000L && it.accuracy <= 100 }
+            .filter { fresh(it) && at - it.time in -1000L..MAX_AGE_MS && it.accuracy <= 100 }
             .minByOrNull { it.accuracy }
     }
 
@@ -51,22 +58,29 @@ object MapLocation {
         for (provider in providers) {
             try { consider(manager.getLastKnownLocation(provider)) } catch (_: Exception) { /* Try other providers. */ }
         }
-        if (fresh(best) && best!!.accuracy <= 100) { done(best, null); return }
+        val now = System.currentTimeMillis()
+        if (fresh(best) && best!!.accuracy <= INSTANT_CACHE_ACCURACY_M && now - best!!.time <= INSTANT_CACHE_AGE_MS) {
+            done(best, null); return
+        }
         val handler = Handler(Looper.getMainLooper())
         val signals = mutableListOf<CancellationSignal>()
         var finished = false
+        var graceScheduled = false
         var remaining = providers.size
         lateinit var timeout: Runnable
+        lateinit var grace: Runnable
         fun finish() {
             if (finished) return
             finished = true
             handler.removeCallbacks(timeout)
+            handler.removeCallbacks(grace)
             signals.forEach { it.cancel() }
             val fix = best?.takeIf { fresh(it) }
             done(fix, if (fix == null) "No fresh location fix yet. Try again near a window or outdoors." else null)
         }
         timeout = Runnable { finish() }
-        handler.postDelayed(timeout, 20_000)
+        grace = Runnable { finish() }
+        handler.postDelayed(timeout, TIMEOUT_MS)
         for (provider in providers) {
             if (finished) break
             val signal = CancellationSignal()
@@ -76,7 +90,13 @@ object MapLocation {
                     if (!finished) {
                         consider(location)
                         remaining--
-                        if ((fresh(best) && best!!.accuracy <= 100) || remaining == 0) finish()
+                        val current = best
+                        if ((fresh(current) && current!!.accuracy <= TARGET_LIVE_ACCURACY_M) || remaining == 0) {
+                            finish()
+                        } else if (fresh(current) && !graceScheduled) {
+                            graceScheduled = true
+                            handler.postDelayed(grace, CALIBRATION_GRACE_MS)
+                        }
                     }
                 }
             } catch (_: Exception) {

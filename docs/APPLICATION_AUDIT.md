@@ -1,5 +1,14 @@
 # FrekiHub application audit
 
+## Location auto-calibration & 30-minute stationary dwell handling — 2026-11-16
+
+Source-confirmed implementation across `android/.../MapLocation.kt`, `android/.../Automation.kt`, `android/.../RuleProgram.kt`, `lib/rule_language.dart` and `lib/automation_sync.dart`:
+- Upgraded `MapLocation.request` (`MapLocation.kt`) so cached positions only fast-return when at most `30 s` old and `<= 25 m` accurate (`INSTANT_CACHE_AGE_MS`, `INSTANT_CACHE_ACCURACY_M`), while live lookups return immediately on `<= 20 m` fixes or hold a `3 s` `CALIBRATION_GRACE_MS` window after a coarser fix so slower GPS/Fused providers can refine precision inside the existing `20 s` deadline.
+- Added stationary stay tracking (`updateStay`, `dwellMinutes`) and `GEOFENCE_TRANSITION_DWELL` (`30 min` loitering delay in `Automation.kt` & `ZoneReceiver`), deduplicating repeated `Visited` pings within `60 m` while stationary, emitting a single `Stayed 30+ min` (`location_stay`) log after 30 continuous minutes, and posting an optional non-binding notification outside saved rules without silently auto-starting a session.
+- Exposed numeric `location.dwell_minutes` in `RuleCatalog` (`lib/rule_language.dart`), `RuleProgram.kt`, `lib/automation_sync.dart`, `RULE_SYNTAX.md` and `docs/ANDROID_RUNTIME.md`.
+
+Verification: `dart format --set-exit-if-changed` across 4 modified Dart files (0 changed), `flutter analyze` (0 issues), `git diff --check`, targeted `flutter test` across `test/rule_language_test.dart`, `test/map_records_test.dart`, `test/audit_regression_test.dart`, `test/map_screen_test.dart` and `test/record_location_test.dart` (**42 checks** passed), and native `:app:compileDebugKotlin -x :app:compileFlutterBuildDebug` (`BUILD SUCCESSFUL`). Real Android GPS/Fused provider locking, 30-minute `GEOFENCE_TRANSITION_DWELL` delivery, and stay-prompt notification behavior remain phone verification gaps.
+
 ## Map UI/UX refinement & shared Liquid Glass material — 2026-11-16
 
 Source-confirmed implementation across `lib/components.dart`, `lib/design.dart`, `lib/main.dart`, `lib/map_records.dart`, `lib/map.dart` and `lib/rule_language.dart`:

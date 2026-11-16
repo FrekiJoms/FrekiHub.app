@@ -66,10 +66,21 @@ void main() {
     );
     expect(RuleCatalog.fields, contains('map.cluster_count'));
     expect(RuleCatalog.fields, contains('map.muted'));
+    expect(RuleCatalog.fields, contains('location.dwell_minutes'));
     expect(RuleCatalog.numericField('map.cluster_count'), isTrue);
+    expect(RuleCatalog.numericField('location.dwell_minutes'), isTrue);
     expect(RuleCatalog.booleanFields, contains('map.muted'));
     RuleCompiler.compile(
       'target == map_page { if (data.get("map.cluster_count") > 0 && data.get("map.muted") == true) { log("Clustered"); } }',
+    );
+    RuleCompiler.compile(
+      'target == notifications { if (location.inside() && data.get("location.dwell_minutes") >= 30) { notification.show("Stayed 30m", "Prompting after dwell"); } }',
+    );
+    expect(
+      RuleCatalog.snapshot(
+        AppData([], [], [], {'locationDwellMinutes': '35'}),
+      )['location.dwell_minutes'],
+      35,
     );
   });
 
