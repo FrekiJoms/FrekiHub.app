@@ -185,4 +185,40 @@ void main() {
       );
     },
   );
+
+  test('Zoom-dependent clustering separates nearby points and routes split across days or gaps', () {
+    final base = DateTime(2026, 11, 15, 8, 26);
+    MapRecord rec(String id, double lat, double lng, Duration offset) =>
+        MapRecord(
+          {
+            'id': id,
+            'time': base.add(offset).millisecondsSinceEpoch,
+            'action': 'clock_in',
+            'title': 'Record $id',
+            'location': 'Place $id',
+          },
+          const {'kind': 'OJT'},
+          const {},
+          lat,
+          lng,
+          base.add(offset),
+        );
+    final r1 = rec('1', 14.5500, 121.0200, Duration.zero);
+    final r2 = rec('2', 14.5515, 121.0215, const Duration(minutes: 45));
+    final r3 = rec('3', 14.5600, 121.0300, const Duration(hours: 6));
+    final r4 = rec('4', 14.5620, 121.0320, const Duration(hours: 7));
+    final r5 = rec('5', 14.5700, 121.0400, const Duration(days: 1, hours: 1));
+
+    expect(clusterMapRecords([r1, r2], 12).length, 1);
+    expect(clusterMapRecords([r1, r2], 18).length, 2);
+
+    final center = clusterCenter([r1, r2]);
+    expect(center.lat, closeTo(14.55075, 1e-6));
+    expect(center.lng, closeTo(121.02075, 1e-6));
+
+    final routes = splitMapRoutes([r1, r2, r3, r4, r5]);
+    expect(routes, hasLength(2));
+    expect(routes[0].records.map((r) => r.id).toList(), ['1', '2']);
+    expect(routes[1].records.map((r) => r.id).toList(), ['3', '4']);
+  });
 }

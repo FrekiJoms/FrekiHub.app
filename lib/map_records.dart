@@ -1,11 +1,33 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
-/// Screen-sized clusters retain every original record and its actual position.
-/// Bucketing is linear in record count and changes only at whole zoom levels.
+/// Zoom-dependent clustering radius in screen pixels so markers progressively
+/// separate as the user zooms in without overlapping badges.
+double clusterRadiusPx(int zoom) {
+  final z = zoom.clamp(2, 19);
+  if (z <= 10) return 62;
+  if (z <= 13) return 50;
+  return switch (z) {
+    14 => 42,
+    15 => 34,
+    16 => 26,
+    17 => 18,
+    18 => 10,
+    _ => 4,
+  };
+}
+
+/// Screen-sized spatial clusters retain every original record and its actual
+/// position without overlapping cluster badges. Linear in record count.
 List<List<MapRecord>> clusterMapRecords(Iterable<MapRecord> records, int zoom) {
-  final scale = 256 * math.pow(2, zoom.clamp(2, 19));
-  final groups = <(int, int), List<MapRecord>>{};
+  final z = zoom.clamp(2, 19);
+  final scale = 256.0 * math.pow(2, z);
+  final radius = clusterRadiusPx(z);
+  final radiusSq = radius * radius;
+  final clusters = <List<MapRecord>>[];
+  final anchors = <(double, double)>[];
+  final grid = <(int, int), List<int>>{};
+
   for (final record in records) {
     final latitude = record.lat.clamp(-85.05112878, 85.05112878);
     final sinLatitude = math.sin(latitude * math.pi / 180);
@@ -14,10 +36,86 @@ List<List<MapRecord>> clusterMapRecords(Iterable<MapRecord> records, int zoom) {
         (0.5 -
             math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * math.pi)) *
         scale;
-    final cell = ((x / 54).floor(), (y / 54).floor());
-    groups.putIfAbsent(cell, () => []).add(record);
+    final cellX = (x / radius).floor();
+    final cellY = (y / radius).floor();
+    int? match;
+    var bestDistSq = radiusSq;
+    for (var dx = -1; dx <= 1; dx++) {
+      for (var dy = -1; dy <= 1; dy++) {
+        final candidates = grid[(cellX + dx, cellY + dy)];
+        if (candidates == null) continue;
+        for (final idx in candidates) {
+          final (ax, ay) = anchors[idx];
+          final dSq = (x - ax) * (x - ax) + (y - ay) * (y - ay);
+          if (dSq <= bestDistSq) {
+            bestDistSq = dSq;
+            match = idx;
+          }
+        }
+      }
+    }
+    if (match != null) {
+      clusters[match].add(record);
+    } else {
+      final idx = clusters.length;
+      clusters.add([record]);
+      anchors.add((x, y));
+      grid.putIfAbsent((cellX, cellY), () => []).add(idx);
+    }
   }
-  return groups.values.toList();
+  return clusters;
+}
+
+({double lat, double lng}) clusterCenter(List<MapRecord> items) {
+  if (items.length == 1) return (lat: items.first.lat, lng: items.first.lng);
+  var sumLat = 0.0;
+  var sumLng = 0.0;
+  for (final item in items) {
+    sumLat += item.lat;
+    sumLng += item.lng;
+  }
+  return (lat: sumLat / items.length, lng: sumLng / items.length);
+}
+
+class MapRouteGroup {
+  final String id;
+  final List<MapRecord> records;
+  const MapRouteGroup({required this.id, required this.records});
+  DateTime get start => records.first.time;
+  DateTime get end => records.last.time;
+}
+
+/// Splits chronological records into coherent route segments without connecting
+/// unrelated days or sessions separated by large gaps (> 4 hours).
+List<MapRouteGroup> splitMapRoutes(
+  List<MapRecord> records, {
+  Duration maxGap = const Duration(hours: 4),
+}) {
+  if (records.isEmpty) return const [];
+  final sorted = [...records]..sort((a, b) => a.time.compareTo(b.time));
+  final groups = <MapRouteGroup>[];
+  var current = <MapRecord>[sorted.first];
+  for (var i = 1; i < sorted.length; i++) {
+    final prev = sorted[i - 1];
+    final next = sorted[i];
+    final sameDay =
+        prev.time.year == next.time.year &&
+        prev.time.month == next.time.month &&
+        prev.time.day == next.time.day;
+    final withinGap = next.time.difference(prev.time) <= maxGap;
+    if (sameDay && withinGap) {
+      current.add(next);
+    } else {
+      if (current.length > 1) {
+        groups.add(MapRouteGroup(id: current.first.id, records: current));
+      }
+      current = [next];
+    }
+  }
+  if (current.length > 1) {
+    groups.add(MapRouteGroup(id: current.first.id, records: current));
+  }
+  return groups;
 }
 
 /// Calendar-aligned local-time ranges, with an exclusive end.

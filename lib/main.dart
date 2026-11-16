@@ -534,56 +534,33 @@ class _AppShellState extends ConsumerState<AppShell>
                     Positioned(
                       top: 16,
                       left: 16,
-                      child: SizedBox.square(
-                        dimension: 48,
-                        child: Chrome(
-                          padding: EdgeInsets.zero,
-                          child: Semantics(
-                            selected: index == 5,
-                            child: IconButton(
-                              tooltip: index == 5
-                                  ? 'Close calendar'
-                                  : 'Calendar',
-                              icon: const Icon(
-                                LucideIcons.calendarDays,
-                                size: 22,
-                              ),
-                              onPressed: () {
-                                ActionFeedback.tap(transition: true);
-                                setState(() {
-                                  slideDirection = index == 5 ? 1 : -1;
-                                  index = index == 5 ? lastTab : 5;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
+                      child: GlassCircleButton(
+                        tooltip: index == 5 ? 'Close calendar' : 'Calendar',
+                        icon: LucideIcons.calendarDays,
+                        selected: index == 5,
+                        onPressed: () {
+                          ActionFeedback.tap(transition: true);
+                          setState(() {
+                            slideDirection = index == 5 ? 1 : -1;
+                            index = index == 5 ? lastTab : 5;
+                          });
+                        },
                       ),
                     ),
                     Positioned(
                       top: 16,
                       right: 16,
-                      child: SizedBox.square(
-                        dimension: 48,
-                        child: Chrome(
-                          padding: EdgeInsets.zero,
-                          child: Semantics(
-                            selected: index == 4,
-                            child: IconButton(
-                              tooltip: index == 4
-                                  ? 'Close settings'
-                                  : 'Settings',
-                              icon: const Icon(LucideIcons.settings2, size: 22),
-                              onPressed: () {
-                                ActionFeedback.tap(transition: true);
-                                setState(() {
-                                  slideDirection = index == 4 ? -1 : 1;
-                                  index = index == 4 ? lastTab : 4;
-                                });
-                              },
-                            ),
-                          ),
-                        ),
+                      child: GlassCircleButton(
+                        tooltip: index == 4 ? 'Close settings' : 'Settings',
+                        icon: LucideIcons.settings2,
+                        selected: index == 4,
+                        onPressed: () {
+                          ActionFeedback.tap(transition: true);
+                          setState(() {
+                            slideDirection = index == 4 ? -1 : 1;
+                            index = index == 4 ? lastTab : 4;
+                          });
+                        },
                       ),
                     ),
                   ],

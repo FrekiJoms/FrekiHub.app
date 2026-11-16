@@ -504,32 +504,129 @@ class Surface extends StatelessWidget {
   );
 }
 
+/// Shared Liquid Glass material tokens derived from the bottom PillNavigation.
+abstract final class LiquidGlassStyle {
+  static const double defaultRadius = 28.0;
+
+  static List<BoxShadow> shadows(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return [
+      BoxShadow(
+        color: Colors.black.withValues(alpha: dark ? .34 : .14),
+        blurRadius: 24,
+        offset: const Offset(0, 10),
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: dark ? .20 : .08),
+        blurRadius: 8,
+        offset: const Offset(0, 2),
+      ),
+    ];
+  }
+
+  static LiquidGlassSettings settings({bool swiping = false}) =>
+      LiquidGlassSettings(blur: swiping ? 0 : 18, thickness: swiping ? 8 : 18);
+
+  static BoxDecoration surfaceDecoration(
+    BuildContext context, {
+    double radius = defaultRadius,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return BoxDecoration(
+      borderRadius: BorderRadius.circular(radius),
+      color: scheme.surface.withValues(alpha: dark ? .52 : .62),
+      border: Border.all(
+        color: Colors.white.withValues(alpha: dark ? .12 : .55),
+        width: 0.8,
+      ),
+    );
+  }
+}
+
 class Chrome extends StatelessWidget {
   final Widget child;
   final EdgeInsets padding;
+  final double borderRadius;
   const Chrome({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(8),
+    this.borderRadius = LiquidGlassStyle.defaultRadius,
   });
   @override
   Widget build(BuildContext context) => DecoratedBox(
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(40),
-      boxShadow: FloatingDepth.shadows(context),
+      borderRadius: BorderRadius.circular(borderRadius),
+      boxShadow: LiquidGlassStyle.shadows(context),
     ),
-    child: GlassContainer(
-      useOwnLayer: true,
-      shape: const LiquidRoundedSuperellipse(borderRadius: 40),
-      settings: const LiquidGlassSettings(blur: 12, thickness: 24),
-      padding: EdgeInsets.zero,
-      child: Container(
-        padding: padding,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface.withValues(alpha: .94),
-          borderRadius: BorderRadius.circular(40),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(borderRadius),
+      child: GlassContainer(
+        useOwnLayer: true,
+        shape: LiquidRoundedSuperellipse(borderRadius: borderRadius),
+        settings: LiquidGlassStyle.settings(),
+        padding: EdgeInsets.zero,
+        child: Container(
+          padding: padding,
+          decoration: LiquidGlassStyle.surfaceDecoration(
+            context,
+            radius: borderRadius,
+          ),
+          child: child,
         ),
-        child: child,
+      ),
+    ),
+  );
+}
+
+/// Circular Liquid Glass icon button with pressed scale feedback matching PillNavigation.
+class GlassCircleButton extends StatefulWidget {
+  final String tooltip;
+  final IconData icon;
+  final double iconSize;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  const GlassCircleButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    this.iconSize = 22,
+    this.selected = false,
+    required this.onPressed,
+  });
+
+  @override
+  State<GlassCircleButton> createState() => _GlassCircleButtonState();
+}
+
+class _GlassCircleButtonState extends State<GlassCircleButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) => SizedBox.square(
+    dimension: 48,
+    child: AnimatedScale(
+      scale: _pressed ? 0.9 : 1.0,
+      duration: Motion.duration(context, 120),
+      curve: Curves.easeOutCubic,
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: Chrome(
+          borderRadius: 24,
+          padding: EdgeInsets.zero,
+          child: Semantics(
+            selected: widget.selected,
+            child: IconButton(
+              tooltip: widget.tooltip,
+              icon: Icon(widget.icon, size: widget.iconSize),
+              onPressed: widget.onPressed,
+            ),
+          ),
+        ),
       ),
     ),
   );

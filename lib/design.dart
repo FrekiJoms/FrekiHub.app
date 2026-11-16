@@ -1401,8 +1401,6 @@ class _PillNavigationState extends State<PillNavigation>
 
   @override
   Widget build(BuildContext c) {
-    final scheme = Theme.of(c).colorScheme;
-    final dark = Theme.of(c).brightness == Brightness.dark;
     return Semantics(
       label:
           'Navigation. Tap center to expand actions, or hold and drag to add.',
@@ -1423,18 +1421,7 @@ class _PillNavigationState extends State<PillNavigation>
         child: DecoratedBox(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? .34 : .14),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? .20 : .08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: LiquidGlassStyle.shadows(c),
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(28),
@@ -1444,10 +1431,7 @@ class _PillNavigationState extends State<PillNavigation>
               builder: (context, swiping, child) => GlassContainer(
                 useOwnLayer: true,
                 shape: const LiquidRoundedSuperellipse(borderRadius: 28),
-                settings: LiquidGlassSettings(
-                  blur: swiping ? 0 : 18,
-                  thickness: swiping ? 8 : 18,
-                ),
+                settings: LiquidGlassStyle.settings(swiping: swiping),
                 padding: EdgeInsets.zero,
                 child: child!,
               ),
@@ -1455,14 +1439,7 @@ class _PillNavigationState extends State<PillNavigation>
                 height: 46,
                 width: 252,
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  color: scheme.surface.withValues(alpha: dark ? .52 : .62),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: dark ? .12 : .55),
-                    width: 0.8,
-                  ),
-                ),
+                decoration: LiquidGlassStyle.surfaceDecoration(c, radius: 28),
                 child: Stack(
                   key: track,
                   clipBehavior: Clip.none,

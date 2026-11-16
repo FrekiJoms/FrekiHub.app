@@ -20,6 +20,7 @@ abstract final class RuleCatalog {
     'device.overlay_allowed',
     'app.foreground',
     'map.trace_enabled',
+    'map.muted',
     'map.current_location_visible',
   };
   static bool numericField(String field) =>
@@ -98,8 +99,10 @@ abstract final class RuleCatalog {
     'map.from_epoch': 'Map range start epoch milliseconds, inclusive',
     'map.until_epoch': 'Map range end epoch milliseconds, exclusive',
     'map.trace_enabled': 'Chronological map trace is visible',
+    'map.muted': 'Muted map tile style is active',
     'map.visible_count':
         'Located records matching map category and timeline filters',
+    'map.cluster_count': 'Visible clustered marker groups at the current zoom',
     'map.selected_count': 'Selected records within the visible map filters',
     'map.total_count':
         'All saved logs in the map timeline, before category filters',
@@ -225,7 +228,10 @@ abstract final class RuleCatalog {
               ?.millisecondsSinceEpoch ??
           DateTime(now.year, now.month, now.day + 1).millisecondsSinceEpoch,
       'map.trace_enabled': mapContext['map.trace_enabled'] ?? false,
+      'map.muted':
+          mapContext['map.muted'] ?? (data.prefs['mapMuted'] == 'true'),
       'map.visible_count': mapContext['map.visible_count'] ?? 0,
+      'map.cluster_count': mapContext['map.cluster_count'] ?? 0,
       'map.selected_count': mapContext['map.selected_count'] ?? 0,
       'map.total_count': mapContext['map.total_count'] ?? 0,
       'map.unlocated_count': mapContext['map.unlocated_count'] ?? 0,

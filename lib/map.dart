@@ -31,6 +31,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   MapUserLocation? userLocation;
   bool locating = false, showUserLocation = true;
   static const userColor = Color(0xFF008CBA);
+  static const clusterAmber = Color(0xFFD9822B);
+  static const routeBlue = Color(0xFF3B6EF6);
   late final cameraMotion = AnimationController(vsync: this);
   static const locationHint = PermissionHintSpec(
     title: 'Find yourself on the map',
@@ -42,6 +44,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
     action: 'Allow precise location',
     icon: LucideIcons.locateFixed,
   );
+
+  static const _mutedTileMatrix = <double>[
+    0.70, 0.32, 0.03, 0, 10, //
+    0.10, 0.85, 0.03, 0, 10, //
+    0.10, 0.32, 0.56, 0, 10, //
+    0, 0, 0, 0.88, 0, //
+  ];
+
+  // Low-glare dark slate inversion for muted basemaps under dark Liquid Glass.
+  static const _darkMutedTileMatrix = <double>[
+    -0.18, -0.45, -0.09, 0, 206, //
+    -0.23, -0.40, -0.09, 0, 208, //
+    -0.23, -0.44, -0.03, 0, 212, //
+    0, 0, 0, 0.92, 0, //
+  ];
 
   Future<void> locateUser() async {
     if (locating || !ready) return;
@@ -98,23 +115,28 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   void panToUser(MapUserLocation fix) {
+    final toZoom = fix.accuracy > 100
+        ? math.max(2.0, 15 - math.log(fix.accuracy / 100) / math.ln2)
+        : math.max(15.0, ready ? controller.camera.zoom : 15.0);
+    panToPoint(LatLng(fix.lat, fix.lng), toZoom);
+  }
+
+  void panToPoint(LatLng target, double toZoom) {
+    if (!ready) return;
     cameraMotion.stop();
     final from = controller.camera.center;
     final zoom = controller.camera.zoom;
-    final toZoom = fix.accuracy > 100
-        ? math.max(2.0, 15 - math.log(fix.accuracy / 100) / math.ln2)
-        : math.max(15.0, zoom);
     if (MediaQuery.disableAnimationsOf(context)) {
-      controller.move(LatLng(fix.lat, fix.lng), toZoom);
+      controller.move(target, toZoom);
       return;
     }
     cameraMotion.duration = Motion.duration(context, 350);
-    final deltaLng = (fix.lng - from.longitude + 540) % 360 - 180;
+    final deltaLng = (target.longitude - from.longitude + 540) % 360 - 180;
     void tick() {
       final t = Motion.curve.transform(cameraMotion.value);
       controller.move(
         LatLng(
-          from.latitude + (fix.lat - from.latitude) * t,
+          from.latitude + (target.latitude - from.latitude) * t,
           (from.longitude + deltaLng * t + 540) % 360 - 180,
         ),
         zoom + (toZoom - zoom) * t,
@@ -134,8 +156,11 @@ class _MapScreenState extends ConsumerState<MapScreen>
       DateTime.tryParse(widget.data.prefs['mapDate'] ?? '') ?? DateTime.now();
   late MapRange range = MapRange.period(period, date);
   late bool trace = widget.data.prefs['mapTrace'] == 'true';
+  late bool mutedMap = widget.data.prefs['mapMuted'] == 'true';
   final categories = <String>{'Sessions', 'Finance', 'Locations', 'Other'};
   Set<String> selected = {};
+  Set<String> inspectedIds = {};
+  String? activeRouteId;
   List<MapRecord> records = [];
   List<Map<String, dynamic>> unlocated = [];
   List<Map<String, dynamic>> previousRows = [];
@@ -231,6 +256,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
               unlocated = without;
               final recordIds = records.map((r) => r.id).toSet();
               selected.retainAll(recordIds);
+              inspectedIds.retainAll(recordIds);
               loading = false;
               loadError = null;
             });
@@ -270,7 +296,9 @@ class _MapScreenState extends ConsumerState<MapScreen>
         'map.from_epoch': range.from.millisecondsSinceEpoch,
         'map.until_epoch': range.until.millisecondsSinceEpoch,
         'map.trace_enabled': trace,
+        'map.muted': mutedMap,
         'map.visible_count': visible.length,
+        'map.cluster_count': clusters.length,
         'map.total_count': previousRows.length,
         'map.unlocated_count': unlocated.length,
         'map.selected_count': traced
@@ -299,13 +327,14 @@ class _MapScreenState extends ConsumerState<MapScreen>
       await db.pref('mapFrom', range.from.toIso8601String());
       await db.pref('mapUntil', range.until.toIso8601String());
       await db.pref('mapTrace', trace);
+      await db.pref('mapMuted', mutedMap);
     });
     publishContext();
   }
 
-  void fit() {
+  void fit([List<MapRecord>? subset]) {
     cameraMotion.stop();
-    final points = traced;
+    final points = subset ?? traced;
     if (!ready || points.isEmpty) return;
     final coordinates = points.map((r) => LatLng(r.lat, r.lng)).toList();
     if (coordinates.every((p) => p == coordinates.first)) {
@@ -315,12 +344,12 @@ class _MapScreenState extends ConsumerState<MapScreen>
         CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(coordinates),
           padding: EdgeInsets.fromLTRB(
-            56,
-            math.min(190, MediaQuery.sizeOf(context).height * .3),
-            56,
+            52,
+            math.min(170, MediaQuery.sizeOf(context).height * .28),
+            64,
             math.min(
-              250 + MediaQuery.paddingOf(context).bottom,
-              MediaQuery.sizeOf(context).height * .35,
+              130 + MediaQuery.viewPaddingOf(context).bottom,
+              MediaQuery.sizeOf(context).height * .32,
             ),
           ),
           maxZoom: 16,
@@ -341,6 +370,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       if (custom != null) date = custom.from;
       range = custom ?? MapRange.period(period, date);
       selected.clear();
+      inspectedIds.clear();
+      activeRouteId = null;
       watch();
     });
     await guarded(context, saveView);
@@ -364,6 +395,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
         range = MapRange.period(period, date);
       }
       selected.clear();
+      inspectedIds.clear();
+      activeRouteId = null;
       watch();
     });
     unawaited(guarded(context, saveView));
@@ -385,9 +418,37 @@ class _MapScreenState extends ConsumerState<MapScreen>
       date = result;
       range = MapRange.period(period, date);
       selected.clear();
+      inspectedIds.clear();
+      activeRouteId = null;
       watch();
     });
     await guarded(context, saveView);
+  }
+
+  Future<void> openPeriodMenu(BuildContext anchor) async {
+    final value = await showChoiceMenu<String>(
+      anchor,
+      choices: const {
+        'day': 'Day',
+        'week': 'Week',
+        'month': 'Month',
+        'year': 'Year',
+        'custom': 'Custom',
+      },
+      selected: period,
+    );
+    if (mounted && value != null) {
+      await choosePeriod(value);
+    }
+  }
+
+  void clearTraceFocus() {
+    if (selected.isEmpty && activeRouteId == null) return;
+    setState(() {
+      selected.clear();
+      activeRouteId = null;
+    });
+    unawaited(guarded(context, saveView));
   }
 
   Future<void> showRecords([List<MapRecord>? group]) async {
@@ -401,14 +462,228 @@ class _MapScreenState extends ConsumerState<MapScreen>
       ),
     );
     if (!mounted || result == null) return;
-    setState(() => selected = result);
-    publishContext();
+    setState(() {
+      selected = result;
+      if (selected.isNotEmpty) trace = true;
+    });
+    unawaited(guarded(context, saveView));
     if (selected.isNotEmpty) fit();
   }
 
-  List<Widget> mapActions() => [
+  Future<void> openMapOptions() async {
+    final result = await panel<String>(
+      context,
+      _MapOptionsSheet(
+        trace: trace,
+        mutedMap: mutedMap,
+        locatedCount: visible.length,
+        unlocatedCount: unlocated.length,
+        selectedCount: selected.length,
+        onTraceChanged: (value) {
+          setState(() => trace = value);
+          unawaited(guarded(context, saveView));
+        },
+        onMutedChanged: (value) {
+          setState(() => mutedMap = value);
+          unawaited(guarded(context, saveView));
+        },
+        onClearSelection: () {
+          setState(() {
+            selected.clear();
+            activeRouteId = null;
+          });
+          unawaited(guarded(context, saveView));
+        },
+      ),
+    );
+    if (!mounted) return;
+    if (result == 'logs') {
+      await showRecords();
+    }
+  }
+
+  Future<void> openLocationSheet(MapRecord record) async {
+    setState(() => inspectedIds = {record.id});
+    try {
+      await panel<void>(
+        context,
+        _MapLocationSheet(
+          record: record,
+          isSelected: selected.contains(record.id),
+          onToggleTrace: () {
+            setState(() {
+              if (!selected.remove(record.id)) {
+                selected.add(record.id);
+                trace = true;
+              }
+            });
+            unawaited(guarded(context, saveView));
+          },
+          onCenter: () {
+            panToPoint(
+              LatLng(record.lat, record.lng),
+              math.max(16.0, ready ? controller.camera.zoom : 16.0),
+            );
+          },
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => inspectedIds = {});
+      }
+    }
+  }
+
+  Future<void> openClusterSheet(List<MapRecord> items) async {
+    setState(() => inspectedIds = items.map((r) => r.id).toSet());
+    String? action;
+    MapRecord? chosenRecord;
+    try {
+      final result = await panel<Object?>(
+        context,
+        _MapClusterSheet(
+          records: items.reversed.toList(),
+          selected: selected,
+          onZoomToCluster: () {
+            final center = clusterCenter(items);
+            panToPoint(
+              LatLng(center.lat, center.lng),
+              math.min(18.0, (ready ? controller.camera.zoom : 12.0) + 2.0),
+            );
+          },
+        ),
+      );
+      if (result is String) action = result;
+      if (result is MapRecord) chosenRecord = result;
+    } finally {
+      if (mounted) {
+        setState(() => inspectedIds = {});
+      }
+    }
+    if (!mounted) return;
+    if (action == 'view_all') {
+      await showRecords(items);
+    } else if (chosenRecord != null) {
+      await openLocationSheet(chosenRecord);
+    }
+  }
+
+  Future<void> openRouteSheet(MapRouteGroup routeGroup) async {
+    setState(() => activeRouteId = routeGroup.id);
+    String? action;
+    MapRecord? chosenRecord;
+    try {
+      final result = await panel<Object?>(
+        context,
+        _MapRouteSheet(route: routeGroup),
+      );
+      if (result is String) action = result;
+      if (result is MapRecord) chosenRecord = result;
+    } finally {
+      if (mounted) {
+        setState(() => activeRouteId = null);
+      }
+    }
+    if (!mounted) return;
+    if (action == 'trace_route') {
+      setState(() {
+        selected = routeGroup.records.map((r) => r.id).toSet();
+        trace = true;
+      });
+      unawaited(guarded(context, saveView));
+      fit(routeGroup.records);
+    } else if (chosenRecord != null) {
+      await openLocationSheet(chosenRecord);
+    }
+  }
+
+  ({List<MapRouteGroup> active, List<MapRouteGroup> historical}) _buildRoutes(
+    List<MapRecord> shown,
+    List<MapRecord> tracedRecords,
+  ) {
+    final allRoutes = splitMapRoutes(shown);
+    if (!trace && selected.isEmpty && activeRouteId == null) {
+      return (active: const [], historical: const []);
+    }
+    if (selected.isNotEmpty) {
+      final active = tracedRecords.length > 1
+          ? [MapRouteGroup(id: 'selected', records: tracedRecords)]
+          : const <MapRouteGroup>[];
+      final historical = trace
+          ? allRoutes
+                .where((g) => !g.records.every((r) => selected.contains(r.id)))
+                .toList()
+          : const <MapRouteGroup>[];
+      return (active: active, historical: historical);
+    }
+    if (allRoutes.isEmpty) {
+      return (active: const [], historical: const []);
+    }
+    final targetId = activeRouteId ?? allRoutes.last.id;
+    final active = <MapRouteGroup>[];
+    final historical = <MapRouteGroup>[];
+    for (final route in allRoutes) {
+      if (route.id == targetId) {
+        active.add(route);
+      } else {
+        historical.add(route);
+      }
+    }
+    if (active.isEmpty && allRoutes.isNotEmpty) {
+      active.add(historical.removeLast());
+    }
+    return (active: active, historical: historical);
+  }
+
+  void _handleMapTap(LatLng tapPoint, List<MapRouteGroup> routes) {
+    if (!ready || routes.isEmpty) return;
+    final tapOffset = controller.camera.latLngToScreenOffset(tapPoint);
+    MapRouteGroup? bestRoute;
+    var bestDist = 22.0;
+    for (final route in routes) {
+      for (var i = 0; i < route.records.length - 1; i++) {
+        final a = controller.camera.latLngToScreenOffset(
+          LatLng(route.records[i].lat, route.records[i].lng),
+        );
+        final b = controller.camera.latLngToScreenOffset(
+          LatLng(route.records[i + 1].lat, route.records[i + 1].lng),
+        );
+        final dist = _distanceToSegment(tapOffset, a, b);
+        if (dist <= bestDist) {
+          bestDist = dist;
+          bestRoute = route;
+        }
+      }
+    }
+    if (bestRoute != null) {
+      ActionFeedback.tap();
+      unawaited(openRouteSheet(bestRoute));
+    } else if (activeRouteId != null) {
+      setState(() => activeRouteId = null);
+    }
+  }
+
+  double _distanceToSegment(Offset p, Offset a, Offset b) {
+    final ab = b - a;
+    final lenSq = ab.dx * ab.dx + ab.dy * ab.dy;
+    if (lenSq <= 0.0001) return (p - a).distance;
+    final t = (((p.dx - a.dx) * ab.dx + (p.dy - a.dy) * ab.dy) / lenSq).clamp(
+      0.0,
+      1.0,
+    );
+    final proj = Offset(a.dx + ab.dx * t, a.dy + ab.dy * t);
+    return (p - proj).distance;
+  }
+
+  List<Widget> displayActions() => [
     if (tileError || loadError != null)
       control('Retry map loading', LucideIcons.refreshCw, retry),
+    control(
+      'Map options',
+      LucideIcons.layers,
+      () => openMapOptions(),
+      active: trace || mutedMap || selected.isNotEmpty,
+    ),
     control(
       'Center on current location',
       LucideIcons.locateFixed,
@@ -422,30 +697,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
       fit,
       enabled: ready && traced.isNotEmpty,
     ),
-    control(
-      trace ? 'Hide chronological trace' : 'Trace selected logs, or all logs',
-      LucideIcons.route,
-      () {
-        setState(() => trace = !trace);
-        unawaited(guarded(context, saveView));
-      },
-      active: trace,
-    ),
-    control('Zoom in', LucideIcons.plus, () {
-      cameraMotion.stop();
-      controller.move(
-        controller.camera.center,
-        math.min(19, controller.camera.zoom + 1),
-      );
-    }, enabled: ready),
-    control('Zoom out', LucideIcons.minus, () {
-      cameraMotion.stop();
-      controller.move(
-        controller.camera.center,
-        math.max(2, controller.camera.zoom - 1),
-      );
-    }, enabled: ready),
   ];
+
   Widget control(
     String label,
     IconData icon,
@@ -458,7 +711,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     isSelected: active,
     onPressed: withFeedback(enabled ? action : null),
     style: IconButton.styleFrom(
-      minimumSize: const Size(48, 48),
+      minimumSize: const Size(44, 44),
+      maximumSize: const Size(44, 44),
       padding: EdgeInsets.zero,
       shape: const CircleBorder(),
       backgroundColor: Colors.transparent,
@@ -468,8 +722,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
     ),
     icon: Container(
       key: active == null ? null : const ValueKey('map-toggle-indicator'),
-      width: 43,
-      height: 43,
+      width: 38,
+      height: 38,
       alignment: Alignment.center,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -496,7 +750,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
   @override
   Widget build(BuildContext c) {
     final shown = visible;
-    final route = traced;
+    final routeRecords = traced;
     final signature = '$clusterZoom:${categories.join(',')}';
     if (!identical(clusteredRecords, records) ||
         clusterSignature != signature) {
@@ -504,7 +758,21 @@ class _MapScreenState extends ConsumerState<MapScreen>
       clusterSignature = signature;
       clusters = clusterMapRecords(shown, clusterZoom);
     }
-    final bottom = MediaQuery.paddingOf(c).bottom;
+    final routeBundles = _buildRoutes(shown, routeRecords);
+    final allDisplayedRoutes = [
+      ...routeBundles.historical,
+      ...routeBundles.active,
+    ];
+    final hasSelectionFocus =
+        inspectedIds.isNotEmpty || selected.isNotEmpty || activeRouteId != null;
+    final activeRouteRecordIds = {
+      for (final g in routeBundles.active)
+        if (activeRouteId != null || selected.isNotEmpty)
+          ...g.records.map((r) => r.id),
+    };
+    final viewBottom = MediaQuery.viewPaddingOf(c).bottom;
+    final scheme = Theme.of(c).colorScheme;
+    final dark = Theme.of(c).brightness == Brightness.dark;
     final dateLabel = period == 'day'
         ? DateFormat('EEE, d MMM yyyy').format(range.from)
         : period == 'month'
@@ -514,14 +782,35 @@ class _MapScreenState extends ConsumerState<MapScreen>
         : period == 'custom'
         ? '${DateFormat('d MMM yyyy, HH:mm').format(range.from)} – ${DateFormat('d MMM yyyy, HH:mm').format(range.until.subtract(const Duration(minutes: 1)))}'
         : '${DateFormat('d MMM').format(range.from)} – ${DateFormat('d MMM yyyy').format(range.until.subtract(const Duration(days: 1)))}';
-    final counts =
-        '${shown.length} located · ${unlocated.length} without location';
+    final counts = '${shown.length} located · ${unlocated.length} unlocated';
     final notice = widget.apiKey.trim().isEmpty
         ? 'Basemap not configured · saved dots remain'
         : tileError
         ? 'Basemap unavailable · saved dots remain'
         : loadError;
     final status = notice == null ? counts : '$counts · $notice';
+    final tileLayer = widget.apiKey.trim().isNotEmpty
+        ? TileLayer(
+            reset: tileReset.stream,
+            evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
+            tileProvider: tileProvider,
+            urlTemplate:
+                'https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${Uri.encodeQueryComponent(widget.apiKey.trim())}',
+            userAgentPackageName: 'com.frekihub.freki_hub',
+            tileDisplay: TileDisplay.instantaneous(),
+            errorTileCallback: (_, _, _) {
+              if (!tileError && mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !tileError) {
+                    setState(() => tileError = true);
+                  }
+                });
+                WidgetsBinding.instance.ensureVisualUpdate();
+              }
+            },
+          )
+        : null;
+
     return LayoutBuilder(
       builder: (c, bounds) {
         return Stack(
@@ -549,6 +838,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
                     if (shown.isNotEmpty) fit();
                     publishContext();
                   },
+                  onTap: (_, point) => _handleMapTap(point, allDisplayedRoutes),
                   onPositionChanged: (camera, gesture) {
                     if (gesture) cameraMotion.stop();
                     if (camera.zoom.floor() != clusterZoom &&
@@ -567,89 +857,195 @@ class _MapScreenState extends ConsumerState<MapScreen>
                   },
                 ),
                 children: [
-                  if (widget.apiKey.trim().isNotEmpty)
-                    TileLayer(
-                      reset: tileReset.stream,
-                      evictErrorTileStrategy: EvictErrorTileStrategy.dispose,
-                      tileProvider: tileProvider,
-                      urlTemplate:
-                          'https://maps.geoapify.com/v1/tile/osm-carto/{z}/{x}/{y}.png?apiKey=${Uri.encodeQueryComponent(widget.apiKey.trim())}',
-                      userAgentPackageName: 'com.frekihub.freki_hub',
-                      tileDisplay: TileDisplay.instantaneous(),
-                      errorTileCallback: (_, _, _) {
-                        if (!tileError && mounted) {
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted && !tileError) {
-                              setState(() => tileError = true);
-                            }
-                          });
-                          WidgetsBinding.instance.ensureVisualUpdate();
-                        }
-                      },
-                    ),
-                  if (trace && route.length > 1)
+                  if (tileLayer != null)
+                    mutedMap
+                        ? ColorFiltered(
+                            colorFilter: ColorFilter.matrix(
+                              dark ? _darkMutedTileMatrix : _mutedTileMatrix,
+                            ),
+                            child: tileLayer,
+                          )
+                        : tileLayer,
+                  if (allDisplayedRoutes.isNotEmpty)
                     PolylineLayer(
                       polylines: [
-                        Polyline(
-                          points: route
-                              .map((r) => LatLng(r.lat, r.lng))
-                              .toList(),
-                          color: const Color(0xFF456FE8),
-                          strokeWidth: 3,
-                          pattern: StrokePattern.dashed(segments: [8, 5]),
-                        ),
+                        for (final route in routeBundles.historical)
+                          Polyline(
+                            points: route.records
+                                .map((r) => LatLng(r.lat, r.lng))
+                                .toList(),
+                            color: routeBlue.withValues(alpha: .28),
+                            strokeWidth: 2.5,
+                          ),
+                        for (final route in routeBundles.active) ...[
+                          Polyline(
+                            points: route.records
+                                .map((r) => LatLng(r.lat, r.lng))
+                                .toList(),
+                            color: Colors.white.withValues(alpha: .78),
+                            strokeWidth: 5.5,
+                          ),
+                          Polyline(
+                            points: route.records
+                                .map((r) => LatLng(r.lat, r.lng))
+                                .toList(),
+                            color: routeBlue,
+                            strokeWidth: 3.2,
+                          ),
+                        ],
+                      ],
+                    ),
+                  if (routeBundles.active.any((r) => r.records.length >= 2))
+                    MarkerLayer(
+                      markers: [
+                        for (final route in routeBundles.active)
+                          if (route.records.length >= 2) ...[
+                            Marker(
+                              point: LatLng(
+                                route.records.first.lat,
+                                route.records.first.lng,
+                              ),
+                              width: 24,
+                              height: 24,
+                              child: const IgnorePointer(
+                                child: Center(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Color(0xFF1F8A5B),
+                                      border: Border.fromBorderSide(
+                                        BorderSide(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
+                                    child: SizedBox(width: 11, height: 11),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Marker(
+                              point: LatLng(
+                                route.records.last.lat,
+                                route.records.last.lng,
+                              ),
+                              width: 24,
+                              height: 24,
+                              child: const IgnorePointer(
+                                child: Center(
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: routeBlue,
+                                      border: Border.fromBorderSide(
+                                        BorderSide(
+                                          color: Colors.white,
+                                          width: 2.5,
+                                        ),
+                                      ),
+                                    ),
+                                    child: SizedBox(width: 12, height: 12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                       ],
                     ),
                   MarkerLayer(
                     markers: clusters.map((items) {
                       final record = items.last;
-                      final chosen = items.any((r) => selected.contains(r.id));
+                      final center = clusterCenter(items);
+                      final isCluster = items.length > 1;
+                      final highlighted = items.any(
+                        (r) =>
+                            inspectedIds.contains(r.id) ||
+                            selected.contains(r.id) ||
+                            activeRouteRecordIds.contains(r.id),
+                      );
+                      final dimmed = hasSelectionFocus && !highlighted;
+                      final markerColor = isCluster
+                          ? clusterAmber
+                          : colors[record.category]!;
+                      final markerSize = isCluster
+                          ? (highlighted ? 38.0 : 32.0)
+                          : (highlighted ? 22.0 : 15.0);
                       return Marker(
-                        point: LatLng(record.lat, record.lng),
+                        point: LatLng(center.lat, center.lng),
                         width: 48,
                         height: 48,
                         child: Semantics(
-                          label:
-                              '${record.category}: ${record.title}, ${items.length} records at ${record.location}',
+                          label: isCluster
+                              ? 'Location cluster: ${items.length} records near ${record.location}'
+                              : '${record.category}: ${record.title} at ${record.location}',
                           button: true,
-                          selected: chosen,
+                          selected: highlighted,
                           child: GestureDetector(
-                            onTap: withFeedback(() => showRecords(items)),
+                            behavior: HitTestBehavior.opaque,
+                            onTap: withFeedback(
+                              () => isCluster
+                                  ? openClusterSheet(items)
+                                  : openLocationSheet(items.single),
+                            ),
                             child: Center(
-                              child: Container(
-                                width: items.length > 1 ? 32 : 22,
-                                height: items.length > 1 ? 32 : 22,
-                                decoration: BoxDecoration(
-                                  color: colors[record.category],
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: chosen
-                                        ? const Color(0xFF172034)
-                                        : Colors.white,
-                                    width: chosen ? 4 : 3,
+                              child: AnimatedOpacity(
+                                opacity: dimmed ? .48 : 1.0,
+                                duration: Motion.duration(c, 150),
+                                child: AnimatedContainer(
+                                  duration: Motion.duration(c, 160),
+                                  curve: Motion.curve,
+                                  width: highlighted
+                                      ? markerSize + 10
+                                      : markerSize,
+                                  height: highlighted
+                                      ? markerSize + 10
+                                      : markerSize,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: highlighted
+                                        ? markerColor.withValues(alpha: .24)
+                                        : Colors.transparent,
                                   ),
-                                  boxShadow: const [
-                                    BoxShadow(
-                                      color: Colors.black26,
-                                      blurRadius: 6,
-                                    ),
-                                  ],
-                                ),
-                                child: items.length > 1
-                                    ? Center(
-                                        child: Text(
-                                          items.length > 99
-                                              ? '99+'
-                                              : '${items.length}',
-                                          maxLines: 1,
-                                          style: const TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w700,
-                                          ),
+                                  child: Center(
+                                    child: Container(
+                                      width: markerSize,
+                                      height: markerSize,
+                                      decoration: BoxDecoration(
+                                        color: markerColor,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: highlighted ? 3 : 2,
                                         ),
-                                      )
-                                    : null,
+                                        boxShadow: const [
+                                          BoxShadow(
+                                            color: Colors.black26,
+                                            blurRadius: 5,
+                                            offset: Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: isCluster
+                                          ? Center(
+                                              child: Text(
+                                                items.length > 99
+                                                    ? '99+'
+                                                    : '${items.length}',
+                                                maxLines: 1,
+                                                style: TextStyle(
+                                                  fontSize: highlighted
+                                                      ? 12
+                                                      : 11,
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            )
+                                          : null,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -693,319 +1089,287 @@ class _MapScreenState extends ConsumerState<MapScreen>
                 ],
               ),
             ),
+            // LAYER 1: Top navigation (compact date/stats pill + floating segmented strip)
             Positioned(
               top: 16,
-              left: 72,
-              right: 72,
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Builder(
-                  builder: (anchor) => Semantics(
-                    label: dateLabel,
-                    hint: 'Long press to change timeline mode',
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onLongPress: withFeedback(() async {
-                        final value = await showChoiceMenu<String>(
-                          anchor,
-                          choices: const {
-                            'day': 'Day',
-                            'week': 'Week',
-                            'month': 'Month',
-                            'year': 'Year',
-                            'custom': 'Custom',
-                          },
-                          selected: period,
-                        );
-                        if (mounted && value != null) {
-                          await choosePeriod(value);
-                        }
-                      }),
-                      child: Chrome(
-                        key: const ValueKey('map-date-pill'),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        child: IntrinsicWidth(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SizedBox(
-                                height: 28,
-                                child: Row(
+              left: 16,
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 56),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: Builder(
+                        builder: (anchor) => Semantics(
+                          label: dateLabel,
+                          hint: 'Long press to change timeline mode',
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onLongPress: withFeedback(
+                              () => openPeriodMenu(anchor),
+                            ),
+                            child: Chrome(
+                              key: const ValueKey('map-date-pill'),
+                              borderRadius: 24,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 3,
+                              ),
+                              child: IntrinsicWidth(
+                                child: Column(
                                   mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    IconButton(
-                                      tooltip: 'Previous timeline',
-                                      style: IconButton.styleFrom(
-                                        minimumSize: const Size(24, 28),
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      disabledColor: Theme.of(c)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: .3),
-                                      onPressed: period == 'custom'
-                                          ? null
-                                          : withFeedback(() => shift(-1)),
-                                      constraints:
-                                          const BoxConstraints.tightFor(
-                                            width: 24,
-                                            height: 28,
+                                    SizedBox(
+                                      height: 28,
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            tooltip: 'Previous timeline',
+                                            style: IconButton.styleFrom(
+                                              minimumSize: const Size(24, 28),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                            ),
+                                            disabledColor: scheme.onSurface
+                                                .withValues(alpha: .3),
+                                            onPressed: period == 'custom'
+                                                ? null
+                                                : withFeedback(() => shift(-1)),
+                                            constraints:
+                                                const BoxConstraints.tightFor(
+                                                  width: 24,
+                                                  height: 28,
+                                                ),
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(
+                                              LucideIcons.chevronLeft,
+                                              size: 14,
+                                            ),
                                           ),
-                                      padding: EdgeInsets.zero,
-                                      icon: const Icon(
-                                        LucideIcons.chevronLeft,
-                                        size: 14,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Tooltip(
-                                        message: 'Timeline mode',
-                                        triggerMode: TooltipTriggerMode.manual,
-                                        child: InkWell(
-                                          onTap: withFeedback(selectDate),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                          child: AnimatedSwitcher(
-                                            duration: Motion.duration(c, 200),
-                                            transitionBuilder:
-                                                (
-                                                  child,
-                                                  animation,
-                                                ) => FadeTransition(
-                                                  opacity: animation,
-                                                  child: SlideTransition(
-                                                    position:
-                                                        Tween<Offset>(
-                                                          begin: Offset(
-                                                            child.key ==
-                                                                    ValueKey(
-                                                                      '$period:${range.from}',
-                                                                    )
-                                                                ? shiftDirection *
-                                                                      .15
-                                                                : -shiftDirection *
-                                                                      .15,
-                                                            0,
-                                                          ),
-                                                          end: Offset.zero,
-                                                        ).animate(
-                                                          CurvedAnimation(
-                                                            parent: animation,
-                                                            curve: Motion.curve,
-                                                          ),
+                                          Expanded(
+                                            child: Tooltip(
+                                              message: 'Timeline mode',
+                                              triggerMode:
+                                                  TooltipTriggerMode.manual,
+                                              child: InkWell(
+                                                onTap: withFeedback(selectDate),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                child: AnimatedSwitcher(
+                                                  duration: Motion.duration(
+                                                    c,
+                                                    200,
+                                                  ),
+                                                  transitionBuilder:
+                                                      (
+                                                        child,
+                                                        animation,
+                                                      ) => FadeTransition(
+                                                        opacity: animation,
+                                                        child: SlideTransition(
+                                                          position:
+                                                              Tween<Offset>(
+                                                                begin: Offset(
+                                                                  child.key ==
+                                                                          ValueKey(
+                                                                            '$period:${range.from}',
+                                                                          )
+                                                                      ? shiftDirection *
+                                                                            .15
+                                                                      : -shiftDirection *
+                                                                            .15,
+                                                                  0,
+                                                                ),
+                                                                end:
+                                                                    Offset.zero,
+                                                              ).animate(
+                                                                CurvedAnimation(
+                                                                  parent:
+                                                                      animation,
+                                                                  curve: Motion
+                                                                      .curve,
+                                                                ),
+                                                              ),
+                                                          child: child,
                                                         ),
-                                                    child: child,
+                                                      ),
+                                                  child: Text(
+                                                    period == 'year'
+                                                        ? '${date.year}'
+                                                        : period == 'day'
+                                                        ? DateFormat('d MMM')
+                                                              .format(date)
+                                                        : period == 'week'
+                                                        ? DateFormat(
+                                                            'd MMM',
+                                                          ).format(range.from)
+                                                        : period == 'custom'
+                                                        ? 'Custom range'
+                                                        : DateFormat.MMMM()
+                                                              .format(date),
+                                                    key: ValueKey(
+                                                      '$period:${range.from}',
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
                                                   ),
                                                 ),
+                                              ),
+                                            ),
+                                          ),
+                                          Tooltip(
+                                            message: 'Change timeline period',
+                                            triggerMode:
+                                                TooltipTriggerMode.manual,
+                                            child: GestureDetector(
+                                              behavior: HitTestBehavior.opaque,
+                                              onTap: withFeedback(
+                                                () => openPeriodMenu(anchor),
+                                              ),
+                                              child: SizedBox(
+                                                width: 18,
+                                                height: 28,
+                                                child: Icon(
+                                                  LucideIcons.chevronDown,
+                                                  size: 11,
+                                                  color:
+                                                      scheme.onSurfaceVariant,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Next timeline',
+                                            style: IconButton.styleFrom(
+                                              minimumSize: const Size(24, 28),
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                            ),
+                                            disabledColor: scheme.onSurface
+                                                .withValues(alpha: .3),
+                                            onPressed: period == 'custom'
+                                                ? null
+                                                : withFeedback(() => shift(1)),
+                                            constraints:
+                                                const BoxConstraints.tightFor(
+                                                  width: 24,
+                                                  height: 28,
+                                                ),
+                                            padding: EdgeInsets.zero,
+                                            icon: const Icon(
+                                              LucideIcons.chevronRight,
+                                              size: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: withFeedback(() => showRecords()),
+                                      child: Semantics(
+                                        button: true,
+                                        hint: 'Open timeline logs',
+                                        child: Opacity(
+                                          opacity: .55,
+                                          child: SkeletonValue(
+                                            loading: loading,
+                                            semanticsLabel:
+                                                'Loading recorded locations',
                                             child: Text(
-                                              period == 'year'
-                                                  ? '${date.year}'
-                                                  : period == 'day'
-                                                  ? DateFormat('d MMM')
-                                                        .format(date)
-                                                  : period == 'week'
-                                                  ? DateFormat('d MMM')
-                                                        .format(range.from)
-                                                  : period == 'custom'
-                                                  ? 'Custom range'
-                                                  : DateFormat.MMMM().format(
-                                                      date,
-                                                    ),
-                                              key: ValueKey(
-                                                '$period:${range.from}',
+                                              status,
+                                              key: const ValueKey(
+                                                'map-record-counts',
                                               ),
                                               maxLines: 1,
+                                              softWrap: false,
                                               overflow: TextOverflow.ellipsis,
                                               textAlign: TextAlign.center,
                                               style: const TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
+                                                fontSize: 9,
+                                                height: 1.3,
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                    IconButton(
-                                      tooltip: 'Next timeline',
-                                      style: IconButton.styleFrom(
-                                        minimumSize: const Size(24, 28),
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      disabledColor: Theme.of(c)
-                                          .colorScheme
-                                          .onSurface
-                                          .withValues(alpha: .3),
-                                      onPressed: period == 'custom'
-                                          ? null
-                                          : withFeedback(() => shift(1)),
-                                      constraints:
-                                          const BoxConstraints.tightFor(
-                                            width: 24,
-                                            height: 28,
-                                          ),
-                                      padding: EdgeInsets.zero,
-                                      icon: const Icon(
-                                        LucideIcons.chevronRight,
-                                        size: 14,
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
-                              Opacity(
-                                opacity: .55,
-                                child: SkeletonValue(
-                                  loading: loading,
-                                  semanticsLabel: 'Loading recorded locations',
-                                  child: Text(
-                                    status,
-                                    key: const ValueKey('map-record-counts'),
-                                    maxLines: 1,
-                                    softWrap: false,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 9,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: math.max(76, 64 + MediaQuery.textScalerOf(c).scale(9) * 1.3),
-              left: 16,
-              right: 16,
-              child: Align(
-                alignment: Alignment.topCenter,
-                child: Chrome(
-                  key: const ValueKey('map-legends'),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 5,
-                  ),
-                  child: ShaderMask(
-                    blendMode: BlendMode.dstIn,
-                    shaderCallback: (bounds) => const LinearGradient(
-                      colors: [
-                        Colors.transparent,
-                        Colors.white,
-                        Colors.white,
-                        Colors.transparent,
-                      ],
-                      stops: [0, .055, .945, 1],
-                    ).createShader(bounds),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          AnimatedOpacity(
-                            opacity: userLocation != null && showUserLocation
-                                ? 1
-                                : .4,
-                            duration: Motion.duration(c, 150),
-                            child: FilterChip(
-                              label: const Text(
-                                'You',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              avatar: const Icon(
-                                LucideIcons.locateFixed,
-                                size: 13,
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: Chrome(
+                      key: const ValueKey('map-legends'),
+                      borderRadius: 22,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 3,
+                      ),
+                      child: ShaderMask(
+                        blendMode: BlendMode.dstIn,
+                        shaderCallback: (bounds) => const LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.white,
+                            Colors.white,
+                            Colors.transparent,
+                          ],
+                          stops: [0, .055, .945, 1],
+                        ).createShader(bounds),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _MapSegmentItem(
+                                label: 'You',
+                                icon: LucideIcons.locateFixed,
                                 color: userColor,
+                                selected:
+                                    userLocation != null && showUserLocation,
+                                enabled: !locating,
+                                onTap: () {
+                                  ActionFeedback.tap();
+                                  if (userLocation == null) {
+                                    locateUser();
+                                  } else {
+                                    setState(
+                                      () =>
+                                          showUserLocation = !showUserLocation,
+                                    );
+                                    publishContext();
+                                  }
+                                },
                               ),
-                              backgroundColor: Colors.transparent,
-                              selectedColor: Colors.transparent,
-                              side: BorderSide.none,
-                              showCheckmark: false,
-                              labelPadding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
-                              selected:
-                                  userLocation != null && showUserLocation,
-                              onSelected: locating
-                                  ? null
-                                  : (_) {
-                                      ActionFeedback.tap();
-                                      if (userLocation == null) {
-                                        locateUser();
-                                      } else {
-                                        setState(
-                                          () => showUserLocation =
-                                              !showUserLocation,
-                                        );
-                                        publishContext();
-                                      }
-                                    },
-                            ),
-                          ),
-                          ...colors.entries.map(
-                            (entry) => Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 2,
-                              ),
-                              child: AnimatedOpacity(
-                                opacity: categories.contains(entry.key)
-                                    ? 1
-                                    : .4,
-                                duration: Motion.duration(c, 150),
-                                child: FilterChip(
-                                  backgroundColor: Colors.transparent,
-                                  selectedColor: Colors.transparent,
-                                  side: BorderSide.none,
-                                  label: Text(
-                                    entry.key,
-                                    maxLines: 1,
-                                    softWrap: false,
-                                  ),
-                                  labelStyle: TextStyle(
-                                    color: Theme.of(c).colorScheme.onSurface,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  labelPadding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  showCheckmark: false,
-                                  avatar: Icon(
-                                    icons[entry.key],
-                                    size: 13,
-                                    color: entry.value,
-                                  ),
+                              ...colors.entries.map(
+                                (entry) => _MapSegmentItem(
+                                  label: entry.key,
+                                  icon: icons[entry.key]!,
+                                  color: entry.value,
                                   selected: categories.contains(entry.key),
-                                  onSelected: (_) {
+                                  onTap: () {
                                     ActionFeedback.tap();
                                     setState(() {
                                       if (!categories.remove(entry.key)) {
@@ -1016,64 +1380,217 @@ class _MapScreenState extends ConsumerState<MapScreen>
                                   },
                                 ),
                               ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  if (selected.isNotEmpty || activeRouteId != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: Chrome(
+                        key: const ValueKey('map-trace-pill'),
+                        borderRadius: 18,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              LucideIcons.route,
+                              size: 13,
+                              color: routeBlue,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                selected.isNotEmpty
+                                    ? 'Tracing ${selected.length} ${selected.length == 1 ? 'stop' : 'stops'}'
+                                    : 'Route focused',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Semantics(
+                              button: true,
+                              label: 'Clear trace selection',
+                              child: Material(
+                                type: MaterialType.transparency,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: withFeedback(clearTraceFocus),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 4,
+                                      vertical: 2,
+                                    ),
+                                    child: Icon(
+                                      LucideIcons.x,
+                                      size: 13,
+                                      color: scheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
+            // LAYER 3: Right-side floating map tools (two compact Liquid Glass groups)
             Positioned(
               top: 0,
               bottom: 0,
               right: 12,
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Chrome(
-                      padding: EdgeInsets.zero,
-                      child: control(
-                        'Choose located logs',
-                        LucideIcons.listFilter,
-                        () => showRecords(),
-                      ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: math.max(
+                      96,
+                      bounds.maxHeight - 280 - viewBottom,
                     ),
-                    const SizedBox(height: 10),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxHeight: math.max(
-                          48,
-                          bounds.maxHeight - 338 - bottom,
-                        ),
-                      ),
-                      child: Chrome(
-                        key: const ValueKey('map-tools-rail'),
-                        padding: EdgeInsets.zero,
-                        child: SingleChildScrollView(
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Chrome(
+                          key: const ValueKey('map-tools-rail'),
+                          borderRadius: 24,
+                          padding: const EdgeInsets.symmetric(vertical: 2),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
-                            children: mapActions(),
+                            children: displayActions(),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        Chrome(
+                          key: const ValueKey('map-zoom-rail'),
+                          borderRadius: 24,
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              control('Zoom in', LucideIcons.plus, () {
+                                cameraMotion.stop();
+                                controller.move(
+                                  controller.camera.center,
+                                  math.min(19, controller.camera.zoom + 1),
+                                );
+                              }, enabled: ready),
+                              Container(
+                                width: 22,
+                                height: 1,
+                                color: scheme.onSurface.withValues(alpha: .10),
+                              ),
+                              control('Zoom out', LucideIcons.minus, () {
+                                cameraMotion.stop();
+                                controller.move(
+                                  controller.camera.center,
+                                  math.max(2, controller.camera.zoom - 1),
+                                );
+                              }, enabled: ready),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
+            // LAYER 4: Subtle unlocated-log action pill + attribution strip clear of PillNavigation
+            if (!loading && shown.isEmpty && unlocated.isNotEmpty)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: viewBottom + 92,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Chrome(
+                    key: const ValueKey('map-unlocated-pill'),
+                    borderRadius: 14,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: withFeedback(() => showRecords()),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              LucideIcons.listFilter,
+                              size: 13,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                '${unlocated.length} unlocated ${unlocated.length == 1 ? 'log' : 'logs'} · Tap to view',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: scheme.onSurface,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             Positioned(
               left: 16,
               right: 16,
-              bottom: 88 + bottom,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                color: Theme.of(c).colorScheme.surface,
-                child: const Text(
-                  'Powered by Geoapify · © OpenStreetMap contributors',
-                  style: TextStyle(fontSize: 10),
+              bottom: viewBottom + 66,
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.surface.withValues(alpha: dark ? .52 : .64),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: dark ? .10 : .42),
+                        width: 0.6,
+                      ),
+                    ),
+                    child: Text(
+                      'Powered by Geoapify · © OpenStreetMap contributors',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w500,
+                        color: scheme.onSurface.withValues(alpha: .72),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1092,6 +1609,573 @@ class _MapScreenState extends ConsumerState<MapScreen>
     tileReset.close();
     controller.dispose();
     super.dispose();
+  }
+}
+
+class _MapSegmentItem extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _MapSegmentItem({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    this.enabled = true,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 1.5),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: AnimatedOpacity(
+          opacity: selected ? 1.0 : .42,
+          duration: Motion.duration(context, 150),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: enabled ? onTap : null,
+              borderRadius: BorderRadius.circular(18),
+              child: AnimatedContainer(
+                duration: Motion.duration(context, 150),
+                curve: Motion.curve,
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: selected
+                      ? scheme.onSurface.withValues(alpha: .08)
+                      : Colors.transparent,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, size: 13, color: color),
+                    const SizedBox(width: 5),
+                    Text(
+                      label,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: scheme.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapOptionsSheet extends StatefulWidget {
+  final bool trace;
+  final bool mutedMap;
+  final int locatedCount;
+  final int unlocatedCount;
+  final int selectedCount;
+  final ValueChanged<bool> onTraceChanged;
+  final ValueChanged<bool> onMutedChanged;
+  final VoidCallback onClearSelection;
+
+  const _MapOptionsSheet({
+    required this.trace,
+    required this.mutedMap,
+    required this.locatedCount,
+    required this.unlocatedCount,
+    required this.selectedCount,
+    required this.onTraceChanged,
+    required this.onMutedChanged,
+    required this.onClearSelection,
+  });
+
+  @override
+  State<_MapOptionsSheet> createState() => _MapOptionsSheetState();
+}
+
+class _MapOptionsSheetState extends State<_MapOptionsSheet> {
+  late bool trace = widget.trace;
+  late bool mutedMap = widget.mutedMap;
+  late int selectedCount = widget.selectedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return PanelContent(
+      header: const PanelHeading(
+        title: 'Map options',
+        leading: Chrome(
+          borderRadius: 22,
+          padding: EdgeInsets.all(10),
+          child: Icon(LucideIcons.layers, size: 20),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SwitchListTile(
+            title: const Text('Show chronological trace'),
+            subtitle: const Text('Connect recorded stops along routes'),
+            value: trace,
+            onChanged: (value) {
+              ActionFeedback.tap();
+              setState(() => trace = value);
+              widget.onTraceChanged(value);
+            },
+          ),
+          SwitchListTile(
+            title: const Text('Muted map style'),
+            subtitle: const Text(
+              'Soften map contrast so routes and clusters stand out',
+            ),
+            value: mutedMap,
+            onChanged: (value) {
+              ActionFeedback.tap();
+              setState(() => mutedMap = value);
+              widget.onMutedChanged(value);
+            },
+          ),
+          const Divider(height: 16),
+          ListTile(
+            leading: const Icon(LucideIcons.listFilter),
+            title: const Text('Timeline logs'),
+            subtitle: Text(
+              '${widget.locatedCount} located · ${widget.unlocatedCount} unlocated',
+            ),
+            trailing: Icon(
+              LucideIcons.chevronRight,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+            onTap: withFeedback(() => Navigator.pop(context, 'logs')),
+          ),
+          if (selectedCount > 0)
+            ListTile(
+              leading: Icon(
+                LucideIcons.xCircle,
+                color: scheme.onSurfaceVariant,
+              ),
+              title: Text('Clear trace selection ($selectedCount)'),
+              onTap: withFeedback(() {
+                setState(() => selectedCount = 0);
+                widget.onClearSelection();
+              }),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapClusterSheet extends StatelessWidget {
+  final List<MapRecord> records;
+  final Set<String> selected;
+  final VoidCallback onZoomToCluster;
+
+  const _MapClusterSheet({
+    required this.records,
+    required this.selected,
+    required this.onZoomToCluster,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final countLabel = records.length > 99 ? '99+' : '${records.length}';
+    return PanelContent(
+      header: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: const BoxDecoration(
+                    color: _MapScreenState.clusterAmber,
+                    shape: BoxShape.circle,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    countLabel,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Location cluster',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        '${records.length} recorded locations',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton(
+                  onPressed: withFeedback(() {
+                    Navigator.pop(context);
+                    onZoomToCluster();
+                  }),
+                  child: const Text('Zoom in'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Nearby records',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(48, 36),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                  onPressed: withFeedback(
+                    () => Navigator.pop(context, 'view_all'),
+                  ),
+                  child: const Text('View all'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      scrollable: true,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        itemCount: records.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final record = records[index];
+          final kind = record.details['kind']?.toString();
+          final catColor = _MapScreenState.colors[record.category]!;
+          final isTraced = selected.contains(record.id);
+          return Surface(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: catColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              title: Text(
+                record.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${DateFormat('d MMM · HH:mm').format(record.time)}'
+                '${kind != null && kind.isNotEmpty ? ' · ($kind)' : ' · ${record.category}'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (isTraced)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Icon(
+                        LucideIcons.route,
+                        size: 14,
+                        color: _MapScreenState.routeBlue,
+                      ),
+                    ),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 16,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+              onTap: withFeedback(() => Navigator.pop(context, record)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _MapLocationSheet extends StatefulWidget {
+  final MapRecord record;
+  final bool isSelected;
+  final VoidCallback onToggleTrace;
+  final VoidCallback onCenter;
+
+  const _MapLocationSheet({
+    required this.record,
+    required this.isSelected,
+    required this.onToggleTrace,
+    required this.onCenter,
+  });
+
+  @override
+  State<_MapLocationSheet> createState() => _MapLocationSheetState();
+}
+
+class _MapLocationSheetState extends State<_MapLocationSheet> {
+  late bool isSelected = widget.isSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final record = widget.record;
+    final scheme = Theme.of(context).colorScheme;
+    final catColor = _MapScreenState.colors[record.category]!;
+    final kind = record.details['kind']?.toString();
+    final categoryTag = kind != null && kind.isNotEmpty
+        ? kind
+        : record.category;
+    return PanelContent(
+      header: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: catColor.withValues(alpha: .15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              _MapScreenState.icons[record.category],
+              size: 18,
+              color: catColor,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${DateFormat('d MMM yyyy · HH:mm').format(record.time)} · ($categoryTag)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      footer: PanelActions(
+        children: [
+          AppButton(
+            label: isSelected ? 'In trace' : 'Trace point',
+            icon: LucideIcons.route,
+            secondary: isSelected,
+            onPressed: () {
+              setState(() => isSelected = !isSelected);
+              widget.onToggleTrace();
+            },
+          ),
+          AppButton(
+            label: 'Center map',
+            icon: LucideIcons.crosshair,
+            secondary: true,
+            onPressed: () {
+              Navigator.pop(context);
+              widget.onCenter();
+            },
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Surface(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.location,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  logDetails(record.row),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: LogDeleteButton(
+              onDelete: () async {
+                final db = ProviderScope.containerOf(
+                  context,
+                  listen: false,
+                ).read(databaseProvider);
+                final deleted = await deleteActivityLog(context, db, record.id);
+                if (deleted && context.mounted) {
+                  Navigator.pop(context);
+                }
+                return deleted;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MapRouteSheet extends StatelessWidget {
+  final MapRouteGroup route;
+
+  const _MapRouteSheet({required this.route});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final span =
+        '${DateFormat('d MMM · HH:mm').format(route.start)} – ${DateFormat('HH:mm').format(route.end)}';
+    return PanelContent(
+      header: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: _MapScreenState.routeBlue.withValues(alpha: .15),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              LucideIcons.route,
+              size: 18,
+              color: _MapScreenState.routeBlue,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Recorded route',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text(
+                  '${route.records.length} stops · $span',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: withFeedback(
+              () => Navigator.pop(context, 'trace_route'),
+            ),
+            child: const Text('Focus'),
+          ),
+        ],
+      ),
+      scrollable: true,
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+        itemCount: route.records.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final record = route.records[index];
+          final catColor = _MapScreenState.colors[record.category]!;
+          return Surface(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: Container(
+                width: 24,
+                height: 24,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: catColor.withValues(alpha: .16),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: catColor,
+                  ),
+                ),
+              ),
+              title: Text(
+                record.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${DateFormat('HH:mm').format(record.time)} · ${record.location}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: scheme.onSurfaceVariant,
+              ),
+              onTap: withFeedback(() => Navigator.pop(context, record)),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

@@ -423,4 +423,57 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  testWidgets(
+    'GlassCircleButton matches 48x48 circular LiquidGlassStyle surface',
+    (tester) async {
+      var tapped = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: Center(
+              child: GlassCircleButton(
+                tooltip: 'Settings',
+                icon: Icons.settings,
+                onPressed: () => tapped = true,
+              ),
+            ),
+          ),
+        ),
+      );
+      final finder = find.byType(GlassCircleButton);
+      expect(tester.getSize(finder), const Size(48, 48));
+      final chrome = tester.widget<Chrome>(find.byType(Chrome));
+      expect(chrome.borderRadius, 24);
+      final lightDeco = LiquidGlassStyle.surfaceDecoration(
+        tester.element(finder),
+        radius: 24,
+      );
+      expect(lightDeco.color!.a, closeTo(.62, .001));
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      expect(tapped, isTrue);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: Design.theme(true),
+          home: Scaffold(
+            body: Center(
+              child: GlassCircleButton(
+                tooltip: 'Settings',
+                icon: Icons.settings,
+                onPressed: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final darkDeco = LiquidGlassStyle.surfaceDecoration(
+        tester.element(finder),
+        radius: 24,
+      );
+      expect(darkDeco.color!.a, closeTo(.52, .001));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

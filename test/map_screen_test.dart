@@ -98,20 +98,10 @@ void main() {
           accuracy,
         );
         expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
-        await tester.tap(
-          find.ancestor(
-            of: find.text('You'),
-            matching: find.byType(FilterChip),
-          ),
-        );
+        await tester.tap(find.text('You'));
         await tester.pump(const Duration(milliseconds: 200));
         expect(find.byKey(const ValueKey('map-user-location')), findsNothing);
-        await tester.tap(
-          find.ancestor(
-            of: find.text('You'),
-            matching: find.byType(FilterChip),
-          ),
-        );
+        await tester.tap(find.text('You'));
         await tester.pump(const Duration(milliseconds: 200));
         expect(find.byKey(const ValueKey('map-user-location')), findsOneWidget);
         expect(
@@ -252,11 +242,11 @@ void main() {
       expect(
         tester.getRect(find.byTooltip('Previous timeline')).left -
             pillRect.left,
-        10,
+        closeTo(10.8, 0.05),
       );
       expect(
         pillRect.right - tester.getRect(find.byTooltip('Next timeline')).right,
-        10,
+        closeTo(10.8, 0.05),
       );
       expect(find.text('Month'), findsNothing);
 
@@ -284,6 +274,11 @@ void main() {
       await tester.tap(find.byTooltip('Next timeline'));
       await tester.pumpAndSettle();
       expect(find.text('2027'), findsOneWidget);
+      await tester.tap(find.byTooltip('Change timeline period'));
+      await tester.pumpAndSettle();
+      expect(find.text('Week'), findsOneWidget);
+      await tester.tap(find.text('Week'));
+      await tester.pumpAndSettle();
       for (final mode in ['Week', 'Day']) {
         await tester.longPress(find.byTooltip('Timeline mode'));
         await tester.pumpAndSettle();
@@ -351,7 +346,7 @@ void main() {
       find.textContaining('Basemap not configured · saved dots remain'),
       findsOneWidget,
     );
-    expect(find.byTooltip('Choose located logs'), findsOneWidget);
+    expect(find.byTooltip('Map options'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
@@ -429,8 +424,10 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       expect(camera.camera.center.latitude, 14.5);
       expect(camera.camera.center.longitude, 121);
-      expect(find.text('1 located · 2 without location'), findsOneWidget);
-      await tester.tap(find.byTooltip('Choose located logs'));
+      expect(find.text('1 located · 2 unlocated'), findsOneWidget);
+      await tester.tap(find.byTooltip('Map options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Timeline logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
       await tester.pumpAndSettle();
@@ -503,7 +500,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 600));
       expect(tester.takeException(), isNull);
-      expect(find.text('2 located · 0 without location'), findsOneWidget);
+      expect(find.text('2 located · 0 unlocated'), findsOneWidget);
       final counts = find.byKey(const ValueKey('map-record-counts'));
       final datePill = find.byKey(const ValueKey('map-date-pill'));
       expect(find.descendant(of: datePill, matching: counts), findsOneWidget);
@@ -524,11 +521,20 @@ void main() {
         .55,
       );
 
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 20);
-      expect(tester.getRect(find.byTooltip('Zoom in')).height, 48);
-      final rail = tester.getRect(find.byKey(const ValueKey('map-tools-rail')));
-      expect(rail.center.dy, 389);
-      expect(rail.right, 308);
+      expect(
+        tester.getRect(find.byTooltip('Previous timeline')).top,
+        closeTo(19.8, 0.05),
+      );
+      expect(tester.getRect(find.byTooltip('Zoom in')).height, 44);
+      final toolsRail = tester.getRect(
+        find.byKey(const ValueKey('map-tools-rail')),
+      );
+      final zoomRail = tester.getRect(
+        find.byKey(const ValueKey('map-zoom-rail')),
+      );
+      expect(toolsRail.right, 308);
+      expect(zoomRail.right, 308);
+      expect(zoomRail.top, greaterThanOrEqualTo(toolsRail.bottom + 10));
       expect(
         tester.getRect(find.byTooltip('Fit recorded locations')).bottom,
         lessThanOrEqualTo(tester.getRect(find.byTooltip('Zoom in')).top),
@@ -536,20 +542,13 @@ void main() {
       final legends = find.byKey(const ValueKey('map-legends'));
       expect(
         tester.getRect(legends).top,
-        greaterThanOrEqualTo(tester.getRect(datePill).bottom + 11),
+        greaterThanOrEqualTo(tester.getRect(datePill).bottom + 7),
       );
       expect(find.text('MAP'), findsNothing);
-      expect(tester.getRect(legends).height, lessThanOrEqualTo(48));
+      expect(tester.getRect(legends).height, lessThanOrEqualTo(42));
       expect(
         find.descendant(of: legends, matching: find.byType(ShaderMask)),
         findsOneWidget,
-      );
-      final legendChip = find
-          .descendant(of: legends, matching: find.byType(FilterChip))
-          .first;
-      expect(
-        tester.getRect(legendChip).height + 10,
-        tester.getRect(legends).height,
       );
       await tester.drag(
         find.descendant(
@@ -567,12 +566,7 @@ void main() {
       expect(tester.widget<AnimatedOpacity>(otherFade).opacity, 1);
       await tester.tap(find.text('Other'));
       await tester.pumpAndSettle();
-      expect(tester.widget<AnimatedOpacity>(otherFade).opacity, .4);
-      final otherChip = tester.widget<FilterChip>(
-        find.widgetWithText(FilterChip, 'Other'),
-      );
-      expect(otherChip.selected, isFalse);
-      expect(otherChip.selectedColor, Colors.transparent);
+      expect(tester.widget<AnimatedOpacity>(otherFade).opacity, .42);
       await tester.tap(find.text('Other'));
       await tester.pumpAndSettle();
       expect(tester.widget<AnimatedOpacity>(otherFade).opacity, 1);
@@ -583,30 +577,61 @@ void main() {
       await tester.tap(find.byTooltip('Zoom in'));
       await tester.pump();
       expect(camera.camera.zoom, zoom + 1);
-      await tester.tap(find.byTooltip('Choose located logs'));
+
+      // Tapping the numbered amber cluster opens the contextual cluster sheet.
+      final clusterTap = tester.widget<GestureDetector>(
+        find
+            .ancestor(
+              of: find.text('2'),
+              matching: find.byType(GestureDetector),
+            )
+            .first,
+      );
+      expect(clusterTap.behavior, HitTestBehavior.opaque);
+      await tester.tap(find.text('2'));
+      await tester.pumpAndSettle();
+      expect(find.text('Location cluster'), findsOneWidget);
+      expect(find.text('2 recorded locations'), findsOneWidget);
+      expect(find.text('View all'), findsOneWidget);
+      await tester.tap(find.text('Purchased lunch'));
+      await tester.pumpAndSettle();
+      expect(find.text('Trace point'), findsOneWidget);
+      expect(find.text('Center map'), findsOneWidget);
+      await tester.tap(find.text('Trace point'));
+      await tester.pumpAndSettle();
+      expect(find.text('In trace'), findsOneWidget);
+      Navigator.of(tester.element(find.text('In trace'))).pop();
+      await tester.pumpAndSettle();
+
+      // Open Map options and verify trace/muted switches + Timeline logs.
+      await tester.tap(find.byTooltip('Map options'));
+      await tester.pumpAndSettle();
+      expect(find.text('Map options'), findsOneWidget);
+      expect(find.text('Show chronological trace'), findsOneWidget);
+      expect(find.text('Muted map style'), findsOneWidget);
+      await tester.tap(find.text('Muted map style'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ColorFiltered), findsWidgets);
+      await tester.tap(find.text('Timeline logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('panel-drag-handle')));
       await tester.pumpAndSettle();
       expect(find.text('Purchased lunch'), findsOneWidget);
       expect(find.text('Clocked in'), findsOneWidget);
-      await tester.tap(find.byType(Checkbox).first);
-      await tester.pump();
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Trace selected logs, or all logs'));
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(find.text('2 located · 0 without location'), findsOneWidget);
-      final traceButton = tester.widget<IconButton>(
+      expect(find.text('2 located · 0 unlocated'), findsOneWidget);
+      expect(find.byKey(const ValueKey('map-trace-pill')), findsOneWidget);
+      expect(find.text('Tracing 1 stop'), findsOneWidget);
+      final optionsButton = tester.widget<IconButton>(
         find.byWidgetPredicate(
-          (widget) =>
-              widget is IconButton &&
-              widget.tooltip == 'Hide chronological trace',
+          (widget) => widget is IconButton && widget.tooltip == 'Map options',
         ),
       );
-      expect(traceButton.isSelected, isTrue);
-      expect(traceButton.style!.shape!.resolve({}), isA<CircleBorder>());
+      expect(optionsButton.isSelected, isTrue);
+      expect(optionsButton.style!.shape!.resolve({}), isA<CircleBorder>());
       final indicator = find.byKey(const ValueKey('map-toggle-indicator'));
-      expect(tester.getSize(indicator), const Size(43, 43));
+      expect(tester.getSize(indicator), const Size(38, 38));
       final indicatorDecoration =
           tester.widget<Container>(indicator).decoration! as BoxDecoration;
       expect(indicatorDecoration.color!.a, closeTo(.12, .001));
@@ -650,12 +675,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(tiles.requests, greaterThan(requests));
       expect(find.byTooltip('Retry map loading'), findsNothing);
-      expect(find.text('2 located · 0 without location'), findsOneWidget);
+      expect(find.text('2 located · 0 unlocated'), findsOneWidget);
       tester.view.physicalSize = const Size(640, 360);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(tester.getRect(find.byTooltip('Previous timeline')).top, 20);
-      await tester.tap(find.byTooltip('Choose located logs'));
+      expect(
+        tester.getRect(find.byTooltip('Previous timeline')).top,
+        closeTo(19.8, 0.05),
+      );
+      await tester.tap(find.byTooltip('Map options'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Timeline logs'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Timeline logs'));
       await tester.pumpAndSettle();
       expect(find.text('Timeline logs'), findsOneWidget);
       await tester.tap(find.text('Done'));
@@ -663,7 +695,9 @@ void main() {
       expect(tester.takeException(), isNull);
       tester.view.physicalSize = const Size(640, 720);
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Choose located logs'));
+      await tester.tap(find.byTooltip('Map options'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Timeline logs'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Select all'));
       await tester.pumpAndSettle();
@@ -682,10 +716,56 @@ void main() {
       expect(find.text('Log deleted'), findsOneWidget);
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
-      expect(find.text('1 located · 0 without location'), findsOneWidget);
+      expect(find.text('1 located · 0 unlocated'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Clear trace selection'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('map-trace-pill')), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(seconds: 1));
     },
   );
+
+  testWidgets('Unlocated-only map surfaces direct timeline logs shortcut', (
+    tester,
+  ) async {
+    final db = AppDatabase.forTesting(NativeDatabase.memory());
+    addTearDown(db.close);
+    final time = DateTime.now().millisecondsSinceEpoch;
+    final data = (await tester.runAsync(() async {
+      await db.addActivity({
+        'id': 'u1',
+        'time': time,
+        'action': 'clock_in',
+        'title': 'Office check-in',
+        'location': 'Location unavailable',
+      });
+      return db.readAll();
+    }))!;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(
+          theme: Design.theme(false),
+          home: Scaffold(
+            body: MapScreen(
+              data: data,
+              tileProvider: _TestTiles(),
+              apiKey: 'test-key',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.byKey(const ValueKey('map-unlocated-pill')), findsOneWidget);
+    expect(find.text('1 unlocated log · Tap to view'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('map-unlocated-pill')));
+    await tester.pumpAndSettle();
+    expect(find.text('Timeline logs'), findsOneWidget);
+    expect(find.text('Office check-in'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+  });
 }

@@ -1,5 +1,16 @@
 # FrekiHub application audit
 
+## Map UI/UX refinement & shared Liquid Glass material — 2026-11-16
+
+Source-confirmed implementation across `lib/components.dart`, `lib/design.dart`, `lib/main.dart`, `lib/map_records.dart`, `lib/map.dart` and `lib/rule_language.dart`:
+- Extracted `LiquidGlassStyle` (`lib/components.dart`) from `PillNavigation` (`lib/design.dart`) so `PillNavigation`, `Chrome`, and the circular `GlassCircleButton` Calendar/Settings shortcuts (`lib/main.dart`) share identical Liquid Glass translucency (`.52`/`.62` surface tint), blur/thickness (`18`/`18`), `0.8 px` white edge highlight, ambient/contact shadows, and `0.9` pressed scale feedback without altering `PillNavigation` appearance.
+- Consolidated Map Layer 1 (`lib/map.dart`) into a single top column (`map-date-pill` showing date beside a `Change timeline period` chevron + tappable `located · unlocated` count link with `8 px` vertical clearance above the compact floating segmented strip `map-legends` for `You`, `Sessions`, `Finance`, `Locations`, and `Other`, plus a dismissible `map-trace-pill` for one-tap trace clearing).
+- Upgraded `clusterMapRecords` (`lib/map_records.dart`) to zoom-dependent spatial-hash distance clustering (`clusterRadiusPx`, `clusterCenter`) so clusters never overlap and progressively separate into individual markers on zoom; markers use full `48×48` opaque hit targets (`HitTestBehavior.opaque`), and amber numbered cluster markers or smaller category-colored single markers enlarge with a soft halo when selected/inspected while unselected markers dim to `48%` opacity.
+- Added `splitMapRoutes` (`lib/map_records.dart`) to prevent linking unrelated days or >4-hour gaps, rendering active routes as solid blue with subtle white casing and start/end endpoint rings while historical routes render in muted translucent blue, with polyline tap hit-testing opening `_MapRouteSheet`.
+- Split the right-side floating toolbar into two compact Liquid Glass groups (`map-tools-rail` for `Retry`, `Map options`, `Locate`, `Fit`; `map-zoom-rail` for `Zoom in` / `Zoom out`), moved trace toggle, `Muted map style` (`mapMuted`, with dark-mode `_darkMutedTileMatrix` slate adaptation), and `Timeline logs` into `_MapOptionsSheet`, added contextual `_MapClusterSheet` and `_MapLocationSheet` drawers, replaced the full-width opaque attribution bar with a compact shrink-wrapped translucent strip clear of `PillNavigation` (plus `map-unlocated-pill` when only unlocated logs exist), and exposed `map.cluster_count` and `map.muted` in `RuleCatalog` and `RULE_SYNTAX.md`.
+
+Verification: `dart format --set-exit-if-changed` across 10 modified Dart source/test files (0 changed), `flutter analyze` (0 issues), `git diff --check`, and targeted `flutter test` across `test/map_screen_test.dart`, `test/map_records_test.dart`, `test/rule_language_test.dart`, `test/audit_regression_test.dart`, `test/navigation_test.dart`, and `test/layout_test.dart` passed all **44 checks**. Physical device tile rendering, gesture feel, and visual glass refraction over live Geoapify tiles remain a phone verification gap.
+
 ## Global keyboard overlay input reveal and targeted sheet lift — 2026-11-15
 
 Source-confirmed resolution across pages, shared `panel` bottom drawers and `SyntaxBuilderScreen`:
