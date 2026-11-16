@@ -457,7 +457,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'A personal place for your time and money.\nVersion 1.0.0 · Local storage · No account',
+                'A personal place for your time and money.\nVersion 1.5.5 · Local storage · No account',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.7,
