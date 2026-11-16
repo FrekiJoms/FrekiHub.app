@@ -368,6 +368,7 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
   @override
   Widget build(BuildContext c) {
     final accounts = _accounts();
+    _WalletAppIcons.prefetch(accounts, context: c);
     final included = accounts.where((a) => a.included).toList();
     final scoped = widget.wallet == null
         ? included
@@ -1230,7 +1231,7 @@ class _WalletRows extends StatelessWidget {
 
   @override
   Widget build(BuildContext c) {
-    _WalletAppIcons.prefetch(accounts);
+    _WalletAppIcons.prefetch(accounts, context: c);
     return Surface(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
       child: ReorderableListView.builder(
@@ -2080,8 +2081,9 @@ class _DeckCardShell extends StatelessWidget {
 }
 
 class _WalletAppIcons {
-  static final Map<String, Uint8List?> _cache = {};
+  static final Map<String, MemoryImage?> _cache = {};
   static final Set<String> _pending = {};
+  static final Set<String> _precached = {};
   static final ValueNotifier<int> version = ValueNotifier<int>(0);
 
   static String _requestToken(String name, String? packageName) {
@@ -2089,31 +2091,79 @@ class _WalletAppIcons {
     return pkg.isEmpty ? name : '$name|$pkg';
   }
 
-  static Uint8List? iconFor(String name, {String? packageName}) {
-    final key = name.trim();
-    if (key.isEmpty) return null;
+  static String _cacheKey(String name, String? packageName) =>
+      _requestToken(name.trim().toLowerCase(), packageName?.trim().toLowerCase());
+
+  static MemoryImage? iconFor(
+    String name, {
+    String? packageName,
+    BuildContext? context,
+  }) {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return null;
+    final key = _cacheKey(cleanName, packageName);
     if (!_cache.containsKey(key) && !_pending.contains(key)) {
-      _load([(name: key, token: _requestToken(key, packageName))]);
+      _load([
+        (
+          name: cleanName,
+          key: key,
+          token: _requestToken(cleanName, packageName),
+        ),
+      ], context: context);
     }
-    return _cache[key];
+    final provider = _cache[key];
+    if (provider != null && context != null && _precached.add(key)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          unawaited(precacheImage(provider, context).catchError((Object _) {}));
+        }
+      });
+    }
+    return provider;
   }
 
-  static void prefetch(Iterable<WalletAccount> accounts) {
-    final missing = <({String name, String token})>[];
+  static bool isPending(String name, {String? packageName}) {
+    final cleanName = name.trim();
+    if (cleanName.isEmpty) return false;
+    final key = _cacheKey(cleanName, packageName);
+    return !_cache.containsKey(key);
+  }
+
+  static void prefetch(
+    Iterable<WalletAccount> accounts, {
+    BuildContext? context,
+  }) {
+    final missing = <({String name, String key, String token})>[];
     for (final a in accounts) {
-      final key = a.name.trim();
-      if (key.isNotEmpty &&
-          !_cache.containsKey(key) &&
-          !_pending.contains(key)) {
-        missing.add((name: key, token: _requestToken(key, a.packageName)));
+      if (a.hasCustomArtwork) continue;
+      final cleanName = a.name.trim();
+      if (cleanName.isEmpty) continue;
+      final key = _cacheKey(cleanName, a.packageName);
+      final cached = _cache[key];
+      if (cached != null && context != null && _precached.add(key)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) {
+            unawaited(precacheImage(cached, context).catchError((Object _) {}));
+          }
+        });
+      }
+      if (!_cache.containsKey(key) && !_pending.contains(key)) {
+        missing.add((
+          name: cleanName,
+          key: key,
+          token: _requestToken(cleanName, a.packageName),
+        ));
       }
     }
-    if (missing.isNotEmpty) _load(missing);
+    if (missing.isNotEmpty) _load(missing, context: context);
   }
 
-  static Future<void> _load(List<({String name, String token})> items) async {
-    final names = items.map((e) => e.name).toList();
-    _pending.addAll(names);
+  static Future<void> _load(
+    List<({String name, String key, String token})> items, {
+    BuildContext? context,
+  }) async {
+    final keys = items.map((e) => e.key).toList();
+    _pending.addAll(keys);
     try {
       final fetched = await NativeSession.channel
           .invokeMapMethod<String, Uint8List>(
@@ -2121,20 +2171,34 @@ class _WalletAppIcons {
             items.map((e) => e.token).toList(),
           );
       var updated = false;
-      for (final name in names) {
-        final bytes = fetched?[name];
+      for (final item in items) {
+        final bytes = fetched?[item.name];
         if (bytes != null && bytes.isNotEmpty) {
-          _cache[name] = bytes;
+          final provider = MemoryImage(bytes);
+          _cache[item.key] = provider;
+          if (context != null && context.mounted && _precached.add(item.key)) {
+            await precacheImage(provider, context).catchError((Object _) {});
+          }
           updated = true;
         } else {
-          _cache[name] = null;
+          if (_cache[item.key] != null || !_cache.containsKey(item.key)) {
+            updated = true;
+          }
+          _cache[item.key] = null;
         }
+      }
+      if (updated) version.value++;
+    } on MissingPluginException {
+      var updated = false;
+      for (final item in items) {
+        if (!_cache.containsKey(item.key)) updated = true;
+        _cache[item.key] = null;
       }
       if (updated) version.value++;
     } catch (_) {
       // Allow retry on transient platform channel errors instead of caching null.
     } finally {
-      _pending.removeAll(names);
+      _pending.removeAll(keys);
     }
   }
 }
@@ -2161,18 +2225,34 @@ class _WalletMark extends StatelessWidget {
   Widget build(BuildContext c) => ValueListenableBuilder<int>(
     valueListenable: _WalletAppIcons.version,
     builder: (context, _, _) {
+      final generic = _genericIcon(account.name);
+      final hasPackage = (account.packageName?.trim() ?? '').isNotEmpty;
+      if (!account.hasCustomArtwork && !hasPackage && generic != null) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: Center(
+            child: Icon(
+              generic,
+              size: size * .76,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        );
+      }
       final appIcon = account.hasCustomArtwork
           ? null
           : _WalletAppIcons.iconFor(
               account.name,
               packageName: account.packageName,
+              context: context,
             );
       if (appIcon != null) {
         return SizedBox(
           width: size,
           height: size,
-          child: Image.memory(
-            appIcon,
+          child: Image(
+            image: appIcon,
             width: size,
             height: size,
             fit: BoxFit.contain,
@@ -2181,7 +2261,22 @@ class _WalletMark extends StatelessWidget {
           ),
         );
       }
-      final generic = _genericIcon(account.name);
+      if (!account.hasCustomArtwork &&
+          _WalletAppIcons.isPending(
+            account.name,
+            packageName: account.packageName,
+          )) {
+        return SizedBox(
+          width: size,
+          height: size,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .06),
+              borderRadius: BorderRadius.circular(size * .26),
+            ),
+          ),
+        );
+      }
       if (!account.hasCustomArtwork && generic != null) {
         return SizedBox(
           width: size,
