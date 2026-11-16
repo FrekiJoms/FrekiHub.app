@@ -592,7 +592,7 @@ class GlassCircleButton extends StatefulWidget {
     super.key,
     required this.tooltip,
     required this.icon,
-    this.iconSize = 22,
+    this.iconSize = 18,
     this.selected = false,
     required this.onPressed,
   });
@@ -607,23 +607,32 @@ class _GlassCircleButtonState extends State<GlassCircleButton> {
   @override
   Widget build(BuildContext context) => SizedBox.square(
     dimension: 48,
-    child: AnimatedScale(
-      scale: _pressed ? 0.9 : 1.0,
-      duration: Motion.duration(context, 120),
-      curve: Curves.easeOutCubic,
+    child: Semantics(
+      selected: widget.selected,
       child: Listener(
         onPointerDown: (_) => setState(() => _pressed = true),
         onPointerUp: (_) => setState(() => _pressed = false),
         onPointerCancel: (_) => setState(() => _pressed = false),
-        child: Chrome(
-          borderRadius: 24,
-          padding: EdgeInsets.zero,
-          child: Semantics(
-            selected: widget.selected,
-            child: IconButton(
-              tooltip: widget.tooltip,
-              icon: Icon(widget.icon, size: widget.iconSize),
-              onPressed: widget.onPressed,
+        child: IconButton(
+          tooltip: widget.tooltip,
+          onPressed: widget.onPressed,
+          style: IconButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            maximumSize: const Size(48, 48),
+            padding: EdgeInsets.zero,
+            shape: const CircleBorder(),
+          ),
+          icon: AnimatedScale(
+            scale: _pressed ? 0.9 : 1.0,
+            duration: Motion.duration(context, 120),
+            curve: Curves.easeOutCubic,
+            child: SizedBox.square(
+              dimension: 38,
+              child: Chrome(
+                borderRadius: 19,
+                padding: EdgeInsets.zero,
+                child: Center(child: Icon(widget.icon, size: widget.iconSize)),
+              ),
             ),
           ),
         ),

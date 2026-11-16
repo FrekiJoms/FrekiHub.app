@@ -443,11 +443,13 @@ void main() {
       );
       final finder = find.byType(GlassCircleButton);
       expect(tester.getSize(finder), const Size(48, 48));
-      final chrome = tester.widget<Chrome>(find.byType(Chrome));
-      expect(chrome.borderRadius, 24);
+      final chromeFinder = find.byType(Chrome);
+      expect(tester.getSize(chromeFinder), const Size(38, 38));
+      final chrome = tester.widget<Chrome>(chromeFinder);
+      expect(chrome.borderRadius, 19);
       final lightDeco = LiquidGlassStyle.surfaceDecoration(
         tester.element(finder),
-        radius: 24,
+        radius: 19,
       );
       expect(lightDeco.color!.a, closeTo(.62, .001));
       await tester.tap(find.byTooltip('Settings'));
@@ -470,7 +472,7 @@ void main() {
       await tester.pumpAndSettle();
       final darkDeco = LiquidGlassStyle.surfaceDecoration(
         tester.element(finder),
-        radius: 24,
+        radius: 19,
       );
       expect(darkDeco.color!.a, closeTo(.52, .001));
       expect(tester.takeException(), isNull);

@@ -1,5 +1,12 @@
 # FrekiHub application audit
 
+## Compact top-corner Calendar and Settings Liquid Glass buttons — 2026-11-16
+
+Source-confirmed update across `lib/components.dart`, `test/navigation_test.dart` and `docs/APP_DOCUMENTATION.md`:
+- Updated `GlassCircleButton` (`lib/components.dart`) to render a compact `38×38` circular `Chrome` badge (`borderRadius: 19`, `iconSize: 18` default) centered inside a preserved `48×48` `IconButton` touch target and `Semantics`/`Tooltip` box, reducing corner visual weight while retaining full hit-target size and top-header symmetry.
+
+Verification: `dart format --set-exit-if-changed` across `lib/components.dart` and `test/navigation_test.dart` (`0 changed`), `flutter analyze` (`No issues found!`), `git diff --check`, and targeted `flutter test` across `test/navigation_test.dart`, `test/layout_test.dart`, and `test/map_screen_test.dart` passed all **18 checks**. Visual ergonomics on a physical phone remain a device review gap.
+
 ## Location auto-calibration & 30-minute stationary dwell handling — 2026-11-16
 
 Source-confirmed implementation across `android/.../MapLocation.kt`, `android/.../Automation.kt`, `android/.../RuleProgram.kt`, `lib/rule_language.dart` and `lib/automation_sync.dart`:
