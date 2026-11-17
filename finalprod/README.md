@@ -30,6 +30,7 @@ All sensitive permissions are opt-in and explained in-app before system prompts 
 | `READ_SMS` | Opt-in local import of transaction SMS messages for enabled rules. |
 | `SCHEDULE_EXACT_ALARM` | Precise timing for scheduled automation reminders when granted. |
 | `SYSTEM_ALERT_WINDOW` | Optional cross-app Clock-out confirmation card while outside FrekiHub. |
+| `REQUEST_INSTALL_PACKAGES` | Opt-in in-app APK update installation when checking for newer releases from Settings or launch. |
 | `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_SPECIAL_USE` (`SessionService`) | Keeps an ongoing user-started session chronometer visible in notifications. |
 | `RECEIVE_BOOT_COMPLETED` (`AutomationBootReceiver`) | Restores enabled schedules/geofences after device reboot or time changes. |
 | `INTERNET` / `ACCESS_NETWORK_STATE` | Map tile fetching and connectivity checks for automation. |

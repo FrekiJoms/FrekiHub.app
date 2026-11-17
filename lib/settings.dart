@@ -11,6 +11,66 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool busy = false;
   String? busyAction;
   Offset themeOrigin = const Offset(160, 230);
+  AppVersionInfo? appVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadVersion());
+  }
+
+  Future<void> _loadVersion() async {
+    final v = await AppUpdater.currentVersion();
+    if (mounted && v != null) setState(() => appVersion = v);
+  }
+
+  Future<void> _checkUpdates() async {
+    if (busy) return;
+    final url = AppUpdater.configuredUrl;
+    if (url.isEmpty) {
+      toast(context, 'No update source configured in this build.');
+      return;
+    }
+    setState(() {
+      busy = true;
+      busyAction = 'update';
+    });
+    await guarded(context, () async {
+      final current =
+          appVersion ??
+          await AppUpdater.currentVersion() ??
+          const AppVersionInfo(versionName: '1.5.5', versionCode: 1);
+      final AppUpdateInfo? info;
+      try {
+        info = await AppUpdater.check(url);
+      } on TimeoutException {
+        throw StateError('Update check timed out. Try again.');
+      } on SocketException {
+        throw StateError(
+          'Could not reach update server. Check your connection.',
+        );
+      } on HttpException catch (e) {
+        throw StateError(
+          e.message.contains('404')
+              ? 'No published update release found.'
+              : e.message,
+        );
+      }
+      if (!mounted) return;
+      if (info != null && info.versionCode > current.versionCode) {
+        await AppUpdater.showUpdateSheet(context, info, current: current);
+      } else {
+        toast(context, 'You are on the latest version (${current.label}).');
+      }
+    });
+    if (mounted) {
+      setState(() {
+        busy = false;
+        busyAction = null;
+      });
+    }
+  }
+
   Future<void> changeTheme(String mode) async {
     ActionFeedback.tap(transition: true);
     await guarded(
@@ -448,6 +508,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
         Surface(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(LucideIcons.refreshCw),
+            title: SkeletonValue(
+              loading: busy && busyAction == 'update',
+              semanticsLabel: 'Checking for updates',
+              child: const Text('Check for updates'),
+            ),
+            subtitle: Text(
+              appVersion != null
+                  ? 'Current version ${appVersion!.label}'
+                  : 'Check for a newer APK release',
+            ),
+            trailing: const Icon(LucideIcons.chevronRight, size: 18),
+            onTap: withFeedback(busy ? null : _checkUpdates),
+          ),
+        ),
+        Surface(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -457,7 +536,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 6),
               Text(
-                'A personal place for your time and money.\nVersion 1.5.5 · Local storage · No account',
+                'A personal place for your time and money.\nVersion ${appVersion?.versionName ?? '1.5.5'} · Local storage · No account',
                 style: TextStyle(
                   fontSize: 12,
                   height: 1.7,
@@ -585,81 +664,100 @@ class _ManageListState extends ConsumerState<_ManageList> {
   Future<void> _pickInstalledApp() async {
     if (saving) return;
     setState(() => saving = true);
+    List<Map<String, dynamic>> installed;
     try {
-      final installed =
+      installed =
           (await NativeSession.channel.invokeListMethod('notificationApps') ??
                   [])
               .map((a) => Map<String, dynamic>.from(a as Map))
               .toList();
-      if (!mounted) return;
-      setState(() => saving = false);
-      var query = '';
-      final picked = await panel<Map<String, dynamic>>(
-        context,
-        StatefulBuilder(
-          builder: (c, setLocal) {
-            final filtered = query.trim().isEmpty
-                ? installed
-                : installed.where((app) {
-                    final n = (app['name'] as String? ?? '').toLowerCase();
-                    final p = (app['package'] as String? ?? '').toLowerCase();
-                    final q = query.trim().toLowerCase();
-                    return n.contains(q) || p.contains(q);
-                  }).toList();
-            return PanelContent(
-              header: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const PanelHeading(title: 'Pick payment app'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    onChanged: (v) => setLocal(() => query = v),
-                    decoration: const InputDecoration(
-                      labelText: 'Search installed apps',
-                      prefixIcon: Icon(LucideIcons.search, size: 18),
-                    ),
+    } catch (_) {
+      if (mounted) {
+        setState(() => saving = false);
+        toast(context, 'Could not load installed apps.', error: true);
+      }
+      return;
+    }
+    if (!mounted) return;
+    setState(() => saving = false);
+    var query = '';
+    final picked = await panel<Map<String, dynamic>>(
+      context,
+      StatefulBuilder(
+        builder: (c, setLocal) {
+          final filtered = query.trim().isEmpty
+              ? installed
+              : installed.where((app) {
+                  final n = (app['name'] as String? ?? '').toLowerCase();
+                  final p = (app['package'] as String? ?? '').toLowerCase();
+                  final q = query.trim().toLowerCase();
+                  return n.contains(q) || p.contains(q);
+                }).toList();
+          return PanelContent(
+            header: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const PanelHeading(title: 'Pick payment app'),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (v) => setLocal(() => query = v),
+                  decoration: const InputDecoration(
+                    labelText: 'Search installed apps',
+                    prefixIcon: Icon(LucideIcons.search, size: 18),
                   ),
-                ],
-              ),
-              footer: AppButton(
-                label: 'Cancel',
-                secondary: true,
-                onPressed: () => Navigator.pop(c),
-              ),
-              scrollable: true,
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (c, i) {
-                  final app = filtered[i];
-                  final appName = (app['name'] as String? ?? '').trim();
-                  final pkg = (app['package'] as String? ?? '').trim();
-                  final added = items.any(
-                    (s) => s.toLowerCase() == appName.toLowerCase(),
-                  );
-                  return ListTile(
-                    title: Text(appName),
-                    subtitle: Text(
-                      pkg,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+            footer: AppButton(
+              label: 'Cancel',
+              secondary: true,
+              onPressed: () => Navigator.pop(c),
+            ),
+            scrollable: true,
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('No matching apps found.'),
                     ),
-                    trailing: added
-                        ? const Icon(LucideIcons.check, size: 18)
-                        : null,
-                    onTap: () => Navigator.pop(c, app),
-                  );
-                },
-              ),
-            );
-          },
-        ),
-      );
-      if (picked == null || !mounted) return;
-      final appName = (picked['name'] as String? ?? '').trim();
-      final pkg = (picked['package'] as String? ?? '').trim();
-      if (appName.isEmpty || pkg.isEmpty) return;
+                  )
+                : ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (c, i) {
+                      final app = filtered[i];
+                      final pkg = (app['package'] as String? ?? '').trim();
+                      final rawName = (app['name'] as String? ?? '').trim();
+                      final appName = rawName.isEmpty ? pkg : rawName;
+                      final added = items.any(
+                        (s) => s.toLowerCase() == appName.toLowerCase(),
+                      );
+                      return ListTile(
+                        title: Text(appName),
+                        subtitle: Text(
+                          pkg,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: added
+                            ? const Icon(LucideIcons.check, size: 18)
+                            : null,
+                        onTap: () =>
+                            Navigator.pop(c, {'name': appName, 'package': pkg}),
+                      );
+                    },
+                  ),
+          );
+        },
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final pkg = (picked['package'] as String? ?? '').trim();
+    final rawName = (picked['name'] as String? ?? '').trim();
+    final appName = rawName.isEmpty ? pkg : rawName;
+    if (appName.isEmpty || pkg.isEmpty) return;
 
-      setState(() => saving = true);
+    setState(() => saving = true);
+    try {
       final db = ref.read(databaseProvider);
       final nextMethods =
           items.any((s) => s.toLowerCase() == appName.toLowerCase())
@@ -670,9 +768,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
         final hidden = {...data.hiddenWallets}..remove(appName.toLowerCase());
         await db.pref('methods', jsonEncode(nextMethods));
         await db.pref('hiddenWallets', jsonEncode(hidden.toList()));
-        final order = List<String>.from(
-          jsonDecode(data.prefs['walletOrder'] ?? '[]') as List,
-        );
+        final order = [...walletStoredOrder(data.prefs)];
         if (!order.contains(appName)) {
           order.add(appName);
           await db.pref('walletOrder', jsonEncode(order));
@@ -686,20 +782,25 @@ class _ManageListState extends ConsumerState<_ManageList> {
         await db.pref('automation', jsonEncode(config));
         await db.pref('purchaseScanning', true);
       });
-      await AutomationSync.configure(await db.readAll());
-      if (mounted) {
-        await PermissionHints.request<bool>(context, 'notificationPermission');
-      }
+      try {
+        await AutomationSync.configure(await db.readAll());
+        if (mounted) {
+          await PermissionHints.request<bool>(
+            context,
+            'notificationPermission',
+          );
+        }
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         items = nextMethods;
         saving = false;
       });
       dataToast(context, 'Payment method', DataAction.saved);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => saving = false);
-        toast(context, 'Could not load installed apps.', error: true);
+        toast(context, 'Could not save payment method.', error: true);
       }
     }
   }

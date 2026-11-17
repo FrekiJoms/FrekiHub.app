@@ -19,6 +19,7 @@ The APK requires Android 15 (API 35) or newer because HyperIsland ToolKit 0.4.0 
 | `RuleNotifications`, `RuleNotificationReceiver` | Alarm state, next occurrence and reminder posting |
 | `TransactionNotifications` | Post-commit Finance receipt and tap destination |
 | `NotificationSoundSettings` | Notification channel settings and sound observations |
+| `AppUpdater`, `UpdateInstallReceiver` | Package version lookup, HTTPS APK download and `PackageInstaller.Session` status handling |
 
 SharedPreferences namespaces are `session`, `automation`, `rule_notifications`, `runtime_events` and bounded `runtime_events_N` segments. Session state stores current ID/start/kind/note and pending native clock-out ID/end. Automation stores config, separate snapshot, legacy queued events during migration, `smsLastScan`, last position/finance-notification fingerprint, active rule, inside states and branch/cooldown state. Reminder storage holds each schedule's definition/fingerprint/token/due/sent/limit/exact state. None directly modifies Flutter's Drift tables.
 
@@ -47,6 +48,7 @@ The manifest declares internet/network state, fine/coarse/background location, n
 - Android 13+ notification posting uses its own permission prompt.
 - Exact reminder scheduling checks Alarms & reminders access and falls back to inexact alarms if denied/revoked.
 - Cross-app session confirmation requires Android Display over other apps access; it is opt-in and checked before each overlay. Android/system or protected surfaces can control whether overlays appear.
+- In-app APK updates require `REQUEST_INSTALL_PACKAGES` ("Install unknown apps") gated through `PermissionHints` (`installPackagesPermission`), and download/install only over HTTPS (`AppUpdater`).
 - Choosing a channel sound is an OS setting, not the app's interaction sound toggle.
 - Viewing historical Map records needs internet for tiles, not a new location permission or tracking toggle. The explicit foreground locate tool uses `mapCurrentLocation` / `MapLocation` after the shared fine-location permission hint. This bounded lookup considers enabled GPS/network/fused providers, validates both monotonic and wall-clock sample age, fast-returns a cached sample only when at most 30 seconds old and within 25 metres, gives live providers a 3-second calibration grace window to refine coarse fixes down toward 20 metres (before its 20-second deadline), and cancels outstanding requests on completion. It distinguishes denied permission, disabled system Location and missing fresh fixes. The `currentLocation` automation/place-picker and periodic automation requests reuse the same GPS/network/fused lookup; location predicates retain their own accuracy/radius and opt-in checks. It neither enables background access nor calls `logLocation`/`recheck`.
 
@@ -124,6 +126,8 @@ Channel name: `frekihub/session`. Most payloads are maps or JSON strings; confir
 | `reminderPermission`, `exactReminderPermission`, `reminderStatus` | Posting prompt, exact-access settings/check, enabled/exact map |
 | `notificationSoundSettings` | Category string: reminders/transactions/sessions |
 | `sound` | clock-in/clock-out/click/transition cue name |
+| `appVersion`, `installUpdate`, `installPackagesPermission` | Installed `versionName`/`versionCode` map, HTTPS APK download/commit, `canRequestPackageInstalls` check/settings |
+| `updateProgress`, `updateStatus` (native → Flutter) | Download byte/ratio updates and `committing`/`confirming`/`installed`/`cancelled`/`failed` installer status |
 
 Only the basic timer wrapper tolerates some missing-plugin cases. Android automation methods are not universally implemented on other platforms. Add new native methods with Dart integration, permission/error handling and focused reconciliation checks; do not equate a `result.success` with a successfully committed financial record.
 

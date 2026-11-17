@@ -130,6 +130,12 @@ The code editor provides contextual completion (opening upward above the cursor 
 
 Notification sounds select Reminders, Saved transactions or Running sessions, then open the Android channel settings. Android owns the actual sound URI/channel choice. This is separate from the app's `sound` toggle for button/session effects. Running-session notifications default quiet.
 
+**App updates** check a fixed, non-user-editable HTTPS manifest (`version.json`) or GitHub Releases `owner/repo` configured in `lib/app_update.dart` / `UPDATE_URL` once on launch and from Settings. When `versionCode` increases, the shared `panel` drawer shows release details and streams the `.apk` directly into Android's `PackageInstaller.Session` without opening a browser, after gating `REQUEST_INSTALL_PACKAGES` through `PermissionHints`.
+
+## Standalone Finance companion (`Frekihub - Frxnance.app`)
+
+`..\Frekihub - Frxnance.app` (`com.frxnance.financing`) exports the Finance tab, wallet deck/views, planner, backup/restore, and local notification/SMS transaction detection (`PurchaseListener`, `FinanceNotificationParser.java`, `TransactionNotifications.kt`, `RuntimeEvents.kt`) into a standalone app without Sessions, Calendar, Map, Activity logs, or the Rule syntax builder. Its `sync_from_frekihub.ps1` script syncs shared Finance/design/parser files and `lib/app_update.dart` / `AppUpdater.kt` from FrekiHub while preserving standalone `AppData` and `budget.dart` save paths.
+
 Backup exports local data as JSON through native sharing. Restore asks for confirmation, rejects files larger than 20 MiB in the UI and replaces validated data in one database transaction. Native timer/automation state is reset/reconfigured through the Settings workflow. Clear-data requires typed confirmation. These are explicitly user-triggered destructive actions, not automatic startup recovery.
 
 ## Architecture and ownership
@@ -180,8 +186,10 @@ Activity rows, Map markers/selection and activity count/latest-action observable
 | `lib/rule_language.dart` | Catalog, typed snapshots, bounded lexer/parser/compiler |
 | `lib/data.dart`, `lib/data.g.dart` | Schema, triggers, reactive data, money/recurrence, generated Drift code |
 | `lib/services.dart`, `lib/theme_reveal.dart` | Method-channel wrapper, feedback and theme reveal |
+| `lib/app_update.dart` | Fixed HTTPS manifest/GitHub Release version check and `PackageInstaller` update drawer |
 | `lib/automation_sync.dart` | Native config/snapshot transport, event import, deduplication and receipts |
 | `android/.../MainActivity.kt` | Method channel, permission intents, SoundPool, resume hook |
+| `android/.../AppUpdater.kt` | Package version lookup, HTTPS APK download and `PackageInstaller.Session` commit |
 | `android/.../SessionService.kt` | Foreground chronometer, HyperIsland, native pending clock-out |
 | `android/.../Automation.kt` | Geofences, location job, durable event queue, boot receiver, purchase listener |
 | `android/.../RuleProgram.kt` | Native conditions, fresh context, branch deduplication and scoped actions |

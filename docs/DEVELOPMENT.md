@@ -70,6 +70,7 @@ flutter analyze
 | Syntax workspace/navigation/completion/Run/Stop | `test/rule_editor_test.dart` (separate log drawer, full-height workspace, Back, narrow enlarged text, keyboard scroll reveal, completion and saved enabled flags) |
 | Position freshness/full-range query/map catalog | `test/map_records_test.dart` |
 | Shared loading placeholders | `test/skeleton_test.dart` (unchanged value geometry, reduced-motion static state, pulse disposal, semantics, blocked placeholder interaction, save guards and log loading); preserve `test/startup_test.dart` |
+| In-app APK updates | `test/app_update_test.dart` (GitHub/manifest URL resolution, HTTPS and positive `versionCode` validation, permission hint cancellation, download progress and `PackageInstaller` status handling) |
 | Compact map toolbar/record selection/trace/recovery | `test/map_screen_test.dart` (inline mode/arrow navigation, advanced custom date/time controls, disabled Custom arrows, late location camera fitting, unlocated logs, top alignment, centered vertical tool rail, horizontal legend scrolling, narrow/enlarged text, landscape, zoom, selection/trace and tile retry) |
 | Native local reminder clock calculation | `android/app/src/test/java/com/frekihub/freki_hub/RuleNotificationScheduleCheck.java` |
 | Native finance notification parser | `android/app/src/test/java/com/frekihub/freki_hub/FinanceNotificationParserCheck.java` |
@@ -171,6 +172,32 @@ $mapDefines = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("GEOAPIFY
 ```
 
 Changing a compiled Dart define requires recompilation; attaching/hot restarting an existing binary cannot add a missing key. Once the configured debug binary is installed, attach with `flutter attach -d DEVICE_ID --dart-define-from-file=config/geoapify.local.json` so recompilation during hot reload retains the same key. Ordinary map UI changes retain the hot reload workflow. Build-time injection keeps the key out of Git but does not make a client API key secret from someone inspecting the app binary. Missing configuration skips tile requests and leaves recorded markers/log controls available. Geoapify receives tile requests for the visible viewport; saved log details are not uploaded or geocoded. Tests use fake keys and in-memory tiles.
+
+### In-app updates (`UPDATE_URL`)
+
+The built-in updater in `lib/app_update.dart` and `AppUpdater.kt` checks a compiled `UPDATE_URL` Dart define once after startup and on demand from **Settings → Check for updates**. Copy `config/update.example.json` to Git-ignored `config/update.local.json` (or pass `--dart-define=UPDATE_URL=...`) with either:
+- GitHub Releases shorthand (`owner/repo` or `https://github.com/owner/repo`), resolved to `https://api.github.com/repos/owner/repo/releases/latest` with tag `v1.5.6+3` or `versionCode: 3` in the release body and an attached HTTPS `.apk` asset.
+- An HTTPS manifest URL (`version.json`) returning `{"versionCode": 3, "versionName": "1.5.6", "apkUrl": "https://.../app.apk", "notes": "..."}`.
+
+When building with both Map and Updater defines:
+
+```powershell
+flutter run -d DEVICE_ID --dart-define-from-file=config/geoapify.local.json --dart-define-from-file=config/update.local.json
+```
+
+For Gradle debug installs, encode both defines comma-separated in `-Pdart-defines=...`:
+
+```powershell
+$mapConfig = Get-Content config/geoapify.local.json -Raw | ConvertFrom-Json
+$updateConfig = Get-Content config/update.local.json -Raw | ConvertFrom-Json
+$defines = @(
+    [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("GEOAPIFY_API_KEY=$($mapConfig.GEOAPIFY_API_KEY)")),
+    [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("UPDATE_URL=$($updateConfig.UPDATE_URL)"))
+) -join ','
+.\android\gradlew.bat -p android "-Pdart-defines=$defines" :app:installDebug
+```
+
+Without `UPDATE_URL`, startup stays silent and **Settings → Check for updates** shows `No update source configured in this build.` Upgrading an already-installed APK in place requires matching signing keys (debug-to-debug from the same keystore, or release-to-release from the owner keystore).
 
 ## Troubleshooting
 

@@ -73,7 +73,7 @@ abstract final class PermissionHints {
       title: 'Read transaction SMS',
       intro: 'Import finance transactions from SMS messages.',
       benefit: 'SMS transaction import',
-      detail: 'FrekiHub reads SMS locally to find transaction messages from banks and e-wallets.',
+      detail: 'FrekiHub reads SMS locally to find transaction messages from banks and e-wallets. On sideloaded Android 13+ builds, open App info → ⋮ → Allow restricted settings if SMS access is blocked.',
       control: 'SMS content is processed locally and not sent to a server. You can revoke access in Android settings.',
       next: 'Allow SMS access for FrekiHub on the next screen.',
       action: 'Allow SMS access',
@@ -84,7 +84,7 @@ abstract final class PermissionHints {
       intro:
           'Read selected finance alerts for clear expense and income activity.',
       benefit: 'Use your selected finance apps',
-      detail: 'Android grants notification access. FrekiHub checks only alerts from the finance apps you select and skips unclear messages.',
+      detail: 'Android grants notification access. FrekiHub checks only alerts from the finance apps you select and skips unclear messages. On Android 13+ sideloads, enable Allow restricted settings in App info if greyed out.',
       control: 'OTPs and unrelated alert text are not stored. Clear transactions are queued locally and saved to Finance when FrekiHub imports them.',
       next: 'Select FrekiHub on the next screen and allow notification access.',
       action: 'Allow notification access',
@@ -109,6 +109,16 @@ abstract final class PermissionHints {
       next: 'Enable Display over other apps for FrekiHub on the next screen.',
       action: 'Allow overlay',
       icon: LucideIcons.layers,
+    ),
+    'installPackagesPermission': PermissionHintSpec(
+      title: 'Install app updates',
+      intro: 'Allow this app to apply downloaded APK updates directly.',
+      benefit: 'In-app updates',
+      detail: 'Downloaded updates open Android’s update prompt without leaving the app.',
+      control: 'Updates only run when you tap Update. You can revoke this access in Android settings.',
+      next: 'Enable Allow from this source on the next screen, then return here.',
+      action: 'Allow app installs',
+      icon: LucideIcons.download,
     ),
   };
 

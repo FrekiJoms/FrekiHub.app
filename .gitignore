@@ -55,3 +55,6 @@ app.*.map.json
 
 # Local map API credentials
 /config/geoapify.local.json
+
+# Local update endpoint override
+/config/update.local.json

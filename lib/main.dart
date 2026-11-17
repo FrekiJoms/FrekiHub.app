@@ -9,6 +9,7 @@ import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'data.dart';
+import 'app_update.dart';
 import 'automation_sync.dart';
 import 'design.dart';
 import 'screens.dart';
@@ -78,6 +79,7 @@ class _AppShellState extends ConsumerState<AppShell>
   int? savedPage;
   Timer? automationTimer;
   bool startupReady = false;
+  bool _updateChecked = false;
   late final PageController _tabController = PageController(initialPage: 0);
   late final AnimationController _jumpFadeController = AnimationController(
     vsync: this,
@@ -110,6 +112,23 @@ class _AppShellState extends ConsumerState<AppShell>
     if (scrolling != _pageScrolling) {
       _pageScrolling = scrolling;
       _swiping.value = scrolling;
+    }
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (_updateChecked) return;
+    _updateChecked = true;
+    final url = AppUpdater.configuredUrl;
+    if (url.isEmpty) return;
+    try {
+      final current = await AppUpdater.currentVersion();
+      if (current == null || !mounted) return;
+      final info = await AppUpdater.check(url);
+      if (info != null && info.versionCode > current.versionCode && mounted) {
+        await AppUpdater.showUpdateSheet(context, info, current: current);
+      }
+    } catch (_) {
+      // Startup update check stays silent when offline or unavailable.
     }
   }
 
@@ -392,7 +411,10 @@ class _AppShellState extends ConsumerState<AppShell>
     if (!startupReady && async.hasValue) {
       startupReady = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) unawaited(reconcile());
+        if (mounted) {
+          unawaited(reconcile());
+          unawaited(_checkForUpdate());
+        }
       });
     }
     final activeTabIndex = index <= 3 ? index : lastTab;

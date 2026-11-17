@@ -1,5 +1,14 @@
 # FrekiHub application audit
 
+## Built-in in-app APK updater — 2026-11-17
+
+Source-confirmed implementation across `lib/app_update.dart`, `lib/main.dart`, `lib/settings.dart`, `lib/permissions.dart`, `lib/screens.dart`, `android/app/src/main/AndroidManifest.xml`, `android/.../MainActivity.kt`, `android/.../AppUpdater.kt`, `config/update.example.json`, `docs/DEVELOPMENT.md`, `docs/ANDROID_RUNTIME.md`, and `test/app_update_test.dart`:
+- Added `AppUpdater` (`lib/app_update.dart`) reading a fixed build-time `UPDATE_URL` Dart define (`config/update.example.json` / `config/update.local.json`), supporting both HTTPS `version.json` manifests and GitHub Releases (`owner/repo` or `https://github.com/owner/repo` resolved to `/releases/latest` with tag `+N` or `versionCode`/`build` release-note matching and HTTPS `.apk` assets).
+- Wired `AppShell._checkForUpdate` (`lib/main.dart`) to silently check once after startup readiness, and added **Check for updates** with `SkeletonValue` loading and current version display in `SettingsScreen` (`lib/settings.dart`), surfacing timeout/connection/HTTP check errors and keeping the About card version aligned with `appVersion`.
+- Added native `AppUpdater` and `UpdateInstallReceiver` (`android/.../AppUpdater.kt`) plus `REQUEST_INSTALL_PACKAGES` (`AndroidManifest.xml`) and `PermissionHints` entry `installPackagesPermission` (`lib/permissions.dart`), streaming HTTPS APK downloads into `PackageInstaller.Session` with storage size allocation (`params.setSize`), progress/status callbacks (`updateProgress` / `updateStatus`), quiet user-cancellation handling (`STATUS_FAILURE_ABORTED`), and lifecycle resume continuation only when Android unknown-sources Settings was opened.
+
+Verification: `dart format` across `lib/app_update.dart`, `lib/settings.dart`, and `test/app_update_test.dart`, `flutter analyze` (`No issues found!`), `git diff --check`, targeted `flutter test` across `test/app_update_test.dart` (**4 checks** passed) and `test/navigation_test.dart` + `test/layout_test.dart` (**10 checks** passed), and native `:app:compileDebugKotlin -x :app:compileFlutterBuildDebug` (`BUILD SUCCESSFUL`). Pre-existing `test/permission_hints_test.dart` passed 15/16 checks (including `installPackagesPermission` hint/decline/accept; the unrelated `Concurrent requests do not stack hints; failure releases the gate` case fails against `skipActionWhenAllowed: !manage` from commit `f32572b`). Real HTTPS manifest/GitHub release fetching, Android `REQUEST_INSTALL_PACKAGES` settings grant return, `PackageInstaller.Session` APK replacement, and syncing `..\Frekihub - Frxnance.app` via `sync_from_frekihub.ps1 -Verify` remain remaining gaps.
+
 ## Compact top-corner Calendar and Settings Liquid Glass buttons — 2026-11-16
 
 Source-confirmed update across `lib/components.dart`, `test/navigation_test.dart` and `docs/APP_DOCUMENTATION.md`:

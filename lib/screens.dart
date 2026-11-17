@@ -29,6 +29,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'data.dart';
+import 'app_update.dart';
 import 'automation_sync.dart';
 import 'design.dart';
 import 'services.dart';

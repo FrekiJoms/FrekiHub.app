@@ -38,9 +38,23 @@ private var smsPermissionResult: MethodChannel.Result? = null
     private var reminderPermissionResult: MethodChannel.Result? = null
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session").setMethodCallHandler { call, result ->
+        val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "frekihub/session")
+        AppUpdater.channel = channel
+        channel.setMethodCallHandler { call, result ->
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             try { when (call.method) {
+                "appVersion" -> result.success(AppUpdater.packageInfo(this))
+                "installUpdate" -> {
+                    val args = call.arguments as? Map<*, *>
+                    val url = args?.get("url") as? String ?: ""
+                    AppUpdater.downloadAndInstall(this, url)
+                    result.success(null)
+                }
+                "installPackagesPermission" -> {
+                    val allowed = AppUpdater.canInstall(this)
+                    if (!allowed) AppUpdater.openInstallSettings(this)
+                    result.success(allowed)
+                }
                 "cacheSession" -> result.success(cacheSession(call.arguments as Map<*, *>))
                 "permissionStatus" -> {
                     val notifications = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
@@ -53,7 +67,8 @@ private var smsPermissionResult: MethodChannel.Result? = null
                         "notificationPermission" to getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java)),
                         "smsPermission" to (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED),
                         "exactReminderPermission" to RuleNotifications.exactAllowed(this),
-                        "overlayPermission" to Settings.canDrawOverlays(this)
+                        "overlayPermission" to Settings.canDrawOverlays(this),
+                        "installPackagesPermission" to AppUpdater.canInstall(this)
                     ))
                 }
                 "permissionSettings" -> {
@@ -65,6 +80,7 @@ private var smsPermissionResult: MethodChannel.Result? = null
                         "smsPermission" -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
                         "exactReminderPermission" -> Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))
                         "overlayPermission" -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                        "installPackagesPermission" -> Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
                         else -> null
                     }
                     if (settings == null) result.error("permission", "Unknown permission settings", null)
@@ -88,7 +104,12 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 "receiptNotificationPermission" -> {
                     if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         if (receiptPermissionResult != null || pendingResult != null) result.success(false)
-                        else { receiptPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 75) }
+                        else requestOrOpenSettings(
+                            Manifest.permission.POST_NOTIFICATIONS,
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            75,
+                            result
+                        ) { receiptPermissionResult = it }
                     } else {
                         val allowed = TransactionNotifications.allowed(this)
                         if (!allowed) startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
@@ -116,13 +137,23 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 "locationPermission" -> {
                     if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) result.success(true)
                     else if (locationResult != null) result.error("busy", "A permission request is already open", null)
-                    else { locationResult = result; requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 74) }
+                    else requestOrOpenSettings(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
+                        74,
+                        result
+                    ) { locationResult = it }
                 }
                 "backgroundPermission" -> { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))); result.success(null) }
                 "smsPermission" -> {
                     if (checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED) result.success(true)
                     else if (smsPermissionResult != null) result.error("busy", "A permission request is already open", null)
-                    else { smsPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.READ_SMS), 77) }
+                    else requestOrOpenSettings(
+                        Manifest.permission.READ_SMS,
+                        arrayOf(Manifest.permission.READ_SMS),
+                        77,
+                        result
+                    ) { smsPermissionResult = it }
                 }
                 "notificationPermission" -> {
                     val allowed = getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(ComponentName(this, PurchaseListener::class.java))
@@ -135,8 +166,10 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 }
                 "currentLocation" -> Automation.requestLocation(this) { location -> if (location == null) result.error("location", "No fresh location available. Enable precise location and try again.", null) else result.success(Automation.locationJson(this, location).toString()) }
                 "notificationApps" -> {
-                    val apps = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0).distinctBy { it.activityInfo.packageName }.map { mapOf("name" to it.loadLabel(packageManager).toString(), "package" to it.activityInfo.packageName) }.sortedBy { it["name"] }
-                    result.success(apps)
+                    Thread {
+                        val apps = loadInstalledApps()
+                        Handler(Looper.getMainLooper()).post { result.success(apps) }
+                    }.start()
                 }
                 "walletAppIcons" -> {
                     val names = (call.arguments as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
@@ -152,7 +185,12 @@ private var smsPermissionResult: MethodChannel.Result? = null
                 "reminderPermission" -> {
                     if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         if (reminderPermissionResult != null) result.error("busy", "A permission request is already open", null)
-                        else { reminderPermissionResult = result; requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 76) }
+                        else requestOrOpenSettings(
+                            Manifest.permission.POST_NOTIFICATIONS,
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            76,
+                            result
+                        ) { reminderPermissionResult = it }
                     } else {
                         val allowed = getSystemService(NotificationManager::class.java).areNotificationsEnabled()
                         if (!allowed) startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
@@ -170,8 +208,12 @@ private var smsPermissionResult: MethodChannel.Result? = null
                     val data = call.arguments as Map<*, *>
                     if (!cacheSession(data)) { result.success(false); return@setMethodCallHandler }
                     if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                        startData = data; pendingResult = result
-                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 73)
+                        requestOrOpenSettings(
+                            Manifest.permission.POST_NOTIFICATIONS,
+                            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                            73,
+                            result
+                        ) { startData = data; pendingResult = it }
                     } else if (!getSystemService(NotificationManager::class.java).areNotificationsEnabled()) {
                         startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
                         result.success(false)
@@ -313,6 +355,7 @@ private var smsPermissionResult: MethodChannel.Result? = null
         }
     }
     override fun onDestroy() {
+        AppUpdater.channel = null
         soundPool?.release(); soundPool = null; soundIds.clear(); readySounds.clear()
         super.onDestroy()
     }
@@ -346,6 +389,50 @@ private var smsPermissionResult: MethodChannel.Result? = null
         if (requestCode == 75) { receiptPermissionResult?.success(TransactionNotifications.allowed(this)); receiptPermissionResult = null }
         if (requestCode == 76) { reminderPermissionResult?.success(getSystemService(NotificationManager::class.java).areNotificationsEnabled()); reminderPermissionResult = null }
         if (requestCode == 77) { smsPermissionResult?.success(checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED); smsPermissionResult = null }
+    }
+
+    private fun requestOrOpenSettings(
+        permission: String,
+        permissions: Array<String>,
+        requestCode: Int,
+        result: MethodChannel.Result,
+        assignPending: (MethodChannel.Result) -> Unit
+    ) {
+        val permPrefs = getSharedPreferences("permissions", MODE_PRIVATE)
+        val key = "asked:$permission"
+        if (permPrefs.getBoolean(key, false) && !shouldShowRequestPermissionRationale(permission)) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            result.success(false)
+            return
+        }
+        permPrefs.edit().putBoolean(key, true).apply()
+        assignPending(result)
+        requestPermissions(permissions, requestCode)
+    }
+
+    private fun loadInstalledApps(): List<Map<String, String>> {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val resolved = try {
+            packageManager.queryIntentActivities(intent, 0)
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return resolved
+            .asSequence()
+            .mapNotNull { info ->
+                val pkg = info.activityInfo?.packageName?.trim()
+                if (pkg.isNullOrEmpty() || pkg == packageName) return@mapNotNull null
+                val label = try {
+                    info.loadLabel(packageManager).toString().trim()
+                } catch (_: Exception) {
+                    ""
+                }.ifEmpty { pkg }
+                pkg to label
+            }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase() }
+            .map { (pkg, label) -> mapOf("name" to label, "package" to pkg) }
+            .toList()
     }
 
     private fun resolveWalletAppIcons(names: List<String>): Map<String, ByteArray> {
