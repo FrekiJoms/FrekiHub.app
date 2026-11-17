@@ -21,6 +21,8 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   late bool _timelineDesc;
   late bool _historyExpanded;
   late bool _monthCardExpanded;
+  bool _historyShowAll = false;
+  static const int _compactHistoryLimit = 5;
   Future<void> occurrence(Projection p) => panel(
     context,
     PanelContent(
@@ -312,6 +314,19 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final categories = breakdown.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final timelineRows = <_TimelineItem>[];
+    if (summary.opening != 0) {
+      timelineRows.add(
+        _TimelineItem(
+          day: dayKey(DateTime(period.year, period.month, 0)),
+          title: 'Balance carried over',
+          detail: 'System · Carryover',
+          amount: summary.opening,
+          kind: 'carryover',
+          planned: false,
+          status: 'carryover',
+        ),
+      );
+    }
     final seenTransfers = <String>{};
     for (final e in d.scopedEntries(wallet: wallet, month: month)) {
       if (e.kind == 'transfer_out' || e.kind == 'transfer_in') {
@@ -408,7 +423,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       return _timelineDesc ? -cmp : cmp;
     });
     final accounts = walletAccounts(d, null, committed);
-    final totalBalance = summary.available;
+    final totalBalance = summary.closing;
     return Stack(
       children: [
         PageBody(
@@ -840,18 +855,66 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                   : Surface(
                       child: Column(
                         children: [
-                          for (var i = 0; i < timelineRows.length; i++) ...[
+                          for (
+                            var i = 0;
+                            i <
+                                (_historyShowAll
+                                    ? timelineRows.length
+                                    : timelineRows.length.clamp(
+                                        0,
+                                        _compactHistoryLimit,
+                                      ));
+                            i++
+                          ) ...[
                             _TimelineRow(
                               item: timelineRows[i],
                               currency: d.currency,
                               showDay: true,
                             ),
-                            if (i != timelineRows.length - 1)
+                            if (i !=
+                                (_historyShowAll
+                                        ? timelineRows.length
+                                        : timelineRows.length.clamp(
+                                            0,
+                                            _compactHistoryLimit,
+                                          )) -
+                                    1)
                               Divider(
                                 height: 1,
                                 color: Theme.of(c).colorScheme.outlineVariant
                                     .withValues(alpha: .4),
                               ),
+                          ],
+                          if (timelineRows.length > _compactHistoryLimit) ...[
+                            Divider(
+                              height: 1,
+                              color: Theme.of(c).colorScheme.outlineVariant
+                                  .withValues(alpha: .4),
+                            ),
+                            InkWell(
+                              onTap: withFeedback(
+                                () => setState(
+                                  () => _historyShowAll = !_historyShowAll,
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 10,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    _historyShowAll
+                                        ? 'Show less'
+                                        : 'Show more (${timelineRows.length - _compactHistoryLimit} more)',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(c).colorScheme.primary,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ],
                       ),
@@ -1052,7 +1115,7 @@ class _TimelineItem {
   final bool planned;
   final String status;
   final String? error;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _TimelineItem({
     required this.day,
     required this.title,
@@ -1061,7 +1124,7 @@ class _TimelineItem {
     required this.kind,
     required this.planned,
     required this.status,
-    required this.onTap,
+    this.onTap,
     this.error,
   });
 }
@@ -1079,13 +1142,17 @@ class _TimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final isCarryover = item.kind == 'carryover';
     final isIncome = item.kind == 'income' || item.kind == 'transfer_in';
     final isExpense = item.kind == 'expense' || item.kind == 'transfer_out';
     final isSavings = item.kind == 'savings';
     final isTransfer = item.kind == 'transfer';
     final Color amountColor;
     final String sign;
-    if (isTransfer) {
+    if (isCarryover) {
+      amountColor = scheme.onSurface;
+      sign = item.amount > 0 ? '+' : '';
+    } else if (isTransfer) {
       amountColor = scheme.onSurfaceVariant;
       sign = '';
     } else if (isIncome) {
@@ -1105,7 +1172,7 @@ class _TimelineRow extends StatelessWidget {
         ? 'Needs review'
         : '$sign${money(item.amount, currency)}';
     return InkWell(
-      onTap: withFeedback(item.onTap),
+      onTap: item.onTap == null ? null : withFeedback(item.onTap!),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
@@ -1119,6 +1186,15 @@ class _TimelineRow extends StatelessWidget {
                 decoration: const BoxDecoration(
                   color: Color(0xFF1E88E5),
                   shape: BoxShape.circle,
+                ),
+              )
+            else if (isCarryover)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Icon(
+                  LucideIcons.cornerDownRight,
+                  size: 12,
+                  color: scheme.onSurfaceVariant,
                 ),
               )
             else

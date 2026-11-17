@@ -175,7 +175,9 @@ public final class FinanceNotificationParser {
             return canonical != null ? canonical : label;
         }
         String detected = detectProvider(text);
-        return detected != null ? detected : "Other";
+        if (detected != null) return detected;
+        String fromLabel = detectProvider(label);
+        return fromLabel != null ? fromLabel : "Other";
     }
 
     public static boolean isMessagingTransport(String packageName, String label) {

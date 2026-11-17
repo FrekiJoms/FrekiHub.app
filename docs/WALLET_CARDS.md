@@ -93,14 +93,15 @@ Available balance, opening balance, monthly net activity, closing balance, incom
 
 `financeMonth` derives historical balances directly from `entries` without storing separate monthly snapshots: `opening` sums all eligible movements strictly before the selected `YYYY-MM`, `net` sums eligible `income - expenses - savings + transferNet` inside the month (where same-scope transfers cancel to zero while cross-scope transfers reconcile balance boundary changes), and `closing = opening + net`. Editing or deleting historical transactions automatically updates every subsequent month's opening/closing balance and `availableBalance`.
 
-`_WalletOverviewCard` (`lib/wallet_views.dart`) presents Available Balance (all-time eligible cumulative balance) and the selected month's Opening, Monthly Net Activity, Closing, Safe to spend, and Income/Spent/Saved inside one unified overview card.
+`_WalletOverviewCard` (`lib/wallet_views.dart`) keeps the dashboard compact with selected month navigation, one prominent Available Balance (representing the selected month's cumulative closing balance including internal carryovers), expandable Income / Spent / Saved metrics (`Show more` / `Show less`), and compact month-specific transaction history (`lib/budget.dart`) with an automatic read-only `Balance carried over` system entry dated on the last day of the previous month whenever prior-month carryover is non-zero. Opening, closing and Safe to Spend equations are intentionally hidden from the card UI.
 
 ## Code map
 
 - `lib/data.dart` — `isWalletIncluded`, `eligibleWalletKeys`, `entryBalanceDelta`, `availableBalance`, `walletMethods`, `walletBalances`, `walletBalance`, `walletEntries`, `scopedEntries`, `savingsByWallet`, `orderedWalletNames`, `saveTransfer`, `deleteTransfer`, backup image filtering.
 - `lib/wallets.dart` — view enum, skins, card renderer, artwork picker, account/commitment helpers, `FinanceMonth` carryover/scope math.
-- `lib/wallet_views.dart` — unified `_WalletOverviewCard` (available balance + opening/net/closing month overview), scope picker, toolbar, rows/grid/stack, detail/menu/design/add/transfer sheets.
-- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and transfer-aware timeline using `eligibleWalletKeys`.
+- `lib/wallet_views.dart` — unified `_WalletOverviewCard` (month navigation, prominent cumulative Available Balance, scope picker, Income/Spent/Saved metrics with `Show more`/`Show less`), toolbar, rows/grid/stack, detail/menu/design/add/transfer sheets.
+- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and compact month history (`Show more` / `Show less` + derived `Balance carried over` system row) using `eligibleWalletKeys`.
+- `lib/automation_sync.dart` — notification/SMS purchase reconciliation resolving messaging sources and duplicate detections cleanly to existing wallets without creating compound ` + Other` cards.
 - `lib/calendar.dart` — renders and opens transfers in `WalletTransferSheet` from day detail panels.
 - `lib/forms.dart` — planner form's wallet default when Finance is scoped, synchronized payment method options.
 - `lib/rule_language.dart` — `budget.wallet_count` catalog field and snapshot value.

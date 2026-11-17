@@ -311,4 +311,112 @@ void main() {
     await AutomationSync.reconcile(db);
     expect(smsScans, 1);
   });
+
+  test(
+    'Messaging and SMS purchase notifications map to existing Maya wallet instead of creating "Maya + Other"',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      addTearDown(db.close);
+      await db.pref('methods', jsonEncode(['Cash', 'Maya']));
+      await db.pref('wallet:Maya:package', 'com.paymaya');
+
+      // Seed an already-corrupted "Maya + Other" row plus an unlabelled "Other" duplicate candidate.
+      await db
+          .into(db.entries)
+          .insert(
+            Entry(
+              id: 'legacy-compound',
+              day: '2026-11-17',
+              kind: 'expense',
+              amount: 5000,
+              currency: 'PHP',
+              category: 'Food',
+              method: 'Maya + Other',
+              note: 'Jollibee',
+            ),
+          );
+
+      var queue = [
+        // 1. Direct Maya app notification
+        {
+          'id': 'purchase:maya-1',
+          'action': 'purchase',
+          'kind': 'expense',
+          'time': DateTime(2026, 11, 17, 10, 0).millisecondsSinceEpoch,
+          'amount': '120.00',
+          'currency': 'PHP',
+          'merchant': 'Grab',
+          'source': 'Maya',
+          'package': 'com.paymaya',
+          'title': 'Purchased at Grab',
+        },
+        // 2. Duplicate SMS fallback with generic source "Other"
+        {
+          'id': 'sms:101',
+          'action': 'purchase',
+          'kind': 'expense',
+          'time': DateTime(2026, 11, 17, 10, 1).millisecondsSinceEpoch,
+          'amount': '120.00',
+          'currency': 'PHP',
+          'merchant': 'Grab',
+          'source': 'Other',
+          'package': 'sms',
+          'title': 'Purchased at Grab',
+        },
+        // 3. Direct Messaging/SMS event where Android resolved source='Maya' and title/merchant omits 'Maya'
+        {
+          'id': 'sms:102',
+          'action': 'purchase',
+          'kind': 'expense',
+          'time': DateTime(2026, 11, 17, 11, 0).millisecondsSinceEpoch,
+          'amount': '250.00',
+          'currency': 'PHP',
+          'merchant': 'Mercury Drug',
+          'source': 'Maya',
+          'package': 'sms',
+          'title': 'Purchased at Mercury Drug',
+        },
+        // 4. Messaging notification with package com.google.android.apps.messaging naming Maya in merchant/title
+        {
+          'id': 'purchase:msg-103',
+          'action': 'purchase',
+          'kind': 'income',
+          'time': DateTime(2026, 11, 17, 12, 0).millisecondsSinceEpoch,
+          'amount': '500.00',
+          'currency': 'PHP',
+          'merchant': 'Maya transfer from Alex',
+          'source': 'Messages',
+          'package': 'com.google.android.apps.messaging',
+          'title': 'Received income · Maya transfer from Alex',
+        },
+      ];
+
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+        switch (call.method) {
+          case 'automationEvents':
+            return jsonEncode(queue);
+          case 'automationAck':
+            queue = [];
+            return null;
+          case 'pending':
+          case 'automationConfig':
+            return null;
+          case 'transactionSaved':
+            return true;
+          default:
+            return null;
+        }
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+      );
+
+      await AutomationSync.reconcile(db);
+      final data = await db.readAll();
+      expect(data.entries.every((e) => e.method == 'Maya'), isTrue);
+      expect(data.walletMethods, ['Cash', 'Maya']);
+    },
+  );
 }

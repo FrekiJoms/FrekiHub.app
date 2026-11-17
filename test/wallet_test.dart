@@ -301,7 +301,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
+    expect(find.text('AVAILABLE BALANCE'), findsOneWidget);
     await tester.tap(find.text('All wallets'));
     await tester.pumpAndSettle();
     expect(find.text('Finance scope'), findsOneWidget);
@@ -375,7 +375,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
+    expect(find.text('AVAILABLE BALANCE'), findsOneWidget);
 
     await tester.tap(find.text('All wallets'));
     await tester.pumpAndSettle();
@@ -385,7 +385,7 @@ void main() {
     await tester.tap(gcash);
     await tester.pumpAndSettle();
 
-    expect(find.text('MONTHLY NET · GCASH'), findsOneWidget);
+    expect(find.text('AVAILABLE · GCASH'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Savings'));
     await tester.pumpAndSettle();
@@ -668,9 +668,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // 1. Total balance and Month net start synchronized for all wallets.
-      expect(find.text('AVAILABLE BALANCE'), findsWidgets);
-      expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
+      // 1. Unified overview card starts synchronized for all wallets.
+      expect(find.text('AVAILABLE BALANCE'), findsOneWidget);
       expect(find.text('₱1,000.00'), findsWidgets);
 
       // 2. Add a new wallet/payment method from Finance "+" button.
@@ -712,7 +711,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('AVAILABLE · MAYA'), findsOneWidget);
-      expect(find.text('MONTHLY NET · MAYA'), findsOneWidget);
       expect(find.text(money(-25000, 'PHP')), findsWidgets);
 
       // 5. Card design preference updates immediately via dataProvider.
@@ -1178,6 +1176,99 @@ void main() {
       } finally {
         await db.close();
       }
+    },
+  );
+
+  testWidgets(
+    'simplified dashboard hides opening/closing/safe-to-spend, navigates historical balance, shows Balance carried over and Show more/less',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final now = DateTime.now();
+      final prevMonth = DateTime(now.year, now.month - 1, 15);
+      final prevLastDay = dayKey(DateTime(now.year, now.month, 0));
+      final curMonthEntries = List.generate(
+        6,
+        (i) => dated(
+          'cur-$i',
+          dayKey(DateTime(now.year, now.month, i + 1)),
+          i == 0 ? 'income' : 'expense',
+          i == 0 ? 500000 : 40000,
+          'Maya',
+          category: i == 0 ? 'Salary' : 'Food',
+        ),
+      );
+      final data = AppData(
+        const [],
+        [
+          dated('prev-inc', dayKey(prevMonth), 'income', 3000, 'Maya'),
+          ...curMonthEntries,
+        ],
+        const [],
+        {
+          'methods': jsonEncode(['Maya']),
+        },
+      );
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            databaseProvider.overrideWithValue(db),
+            dataProvider.overrideWith((ref) => Stream.value(data)),
+          ],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            home: Scaffold(body: BudgetScreen(data: data)),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Opening, Closing, Monthly net, Safe to spend are never shown on dashboard.
+      expect(find.text('Opening'), findsNothing);
+      expect(find.text('Closing'), findsNothing);
+      expect(find.text('Safe to spend'), findsNothing);
+      expect(find.textContaining('MONTHLY NET'), findsNothing);
+
+      // Current month Available Balance carries forward ₱30 + ₱5,000 - 5*₱400 = ₱3,030.
+      expect(find.text('₱3,030.00'), findsWidgets);
+      expect(find.text('Income'), findsOneWidget);
+      expect(find.text('Spent'), findsOneWidget);
+      expect(find.text('Saved'), findsOneWidget);
+
+      // System-generated carryover entry appears in History (7 total -> truncated to 5 until Show more).
+      final scroller = find.byType(Scrollable).first;
+      await tester.scrollUntilVisible(
+        find.textContaining('Show more (2 more)'),
+        200,
+        scrollable: scroller,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Show more (2 more)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Balance carried over'), findsOneWidget);
+      expect(find.text('$prevLastDay · System · Carryover'), findsOneWidget);
+      expect(find.text('+₱30.00'), findsOneWidget);
+
+      // Navigating back to previous month shows ₱30.00 Available Balance cleanly.
+      await tester.scrollUntilVisible(
+        find.text('AVAILABLE BALANCE'),
+        -300,
+        scrollable: scroller,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Previous month'));
+      await tester.pumpAndSettle();
+      expect(find.text('₱30.00'), findsWidgets);
+      expect(find.text('Balance carried over'), findsNothing);
+
+      // Show less / Show more toggle on the overview card hides and reveals Income/Spent/Saved.
+      await tester.tap(find.text('Show less').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Show more'), findsOneWidget);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => db.close());
     },
   );
 }

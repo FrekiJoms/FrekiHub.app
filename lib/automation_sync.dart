@@ -73,8 +73,25 @@ abstract final class AutomationSync {
     }
   }
 
+  static Future<void> _sanitizeCompoundMethods(
+    AppDatabase db,
+    Map<String, String> prefs,
+  ) async {
+    final compound = await (db.select(
+      db.entries,
+    )..where((e) => e.method.like('% + %'))).get();
+    for (final row in compound) {
+      final cleaned = _preferResolvedMethod(row.method, '', prefs);
+      if (cleaned != row.method) {
+        await (db.update(db.entries)..where((e) => e.id.equals(row.id)))
+            .write(EntriesCompanion(method: Value(cleaned)));
+      }
+    }
+  }
+
   static Future<bool> _reconcile(AppDatabase db) async {
     final prefs = await db.readPreferences();
+    await _sanitizeCompoundMethods(db, prefs);
     if (prefs['smsScanning'] == 'true') {
       try {
         await scanSms();
@@ -198,18 +215,21 @@ abstract final class AutomationSync {
                     .getSingleOrNull()
               : null;
           if (duplicate != null) {
-            final currentSource = _resolvePurchaseMethod(event);
-            final sources = <String>{
-              ...duplicate.method.split(' + '),
+            final currentSource = _resolvePurchaseMethod(event, prefs);
+            final resolved = _preferResolvedMethod(
+              duplicate.method,
               currentSource,
-            }.where((s) => s.trim().isNotEmpty).toList();
-            await (db.update(db.entries)
-                  ..where((e) => e.id.equals(duplicate.id)))
-                .write(EntriesCompanion(method: Value(sources.join(' + '))));
+              prefs,
+            );
+            if (resolved != duplicate.method) {
+              await (db.update(db.entries)
+                    ..where((e) => e.id.equals(duplicate.id)))
+                  .write(EntriesCompanion(method: Value(resolved)));
+            }
             acknowledged.add(id);
             continue;
           }
-          final resolvedMethod = _resolvePurchaseMethod(event);
+          final resolvedMethod = _resolvePurchaseMethod(event, prefs);
           await db
               .into(db.entries)
               .insert(
@@ -311,24 +331,121 @@ abstract final class AutomationSync {
     }
   }
 
-  static String _resolvePurchaseMethod(Map<String, dynamic> event) {
-    final raw = ((event['source'] ?? event['package']) as String? ?? '').trim();
-    final pkg = (event['package'] as String? ?? '').trim().toLowerCase();
-    final lower = raw.toLowerCase();
-    final isMessaging =
-        lower.isEmpty ||
+  static List<String> _savedMethods(Map<String, String> prefs) {
+    try {
+      return List<String>.from(jsonDecode(prefs['methods'] ?? '[]') as List)
+          .map((m) => m.trim())
+          .where((m) => m.isNotEmpty)
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  static String _canonicalWalletMatch(
+    String candidate,
+    Map<String, String> prefs,
+  ) {
+    final lower = candidate.trim().toLowerCase();
+    if (lower.isEmpty) return candidate.trim();
+    for (final m in _savedMethods(prefs)) {
+      if (m.toLowerCase() == lower) return m;
+    }
+    return candidate.trim();
+  }
+
+  static bool _isMessagingPackage(String pkg) =>
+      pkg == 'sms' ||
+      pkg == 'com.google.android.apps.messaging' ||
+      pkg == 'com.samsung.android.messaging' ||
+      pkg == 'com.android.mms' ||
+      pkg == 'com.android.messaging' ||
+      pkg.contains('.messaging') ||
+      pkg.contains('.mms') ||
+      pkg.contains('.sms');
+
+  static bool _isGenericMethod(String value) {
+    final lower = value.trim().toLowerCase();
+    return lower.isEmpty ||
+        lower == 'other' ||
         lower == 'messaging' ||
         lower == 'messages' ||
         lower == 'sms' ||
         lower == 'text messages' ||
         lower == 'mms' ||
-        pkg == 'sms' ||
-        pkg.contains('.messaging') ||
-        pkg.contains('.mms');
-    if (!isMessaging) return raw;
-    final text = '${event['title'] ?? ''} ${event['merchant'] ?? ''}';
+        lower == 'automation';
+  }
+
+  static final RegExp _numericSender = RegExp(r'^[+0-9\s()-]{3,}$');
+
+  static String _preferResolvedMethod(
+    String existing,
+    String incoming,
+    Map<String, String> prefs,
+  ) {
+    final parts = existing
+        .split(' + ')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && !_isGenericMethod(s))
+        .toList();
+    if (parts.isNotEmpty) return _canonicalWalletMatch(parts.first, prefs);
+    if (!_isGenericMethod(incoming)) {
+      return _canonicalWalletMatch(incoming, prefs);
+    }
+    return existing.trim().isEmpty ? 'Other' : existing.trim();
+  }
+
+  static String _resolvePurchaseMethod(
+    Map<String, dynamic> event, [
+    Map<String, String> prefs = const {},
+  ]) {
+    final raw = ((event['source'] ?? event['package']) as String? ?? '').trim();
+    final pkg = (event['package'] as String? ?? '').trim().toLowerCase();
+    if (pkg.isNotEmpty && !_isMessagingPackage(pkg)) {
+      for (final entry in prefs.entries) {
+        if (entry.key.startsWith('wallet:') &&
+            entry.key.endsWith(':package') &&
+            entry.value.trim().toLowerCase() == pkg) {
+          final walletName = entry.key.substring(
+            'wallet:'.length,
+            entry.key.length - ':package'.length,
+          );
+          if (walletName.trim().isNotEmpty) {
+            return _canonicalWalletMatch(walletName, prefs);
+          }
+        }
+      }
+    }
+    final isMessaging =
+        _isGenericMethod(raw) ||
+        _numericSender.hasMatch(raw) ||
+        (_isMessagingPackage(pkg) && _isGenericMethod(raw));
+    if (!isMessaging) {
+      for (final rule in _providerPatterns) {
+        if (rule.pattern.hasMatch(raw)) {
+          return _canonicalWalletMatch(rule.label, prefs);
+        }
+      }
+      return _canonicalWalletMatch(raw, prefs);
+    }
+    final text = '${event['title'] ?? ''} ${event['merchant'] ?? ''} $raw';
+    for (final saved in _savedMethods(prefs)) {
+      if (_isGenericMethod(saved) ||
+          saved.toLowerCase() == 'cash' ||
+          saved.length < 2) {
+        continue;
+      }
+      if (RegExp(
+        '\\b${RegExp.escape(saved)}\\b',
+        caseSensitive: false,
+      ).hasMatch(text)) {
+        return saved;
+      }
+    }
     for (final rule in _providerPatterns) {
-      if (rule.pattern.hasMatch(text)) return rule.label;
+      if (rule.pattern.hasMatch(text)) {
+        return _canonicalWalletMatch(rule.label, prefs);
+      }
     }
     return 'Other';
   }
