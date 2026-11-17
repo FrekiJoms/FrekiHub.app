@@ -204,7 +204,11 @@ void main() {
       allowed = true;
       fail = true;
       await expectLater(
-        PermissionHints.request<bool>(context, 'locationPermission'),
+        PermissionHints.perform<bool>(
+          context,
+          'locationPermission',
+          () => NativeSession.channel.invokeMethod<bool>('locationPermission'),
+        ),
         throwsA(isA<PlatformException>()),
       );
       fail = false;

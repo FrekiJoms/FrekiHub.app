@@ -3,11 +3,13 @@ import 'dart:convert';
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freki_hub/data.dart';
 import 'package:freki_hub/design.dart';
 import 'package:freki_hub/screens.dart';
+import 'package:freki_hub/services.dart';
 
 Entry movement(
   String id,
@@ -485,6 +487,10 @@ void main() {
           overrides: [databaseProvider.overrideWithValue(db)],
           child: MaterialApp(
             theme: Design.theme(false),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
             home: Scaffold(
               body: PageView(
                 controller: pageController,
@@ -644,6 +650,10 @@ void main() {
           ],
           child: MaterialApp(
             theme: Design.theme(false),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
             home: Scaffold(
               body: Consumer(
                 builder: (context, ref, _) {
@@ -869,6 +879,10 @@ void main() {
           overrides: [databaseProvider.overrideWithValue(db)],
           child: MaterialApp(
             theme: Design.theme(false),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
             home: Scaffold(
               body: StatefulBuilder(
                 builder: (context, setState) => SingleChildScrollView(
@@ -907,6 +921,116 @@ void main() {
       final after = await tester.runAsync(() => db.readAll());
       expect(after!.methods, isNot(contains('GCash')));
       expect(after.hiddenWallets, contains('gcash'));
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => db.close());
+    },
+  );
+
+  testWidgets(
+    'Add wallet picks an installed app and saves even when notification setup fails or is declined',
+    (tester) async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(NativeSession.channel, null),
+      );
+      var failAutomation = false;
+      messenger.setMockMethodCallHandler(NativeSession.channel, (call) async {
+        switch (call.method) {
+          case 'notificationApps':
+            return [
+              {'name': 'GoTyme Bank', 'package': 'ph.com.gotyme'},
+              {'name': 'Maya', 'package': 'com.paymaya'},
+            ];
+          case 'permissionStatus':
+            return {'notificationPermission': false};
+          case 'automationConfig':
+            if (failAutomation) throw PlatformException(code: 'unavailable');
+            return null;
+          default:
+            return null;
+        }
+      });
+
+      await tester.runAsync(() async {
+        await db.pref('methods', jsonEncode(['Cash']));
+        await db.pref('walletOrder', jsonEncode(['Cash']));
+      });
+      final initial = await tester.runAsync(() => db.readAll());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [databaseProvider.overrideWithValue(db)],
+          child: MaterialApp(
+            theme: Design.theme(false),
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: WalletSection(
+                  data: initial!,
+                  accounts: walletAccounts(initial),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Add wallet'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Pick installed app'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pick installed app'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('GoTyme Bank'), findsOneWidget);
+      expect(find.text('ph.com.gotyme'), findsOneWidget);
+      await tester.tap(find.text('GoTyme Bank'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('App: ph.com.gotyme'), findsOneWidget);
+
+      await tester.tap(find.text('Add wallet').last);
+      await tester.pumpAndSettle();
+
+      // Declining the follow-up notification access hint must not fail or revert the saved wallet.
+      expect(find.text('Not now'), findsOneWidget);
+      await tester.tap(find.text('Not now'));
+      await tester.pumpAndSettle();
+
+      final afterDecline = await tester.runAsync(() => db.readAll());
+      expect(afterDecline!.methods, contains('GoTyme Bank'));
+      expect(afterDecline.prefs['wallet:GoTyme Bank:package'], 'ph.com.gotyme');
+
+      // Native automation setup failure after DB commit must also leave the saved wallet intact.
+      failAutomation = true;
+      await tester.tap(find.byTooltip('Add wallet'));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Pick installed app'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pick installed app'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Maya'));
+      await tester.pumpAndSettle();
+      expect(find.text('App: com.paymaya'), findsOneWidget);
+
+      await tester.tap(find.text('Add wallet').last);
+      await tester.pumpAndSettle();
+
+      final afterFailure = await tester.runAsync(() => db.readAll());
+      expect(afterFailure!.methods, contains('Maya'));
+      expect(afterFailure.prefs['wallet:Maya:package'], 'com.paymaya');
       expect(tester.takeException(), isNull);
 
       await tester.pumpWidget(const SizedBox.shrink());

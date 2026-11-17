@@ -1,5 +1,14 @@
 # FrekiHub application audit
 
+## Installed-app wallet picker & permission-hint test alignment — 2026-11-17
+
+Source-confirmed update across `lib/wallet_views.dart`, `test/wallet_test.dart`, and `test/permission_hints_test.dart`:
+- Updated `_AddWalletSheetState._pickInstalledApp` (`lib/wallet_views.dart`) to isolate the `notificationApps` channel query before opening the `Pick payment app` drawer, render a `No matching apps found.` empty state, and fall back to the package ID when an app label is empty.
+- Wrapped post-save `AutomationSync.configure` and optional `PermissionHints.request(context, 'notificationPermission')` in `_AddWalletSheetState._add` (`lib/wallet_views.dart`) so a saved wallet still completes cleanly if notification setup fails or is declined.
+- Aligned `Concurrent requests do not stack hints; failure releases the gate` (`test/permission_hints_test.dart`) with `skipActionWhenAllowed: !manage` by exercising `PermissionHints.perform` for the `PlatformException` gate-release check.
+
+Verification: `dart format` across `lib/wallet_views.dart`, `test/wallet_test.dart`, and `test/permission_hints_test.dart`, `flutter analyze` (`No issues found!`), `git diff --check`, and targeted `flutter test` across `test/wallet_test.dart`, `test/permission_hints_test.dart`, and `test/app_update_test.dart` passed all **37 checks**. On-device `Pick installed app` query, `READ_SMS` / Notification Listener grants, and Android 13+ Restricted settings remain physical-device verification gaps.
+
 ## Built-in in-app APK updater — 2026-11-17
 
 Source-confirmed implementation across `lib/app_update.dart`, `lib/main.dart`, `lib/settings.dart`, `lib/permissions.dart`, `lib/screens.dart`, `android/app/src/main/AndroidManifest.xml`, `android/.../MainActivity.kt`, `android/.../AppUpdater.kt`, `config/update.example.json`, `docs/DEVELOPMENT.md`, `docs/ANDROID_RUNTIME.md`, and `test/app_update_test.dart`:
@@ -7,7 +16,7 @@ Source-confirmed implementation across `lib/app_update.dart`, `lib/main.dart`, `
 - Wired `AppShell._checkForUpdate` (`lib/main.dart`) to silently check once after startup readiness, and added **Check for updates** with `SkeletonValue` loading and current version display in `SettingsScreen` (`lib/settings.dart`), surfacing timeout/connection/HTTP check errors and keeping the About card version aligned with `appVersion`.
 - Added native `AppUpdater` and `UpdateInstallReceiver` (`android/.../AppUpdater.kt`) plus `REQUEST_INSTALL_PACKAGES` (`AndroidManifest.xml`) and `PermissionHints` entry `installPackagesPermission` (`lib/permissions.dart`), streaming HTTPS APK downloads into `PackageInstaller.Session` with storage size allocation (`params.setSize`), progress/status callbacks (`updateProgress` / `updateStatus`), quiet user-cancellation handling (`STATUS_FAILURE_ABORTED`), and lifecycle resume continuation only when Android unknown-sources Settings was opened.
 
-Verification: `dart format` across `lib/app_update.dart`, `lib/settings.dart`, and `test/app_update_test.dart`, `flutter analyze` (`No issues found!`), `git diff --check`, targeted `flutter test` across `test/app_update_test.dart` (**4 checks** passed) and `test/navigation_test.dart` + `test/layout_test.dart` (**10 checks** passed), and native `:app:compileDebugKotlin -x :app:compileFlutterBuildDebug` (`BUILD SUCCESSFUL`). Pre-existing `test/permission_hints_test.dart` passed 15/16 checks (including `installPackagesPermission` hint/decline/accept; the unrelated `Concurrent requests do not stack hints; failure releases the gate` case fails against `skipActionWhenAllowed: !manage` from commit `f32572b`). Real HTTPS manifest/GitHub release fetching, Android `REQUEST_INSTALL_PACKAGES` settings grant return, `PackageInstaller.Session` APK replacement, and syncing `..\Frekihub - Frxnance.app` via `sync_from_frekihub.ps1 -Verify` remain remaining gaps.
+Verification: `dart format` across `lib/app_update.dart`, `lib/settings.dart`, and `test/app_update_test.dart`, `flutter analyze` (`No issues found!`), `git diff --check`, targeted `flutter test` across `test/app_update_test.dart` (**4 checks** passed) and `test/navigation_test.dart` + `test/layout_test.dart` (**10 checks** passed), and native `:app:compileDebugKotlin -x :app:compileFlutterBuildDebug` (`BUILD SUCCESSFUL`). Confirmed `..\Frekihub - Frxnance.app` contains the synced `lib/app_update.dart` and `AppUpdater.kt`. Real HTTPS manifest/GitHub release fetching, Android `REQUEST_INSTALL_PACKAGES` settings grant return, and `PackageInstaller.Session` APK replacement remain physical-device verification gaps.
 
 ## Compact top-corner Calendar and Settings Liquid Glass buttons — 2026-11-16
 

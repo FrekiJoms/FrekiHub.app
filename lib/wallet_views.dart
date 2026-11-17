@@ -2091,8 +2091,10 @@ class _WalletAppIcons {
     return pkg.isEmpty ? name : '$name|$pkg';
   }
 
-  static String _cacheKey(String name, String? packageName) =>
-      _requestToken(name.trim().toLowerCase(), packageName?.trim().toLowerCase());
+  static String _cacheKey(String name, String? packageName) => _requestToken(
+    name.trim().toLowerCase(),
+    packageName?.trim().toLowerCase(),
+  );
 
   static MemoryImage? iconFor(
     String name, {
@@ -2271,7 +2273,8 @@ class _WalletMark extends StatelessWidget {
           height: size,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: .06),
+              color: Theme.of(context).colorScheme.onSurface
+                  .withValues(alpha: .06),
               borderRadius: BorderRadius.circular(size * .26),
             ),
           ),
@@ -3044,91 +3047,103 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
   Future<void> _pickInstalledApp() async {
     if (busy) return;
     setState(() => busy = true);
+    List<Map<String, dynamic>> installed;
     try {
-      final installed =
+      installed =
           (await NativeSession.channel.invokeListMethod('notificationApps') ??
                   [])
               .map((a) => Map<String, dynamic>.from(a as Map))
               .toList();
-      if (!mounted) return;
-      setState(() => busy = false);
-      var query = '';
-      final picked = await panel<Map<String, dynamic>>(
-        context,
-        StatefulBuilder(
-          builder: (c, setLocal) {
-            final filtered = query.trim().isEmpty
-                ? installed
-                : installed.where((app) {
-                    final n = (app['name'] as String? ?? '').toLowerCase();
-                    final p = (app['package'] as String? ?? '').toLowerCase();
-                    final q = query.trim().toLowerCase();
-                    return n.contains(q) || p.contains(q);
-                  }).toList();
-            return PanelContent(
-              header: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const PanelHeading(title: 'Pick payment app'),
-                  const SizedBox(height: 12),
-                  TextField(
-                    onChanged: (v) => setLocal(() => query = v),
-                    decoration: const InputDecoration(
-                      labelText: 'Search installed apps',
-                      prefixIcon: Icon(LucideIcons.search, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-              footer: AppButton(
-                label: 'Cancel',
-                secondary: true,
-                onPressed: () => Navigator.pop(c),
-              ),
-              scrollable: true,
-              child: ListView.builder(
-                itemCount: filtered.length,
-                itemBuilder: (c, i) {
-                  final app = filtered[i];
-                  final appName = (app['name'] as String? ?? '').trim();
-                  final pkg = (app['package'] as String? ?? '').trim();
-                  final added = widget.data.walletMethods.any(
-                    (s) => s.toLowerCase() == appName.toLowerCase(),
-                  );
-                  return ListTile(
-                    title: Text(appName),
-                    subtitle: Text(
-                      pkg,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: added
-                        ? const Icon(LucideIcons.check, size: 18)
-                        : null,
-                    onTap: () => Navigator.pop(c, app),
-                  );
-                },
-              ),
-            );
-          },
-        ),
-      );
-      if (picked == null || !mounted) return;
-      final appName = (picked['name'] as String? ?? '').trim();
-      final pkg = (picked['package'] as String? ?? '').trim();
-      if (appName.isEmpty || pkg.isEmpty) return;
-      final trimmedName = appName.length > 24
-          ? appName.substring(0, 24).trim()
-          : appName;
-      name.text = trimmedName;
-      name.selection = TextSelection.collapsed(offset: trimmedName.length);
-      setState(() => _selectedPackage = pkg);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => busy = false);
         toast(context, 'Could not load installed apps.', error: true);
       }
+      return;
     }
+    if (!mounted) return;
+    setState(() => busy = false);
+    var query = '';
+    final picked = await panel<Map<String, dynamic>>(
+      context,
+      StatefulBuilder(
+        builder: (c, setLocal) {
+          final filtered = query.trim().isEmpty
+              ? installed
+              : installed.where((app) {
+                  final n = (app['name'] as String? ?? '').toLowerCase();
+                  final p = (app['package'] as String? ?? '').toLowerCase();
+                  final q = query.trim().toLowerCase();
+                  return n.contains(q) || p.contains(q);
+                }).toList();
+          return PanelContent(
+            header: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const PanelHeading(title: 'Pick payment app'),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (v) => setLocal(() => query = v),
+                  decoration: const InputDecoration(
+                    labelText: 'Search installed apps',
+                    prefixIcon: Icon(LucideIcons.search, size: 18),
+                  ),
+                ),
+              ],
+            ),
+            footer: AppButton(
+              label: 'Cancel',
+              secondary: true,
+              onPressed: () => Navigator.pop(c),
+            ),
+            scrollable: true,
+            child: filtered.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('No matching apps found.'),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: filtered.length,
+                    itemBuilder: (c, i) {
+                      final app = filtered[i];
+                      final pkg = (app['package'] as String? ?? '').trim();
+                      final rawName = (app['name'] as String? ?? '').trim();
+                      final appName = rawName.isEmpty ? pkg : rawName;
+                      final added = widget.data.walletMethods.any(
+                        (s) => s.toLowerCase() == appName.toLowerCase(),
+                      );
+                      return ListTile(
+                        title: Text(appName),
+                        subtitle: Text(
+                          pkg,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: added
+                            ? const Icon(LucideIcons.check, size: 18)
+                            : null,
+                        onTap: () =>
+                            Navigator.pop(c, {'name': appName, 'package': pkg}),
+                      );
+                    },
+                  ),
+          );
+        },
+      ),
+    );
+    if (picked == null || !mounted) return;
+    final pkg = (picked['package'] as String? ?? '').trim();
+    final rawName = (picked['name'] as String? ?? '').trim();
+    final appName = rawName.isEmpty ? pkg : rawName;
+    if (appName.isEmpty || pkg.isEmpty) return;
+    final trimmedName = appName.length > 24
+        ? appName.substring(0, 24).trim()
+        : appName;
+    name.text = trimmedName;
+    name.selection = TextSelection.collapsed(offset: trimmedName.length);
+    setState(() => _selectedPackage = pkg);
   }
 
   Future<void> _add() async {
@@ -3186,12 +3201,16 @@ class _AddWalletSheetState extends ConsumerState<_AddWalletSheet> {
         }
       });
       if (pkg != null && pkg.isNotEmpty) {
-        await AutomationSync.configure(await db.readAll());
-        if (mounted) {
-          await PermissionHints.request<bool>(
-            context,
-            'notificationPermission',
-          );
+        try {
+          await AutomationSync.configure(await db.readAll());
+          if (mounted) {
+            await PermissionHints.request<bool>(
+              context,
+              'notificationPermission',
+            );
+          }
+        } catch (_) {
+          // Wallet is already saved; optional notification setup can be enabled in Settings.
         }
       }
       if (mounted) {
