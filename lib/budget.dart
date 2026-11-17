@@ -278,22 +278,25 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     final d = widget.data;
     final month = dayKey(period).substring(0, 7);
     final last = DateTime(period.year, period.month + 1, 0);
+    final eligible = d.eligibleWalletKeys(wallet: wallet);
+    final eligibleAll = d.eligibleWalletKeys();
     final plannedForPeriod = project(d, period, last);
-    final planned = wallet == null
-        ? plannedForPeriod
-        : plannedForPeriod
-              .where((p) => walletMethodName(p.rule.method) == wallet)
-              .toList();
+    final planned = plannedForPeriod
+        .where(
+          (p) =>
+              eligible.contains(walletMethodName(p.rule.method).toLowerCase()),
+        )
+        .toList();
     final summary = financeMonth(d, period, wallet, planned);
     final committed = walletCommitments(plannedForPeriod);
     final goal = int.tryParse(d.prefs['savingsGoal:${d.currency}'] ?? '') ?? 0;
-    final saved = wallet == null
-        ? d.total('savings')
-        : d
-              .scopedEntries(wallet: wallet)
-              .where((e) => e.kind == 'savings')
-              .fold(0, (sum, e) => sum + e.amount);
-    final savingsEntries = d.savingsByWallet.entries.toList()
+    final saved = d
+        .scopedEntries(wallet: wallet)
+        .where((e) => e.kind == 'savings')
+        .fold(0, (sum, e) => sum + e.amount);
+    final savingsEntries = d.savingsByWallet.entries
+        .where((e) => eligibleAll.contains(e.key.toLowerCase()))
+        .toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final breakdown = <String, int>{};
     for (final e
@@ -405,13 +408,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       return _timelineDesc ? -cmp : cmp;
     });
     final accounts = walletAccounts(d, null, committed);
-    final totalBalance =
-        (wallet == null
-                ? accounts.where((a) => a.included)
-                : accounts.where(
-                    (a) => a.name.toLowerCase() == wallet!.toLowerCase(),
-                  ))
-            .fold<int>(0, (sum, a) => sum + a.balance);
+    final totalBalance = summary.available;
     return Stack(
       children: [
         PageBody(
@@ -872,7 +869,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  wallet == null ? 'TOTAL BALANCE' : wallet!.toUpperCase(),
+                  wallet == null ? 'AVAILABLE' : wallet!.toUpperCase(),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .5),
                     fontSize: 7,

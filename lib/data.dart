@@ -863,6 +863,46 @@ class AppData {
     return lower == 'messaging' || lower == 'messages';
   }
 
+  bool isWalletIncluded(String name) {
+    final canonical = _canonicalWalletName(name);
+    if (prefs.containsKey('wallet:$canonical:include')) {
+      return prefs['wallet:$canonical:include'] != 'false';
+    }
+    return prefs['wallet:$name:include'] != 'false';
+  }
+
+  /// Canonical lowercase wallet names eligible for the requested [wallet] scope.
+  ///
+  /// Both aggregate and monthly Finance calculations use this shared resolver so
+  /// they stay consistent on `Include in net total`, `hiddenWallets`, removed
+  /// wallets, messaging exclusions, and explicit single-wallet filters.
+  Set<String> eligibleWalletKeys({String? wallet}) {
+    final hidden = hiddenWallets;
+    if (wallet != null) {
+      final target = walletMethodName(wallet).trim().toLowerCase();
+      if (target.isEmpty ||
+          _isMessagingMethod(target) ||
+          hidden.contains(target)) {
+        return const {};
+      }
+      for (final canonical in walletMethods) {
+        if (canonical.toLowerCase() == target) return {target};
+      }
+      return const {};
+    }
+    final result = <String>{};
+    for (final canonical in walletMethods) {
+      if (isWalletIncluded(canonical)) {
+        result.add(canonical.toLowerCase());
+      }
+    }
+    return result;
+  }
+
+  /// Signed impact of an entry on its own wallet's balance.
+  static int entryBalanceDelta(Entry e) =>
+      (e.kind == 'income' || e.kind == 'transfer_in') ? e.amount : -e.amount;
+
   /// One pass over the current currency's ledger, keyed by canonical payment method.
   Map<String, int> get walletBalances {
     final hidden = hiddenWallets;
@@ -878,9 +918,7 @@ class AppData {
         continue;
       }
       final name = byLower[lower] ?? raw;
-      final signed = (e.kind == 'income' || e.kind == 'transfer_in')
-          ? e.amount
-          : -e.amount;
+      final signed = entryBalanceDelta(e);
       result.update(
         name,
         (value) => value + signed,
@@ -890,7 +928,17 @@ class AppData {
     return result;
   }
 
-  int walletBalance(String method) => walletBalances[_canonicalWalletName(method)] ?? 0;
+  int walletBalance(String method) =>
+      walletBalances[_canonicalWalletName(method)] ?? 0;
+
+  /// Actual cumulative balance across all wallets eligible for [wallet] scope.
+  int availableBalance({String? wallet}) {
+    var sum = 0;
+    for (final e in scopedEntries(wallet: wallet)) {
+      sum += entryBalanceDelta(e);
+    }
+    return sum;
+  }
 
   List<Entry> walletEntries(String method) {
     final target = method.trim().toLowerCase();
@@ -903,29 +951,30 @@ class AppData {
         .toList();
   }
 
-  /// Ledger rows in the display currency, optionally narrowed to one month and
-  /// one payment method. Finance uses this so every summary, chart and timeline
-  /// changes together when a wallet is selected.
+  /// Ledger rows in the display currency restricted by the shared [wallet]
+  /// scope resolver and optionally narrowed to one `YYYY-MM` [month].
   List<Entry> scopedEntries({String? wallet, String? month}) {
-    final target = wallet?.trim().toLowerCase();
+    final eligible = eligibleWalletKeys(wallet: wallet);
     return entries
         .where(
           (e) =>
               e.currency == currency &&
               (month == null || e.day.startsWith(month)) &&
-              (target == null ||
-                  walletMethodName(e.method).toLowerCase() == target),
+              eligible.contains(walletMethodName(e.method).toLowerCase()),
         )
         .toList();
   }
 
-  /// Lifetime savings contributions per wallet for the goal breakdown.
+  /// Lifetime savings contributions per eligible wallet for the goal breakdown.
   Map<String, int> get savingsByWallet {
+    final hidden = hiddenWallets;
     final result = <String, int>{};
     for (final e in entries.where(
       (e) => e.currency == currency && e.kind == 'savings',
     )) {
-      final name = walletMethodName(e.method);
+      final name = _canonicalWalletName(e.method);
+      final lower = name.toLowerCase();
+      if (_isMessagingMethod(name) || hidden.contains(lower)) continue;
       result.update(name, (value) => value + e.amount, ifAbsent: () => e.amount);
     }
     return result;

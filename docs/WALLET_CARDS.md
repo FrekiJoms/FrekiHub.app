@@ -87,16 +87,24 @@ Custom artwork uses the existing image picker. Images are copied into app suppor
 
 Transfers are stored without a schema migration as two linked `entries` rows committed together in one database transaction (`kind: 'transfer_out'` on the source wallet and `kind: 'transfer_in'` on the destination wallet), with unique paired `occurrence` keys (`transfer:<id>:out` and `transfer:<id>:in`). `walletBalances` subtracts `transfer_out` and adds `transfer_in`, while `financeMonth` continues summing only `income`, `expense` and `savings` so transfers do not inflate monthly income or spending. When `All wallets` is active, paired transfer legs collapse to one timeline row (`From → To`); when scoped to one wallet, that wallet's signed leg appears. Transfers can be started from the wallet toolbar, wallet detail sheet or wallet menu via `WalletTransferSheet`, which animates wallet swaps (`AnimatedRotation` and `AnimatedSwitcher`, respecting `MediaQuery.disableAnimationsOf`) and previews post-transfer balances live.
 
+## Unified financial scope & monthly carryover
+
+Available balance, opening balance, monthly net activity, closing balance, income/expenses/savings summaries, safe-to-spend, planner commitments, analytics and timeline all share `AppData.eligibleWalletKeys` (`lib/data.dart`). When `All wallets` is active, it excludes `messaging`/`messages`, `hiddenWallets`, and any wallet with `wallet:<name>:include == 'false'`. When a single wallet is selected, all components narrow to that wallet consistently.
+
+`financeMonth` derives historical balances directly from `entries` without storing separate monthly snapshots: `opening` sums all eligible movements strictly before the selected `YYYY-MM`, `net` sums eligible `income - expenses - savings + transferNet` inside the month (where same-scope transfers cancel to zero while cross-scope transfers reconcile balance boundary changes), and `closing = opening + net`. Editing or deleting historical transactions automatically updates every subsequent month's opening/closing balance and `availableBalance`.
+
+`_WalletOverviewCard` (`lib/wallet_views.dart`) presents Available Balance (all-time eligible cumulative balance) and the selected month's Opening, Monthly Net Activity, Closing, Safe to spend, and Income/Spent/Saved inside one unified overview card.
+
 ## Code map
 
-- `lib/data.dart` — `walletMethods`, `walletBalances`, `walletBalance`, `walletEntries`, `scopedEntries`, `savingsByWallet`, `orderedWalletNames`, `saveTransfer`, `deleteTransfer`, backup image filtering.
-- `lib/wallets.dart` — view enum, skins, card renderer, artwork picker, account/commitment helpers, `FinanceMonth` month math.
-- `lib/wallet_views.dart` — Finance total/month cards (top balance card follows active `wallet` scope), scope picker, toolbar, rows/grid/stack, detail/menu/design/add/transfer sheets.
-- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and transfer-aware timeline.
+- `lib/data.dart` — `isWalletIncluded`, `eligibleWalletKeys`, `entryBalanceDelta`, `availableBalance`, `walletMethods`, `walletBalances`, `walletBalance`, `walletEntries`, `scopedEntries`, `savingsByWallet`, `orderedWalletNames`, `saveTransfer`, `deleteTransfer`, backup image filtering.
+- `lib/wallets.dart` — view enum, skins, card renderer, artwork picker, account/commitment helpers, `FinanceMonth` carryover/scope math.
+- `lib/wallet_views.dart` — unified `_WalletOverviewCard` (available balance + opening/net/closing month overview), scope picker, toolbar, rows/grid/stack, detail/menu/design/add/transfer sheets.
+- `lib/budget.dart` — composes the wallet section with the savings goal, scoped chart, planner and transfer-aware timeline using `eligibleWalletKeys`.
 - `lib/calendar.dart` — renders and opens transfers in `WalletTransferSheet` from day detail panels.
 - `lib/forms.dart` — planner form's wallet default when Finance is scoped, synchronized payment method options.
 - `lib/rule_language.dart` — `budget.wallet_count` catalog field and snapshot value.
-- `test/wallet_test.dart` — balance, currency, scope, commitment, goal-contribution, order, skin, backup, stack-swipe, live sync flow and wallet transfer checks.
+- `test/wallet_test.dart` — balance, currency, scope, carryover, exclusion/cross-scope transfer reconciliation, historical recalculation, commitment, goal-contribution, order, skin, backup, stack-swipe, live sync flow and wallet transfer checks.
 
 ## Verification boundaries
 

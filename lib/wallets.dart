@@ -350,17 +350,30 @@ List<WalletAccount> walletAccounts(
   ];
 }
 
-/// Everything the Finance header needs for one month and wallet scope.
+/// Everything the Unified Financial Overview needs for one month and wallet scope.
 class FinanceMonth {
   final DateTime period;
-  final int income, expenses, savings, net, safe, commitments;
+  final int opening,
+      income,
+      expenses,
+      savings,
+      transferNet,
+      net,
+      closing,
+      available,
+      safe,
+      commitments;
   final double used;
   const FinanceMonth({
     required this.period,
+    this.opening = 0,
     required this.income,
     required this.expenses,
     required this.savings,
+    this.transferNet = 0,
     required this.net,
+    this.closing = 0,
+    this.available = 0,
     required this.safe,
     required this.commitments,
     required this.used,
@@ -373,13 +386,42 @@ FinanceMonth financeMonth(
   String? wallet,
   List<Projection> planned,
 ) {
-  final month = dayKey(period).substring(0, 7);
-  final scoped = data.scopedEntries(wallet: wallet, month: month);
-  int total(String kind) =>
-      scoped.where((e) => e.kind == kind).fold(0, (sum, e) => sum + e.amount);
-  final income = total('income'), expenses = total('expense');
-  final savings = total('savings');
-  final net = income - expenses - savings;
+  final monthPrefix = dayKey(period).substring(0, 7);
+  final eligibleEntries = data.scopedEntries(wallet: wallet);
+  var opening = 0;
+  var income = 0;
+  var expenses = 0;
+  var savings = 0;
+  var transfersIn = 0;
+  var transfersOut = 0;
+  var available = 0;
+
+  for (final e in eligibleEntries) {
+    final delta = AppData.entryBalanceDelta(e);
+    available += delta;
+    final entryMonth = e.day.length >= 7 ? e.day.substring(0, 7) : e.day;
+    final cmp = entryMonth.compareTo(monthPrefix);
+    if (cmp < 0) {
+      opening += delta;
+    } else if (cmp == 0) {
+      switch (e.kind) {
+        case 'income':
+          income += e.amount;
+        case 'expense':
+          expenses += e.amount;
+        case 'savings':
+          savings += e.amount;
+        case 'transfer_in':
+          transfersIn += e.amount;
+        case 'transfer_out':
+          transfersOut += e.amount;
+      }
+    }
+  }
+
+  final transferNet = transfersIn - transfersOut;
+  final net = income - expenses - savings + transferNet;
+  final closing = opening + net;
   final last = DateTime(period.year, period.month + 1, 0);
   final today = dayKey(DateTime.now());
   final commitments = planned
@@ -397,11 +439,15 @@ FinanceMonth financeMonth(
       : DateTime.now().day / last.day;
   return FinanceMonth(
     period: period,
+    opening: opening,
     income: income,
     expenses: expenses,
     savings: savings,
+    transferNet: transferNet,
     net: net,
-    safe: math.max(0, net - commitments),
+    closing: closing,
+    available: available,
+    safe: math.max(0, closing - commitments),
     commitments: commitments,
     used: used,
   );

@@ -369,15 +369,13 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
   Widget build(BuildContext c) {
     final accounts = _accounts();
     _WalletAppIcons.prefetch(accounts, context: c);
-    final included = accounts.where((a) => a.included).toList();
-    final scoped = widget.wallet == null
-        ? included
-        : accounts
-              .where(
-                (a) => a.name.toLowerCase() == widget.wallet!.toLowerCase(),
-              )
-              .toList();
-    final total = scoped.fold(0, (sum, a) => sum + a.balance);
+    final eligible = widget.data.eligibleWalletKeys(wallet: widget.wallet);
+    final scoped = accounts
+        .where((a) => eligible.contains(a.name.toLowerCase()))
+        .toList();
+    final total =
+        widget.month?.available ??
+        scoped.fold<int>(0, (sum, a) => sum + a.balance);
     final assets = scoped
         .where((a) => a.balance > 0)
         .fold(0, (sum, a) => sum + a.balance);
@@ -387,33 +385,23 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        KeyedSubtree(
-          key: widget.totalCardKey,
-          child: _WalletTotalCard(
-            total: total,
-            assets: assets,
-            liabilities: liabilities,
-            count: scoped.length,
-            wallet: widget.wallet,
-            currency: widget.data.currency,
-            masked: _effectiveMasked,
-            onToggle: _toggleMasked,
-          ),
+        _WalletOverviewCard(
+          totalCardKey: widget.totalCardKey,
+          total: total,
+          assets: assets,
+          liabilities: liabilities,
+          count: scoped.length,
+          wallet: widget.wallet,
+          wallets: accounts.map((a) => a.name).toList(),
+          currency: widget.data.currency,
+          masked: _effectiveMasked,
+          onToggle: _toggleMasked,
+          month: widget.month,
+          expanded: widget.monthCardExpanded,
+          onExpandedChanged: widget.onMonthCardExpandedChanged,
+          onPeriod: widget.onPeriod,
+          onScope: widget.onWallet == null ? null : () => _scope(accounts),
         ),
-        if (widget.month != null) ...[
-          const SizedBox(height: 10),
-          _WalletMonthCard(
-            month: widget.month!,
-            wallet: widget.wallet,
-            wallets: accounts.map((a) => a.name).toList(),
-            currency: widget.data.currency,
-            masked: _effectiveMasked,
-            expanded: widget.monthCardExpanded,
-            onExpandedChanged: widget.onMonthCardExpandedChanged,
-            onPeriod: widget.onPeriod,
-            onScope: widget.onWallet == null ? null : () => _scope(accounts),
-          ),
-        ],
         if (widget.belowMonthCard != null) ...[
           const SizedBox(height: 10),
           widget.belowMonthCard!,
@@ -483,158 +471,639 @@ bool _sameNames(List<String> a, List<String> b) {
   return true;
 }
 
-class _WalletTotalCard extends StatelessWidget {
+String _signedMoney(int amount, String currency) =>
+    amount > 0 ? '+${money(amount, currency)}' : money(amount, currency);
+
+class _WalletOverviewCard extends StatefulWidget {
+  final GlobalKey? totalCardKey;
   final int total, assets, liabilities, count;
   final String? wallet;
+  final List<String> wallets;
   final String currency;
   final bool masked;
   final VoidCallback onToggle;
-  const _WalletTotalCard({
+  final FinanceMonth? month;
+  final bool? expanded;
+  final ValueChanged<bool>? onExpandedChanged;
+  final ValueChanged<DateTime>? onPeriod;
+  final VoidCallback? onScope;
+  const _WalletOverviewCard({
+    this.totalCardKey,
     required this.total,
     required this.assets,
     required this.liabilities,
     required this.count,
-    this.wallet,
+    required this.wallet,
+    required this.wallets,
     required this.currency,
     required this.masked,
     required this.onToggle,
+    required this.month,
+    this.expanded,
+    this.onExpandedChanged,
+    required this.onPeriod,
+    required this.onScope,
   });
 
-  String _short(int amount) =>
-      masked ? walletMaskedAmount(currency) : money(amount, currency);
+  @override
+  State<_WalletOverviewCard> createState() => _WalletOverviewCardState();
+}
+
+class _WalletOverviewCardState extends State<_WalletOverviewCard> {
+  late bool _expanded = widget.expanded ?? true;
+
+  @override
+  void didUpdateWidget(covariant _WalletOverviewCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.expanded != null && widget.expanded != _expanded) {
+      _expanded = widget.expanded!;
+    }
+  }
+
+  String _short(int amount) => widget.masked
+      ? walletMaskedAmount(widget.currency)
+      : money(amount, widget.currency);
+
+  String _shortSigned(int amount) => widget.masked
+      ? walletMaskedAmount(widget.currency)
+      : _signedMoney(amount, widget.currency);
+
+  String get scope => widget.wallet ?? 'All wallets';
 
   @override
   Widget build(BuildContext c) {
-    final title = masked
-        ? 'Total net balance, amounts hidden'
-        : 'Total net balance ${money(total, currency)}';
-    return Semantics(
-      container: true,
-      label: '$title, across $count wallets',
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xff191b19), Color(0xff303630)],
-          ),
-          borderRadius: BorderRadius.circular(26),
-          border: Border.all(color: Colors.white.withValues(alpha: .06)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    wallet == null
-                        ? 'TOTAL BALANCE'
-                        : 'WALLET BALANCE · ${wallet!.toUpperCase()}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: .7),
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                Semantics(
-                  button: true,
-                  label: masked ? 'Show amounts' : 'Hide amounts',
-                  child: IconButton(
-                    tooltip: masked ? 'Show amounts' : 'Hide amounts',
-                    onPressed: onToggle,
-                    style: IconButton.styleFrom(
-                      minimumSize: const Size(34, 34),
-                      maximumSize: const Size(34, 34),
-                      padding: EdgeInsets.zero,
-                      backgroundColor: Colors.white.withValues(alpha: .08),
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: Icon(
-                      masked ? LucideIcons.eyeOff : LucideIcons.eye,
-                      size: 16,
-                    ),
-                  ),
-                ),
-              ],
+    final theme = Theme.of(c);
+    final month = widget.month;
+    final expanded = widget.expanded ?? _expanded;
+    final availableLabel = widget.masked
+        ? 'Available balance, amounts hidden'
+        : 'Available balance ${money(widget.total, widget.currency)}';
+
+    final topHero = KeyedSubtree(
+      key: widget.totalCardKey,
+      child: Semantics(
+        container: true,
+        label: '$availableLabel, across ${widget.count} wallets',
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xff191b19), Color(0xff303630)],
             ),
-            const SizedBox(height: 8),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
+            borderRadius: month == null
+                ? BorderRadius.circular(26)
+                : const BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
                     child: Text(
-                      masked
-                          ? walletMaskedAmount(currency)
-                          : money(total, currency),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Geist Mono',
-                        fontSize: 32,
-                        height: 1.05,
+                      widget.wallet == null
+                          ? 'AVAILABLE BALANCE'
+                          : 'AVAILABLE · ${widget.wallet!.toUpperCase()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .7),
+                        fontSize: 10,
+                        letterSpacing: 1.8,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: -1.2,
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  '$count ${count == 1 ? 'wallet' : 'wallets'}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .55),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
+                  Semantics(
+                    button: true,
+                    label: widget.masked ? 'Show amounts' : 'Hide amounts',
+                    child: IconButton(
+                      tooltip: widget.masked ? 'Show amounts' : 'Hide amounts',
+                      onPressed: widget.onToggle,
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(34, 34),
+                        maximumSize: const Size(34, 34),
+                        padding: EdgeInsets.zero,
+                        backgroundColor: Colors.white.withValues(alpha: .08),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: Icon(
+                        widget.masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                        size: 16,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              wallet == null
-                  ? 'All wallets · all time, in $currency'
-                  : '$wallet · all time, in $currency',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .5),
-                fontSize: 10,
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _TotalMetric(label: 'Assets', value: _short(assets)),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _TotalMetric(
-                    label: 'Owed',
-                    value: _short(liabilities),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _short(widget.total),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'Geist Mono',
+                          fontSize: 32,
+                          height: 1.05,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -1.2,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _TotalMetric(
-                    label: 'Wallets',
-                    value: '$count',
-                    numeric: true,
+                  const SizedBox(width: 12),
+                  Text(
+                    '${widget.count} ${widget.count == 1 ? 'wallet' : 'wallets'}',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .55),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.wallet == null
+                    ? 'All wallets · all time, in ${widget.currency}'
+                    : '${widget.wallet} · all time, in ${widget.currency}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .5),
+                  fontSize: 10,
                 ),
-              ],
-            ),
-          ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _TotalMetric(
+                      label: 'Assets',
+                      value: _short(widget.assets),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _TotalMetric(
+                      label: 'Owed',
+                      value: _short(widget.liabilities),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _TotalMetric(
+                      label: 'Wallets',
+                      value: '${widget.count}',
+                      numeric: true,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
+
+    if (month == null) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: Colors.white.withValues(alpha: .06)),
+        ),
+        child: topHero,
+      );
+    }
+
+    final period = month.period;
+    final last = DateTime(period.year, period.month + 1, 0);
+    final monthNetText = _shortSigned(month.net);
+    final safeText = _short(month.safe);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: theme.colorScheme.outlineVariant.withValues(alpha: .55),
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          topHero,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(6, 4, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Previous month',
+                      onPressed: widget.onPeriod == null
+                          ? null
+                          : withFeedback(
+                              () => widget.onPeriod!(
+                                DateTime(period.year, period.month - 1),
+                              ),
+                            ),
+                      icon: const Icon(LucideIcons.chevronLeft),
+                    ),
+                    Expanded(
+                      child: Text(
+                        DateFormat('MMMM yyyy').format(period),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Next month',
+                      onPressed: widget.onPeriod == null
+                          ? null
+                          : withFeedback(
+                              () => widget.onPeriod!(
+                                DateTime(period.year, period.month + 1),
+                              ),
+                            ),
+                      icon: const Icon(LucideIcons.chevronRight),
+                    ),
+                    IconButton(
+                      tooltip: expanded
+                          ? 'Minimize month card'
+                          : 'Expand month card',
+                      onPressed: withFeedback(() {
+                        final next = !expanded;
+                        if (widget.onExpandedChanged != null) {
+                          widget.onExpandedChanged!(next);
+                        } else {
+                          setState(() => _expanded = next);
+                        }
+                      }),
+                      icon: Icon(
+                        expanded
+                            ? LucideIcons.chevronUp
+                            : LucideIcons.chevronDown,
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!expanded)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 0, 4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Monthly net · $scope · Closing ${_short(month.closing)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          monthNetText,
+                          style: const TextStyle(
+                            fontFamily: 'Geist Mono',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'MONTHLY NET · ${scope.toUpperCase()}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      letterSpacing: 1.6,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      monthNetText,
+                                      style: const TextStyle(
+                                        fontFamily: 'Geist Mono',
+                                        fontSize: 28,
+                                        height: 1.05,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.9,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Semantics(
+                              label:
+                                  '${(month.used * 100).round()} percent of the month elapsed',
+                              child: SizedBox(
+                                width: 54,
+                                height: 54,
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    SizedBox.expand(
+                                      child: CircularProgressIndicator(
+                                        value: month.used,
+                                        strokeWidth: 4,
+                                        backgroundColor: theme
+                                            .colorScheme
+                                            .surfaceContainerHighest,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${(month.used * 100).round()}%',
+                                      style: const TextStyle(
+                                        fontFamily: 'Geist Mono',
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '${DateFormat('MMM').format(period)} · ${last.day} days · ${(month.used * 100).round()}% of period elapsed',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHigh,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _CarryoverMetric(
+                                  label: 'Opening',
+                                  value: _short(month.opening),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: Text(
+                                  '+',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: _CarryoverMetric(
+                                  label: 'Monthly net',
+                                  value: monthNetText,
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                ),
+                                child: Text(
+                                  '=',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: _CarryoverMetric(
+                                  label: 'Closing',
+                                  value: _short(month.closing),
+                                  emphasize: true,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (month.transferNet != 0) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Includes ${_shortSigned(month.transferNet)} net transfers across scope.',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 12),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Semantics(
+                            button: widget.onScope != null,
+                            label: 'Finance scope, currently $scope',
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: widget.onScope,
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 230,
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surfaceContainerHigh,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(LucideIcons.wallet, size: 14),
+                                    const SizedBox(width: 6),
+                                    Flexible(
+                                      child: Text(
+                                        scope,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(
+                                      LucideIcons.chevronDown,
+                                      size: 14,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const Divider(),
+                        const Text(
+                          'Safe to spend',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            safeText,
+                            style: const TextStyle(
+                              fontFamily: 'Geist Mono',
+                              fontSize: 26,
+                              height: 1.05,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -.8,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          month.commitments == 0
+                              ? 'No remaining planned expenses or savings for $scope in ${DateFormat('MMMM').format(period)}.'
+                              : 'After ${money(month.commitments, widget.currency)} in remaining planned expenses and savings for $scope.',
+                          style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        LayoutBuilder(
+                          builder: (c, constraints) {
+                            final columns = constraints.maxWidth < 260 ? 2 : 3;
+                            final width =
+                                (constraints.maxWidth - 12 * (columns - 1)) /
+                                columns;
+                            return Wrap(
+                              spacing: 12,
+                              runSpacing: 16,
+                              children: [
+                                for (final value in [
+                                  ('Income', month.income),
+                                  ('Spent', month.expenses),
+                                  ('Saved', month.savings),
+                                ])
+                                  SizedBox(
+                                    width: width,
+                                    child: _MonthMetric(
+                                      label: value.$1,
+                                      value: _short(value.$2),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                        if (widget.wallets.length > 1 &&
+                            widget.onScope != null) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.wallet == null
+                                ? 'Tap the scope chip to narrow the overview, chart, planner and history to one wallet.'
+                                : 'Balance, monthly summary, chart, planner and history follow $scope.',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              height: 1.35,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
+}
+
+class _CarryoverMetric extends StatelessWidget {
+  final String label, value;
+  final bool emphasize;
+  const _CarryoverMetric({
+    required this.label,
+    required this.value,
+    this.emphasize = false,
+  });
+
+  @override
+  Widget build(BuildContext c) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w500,
+          color: Theme.of(c).colorScheme.onSurfaceVariant,
+        ),
+      ),
+      const SizedBox(height: 3),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          value,
+          style: TextStyle(
+            fontFamily: 'Geist Mono',
+            fontSize: 11.5,
+            fontWeight: emphasize ? FontWeight.w700 : FontWeight.w600,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _TotalMetric extends StatelessWidget {
@@ -681,344 +1150,6 @@ class _TotalMetric extends StatelessWidget {
       ],
     ),
   );
-}
-
-class _WalletMonthCard extends StatefulWidget {
-  final FinanceMonth month;
-  final String? wallet;
-  final List<String> wallets;
-  final String currency;
-  final bool masked;
-  final bool? expanded;
-  final ValueChanged<bool>? onExpandedChanged;
-  final ValueChanged<DateTime>? onPeriod;
-  final VoidCallback? onScope;
-  const _WalletMonthCard({
-    required this.month,
-    required this.wallet,
-    required this.wallets,
-    required this.currency,
-    required this.masked,
-    this.expanded,
-    this.onExpandedChanged,
-    required this.onPeriod,
-    required this.onScope,
-  });
-
-  @override
-  State<_WalletMonthCard> createState() => _WalletMonthCardState();
-}
-
-class _WalletMonthCardState extends State<_WalletMonthCard> {
-  late bool _expanded = widget.expanded ?? true;
-
-  @override
-  void didUpdateWidget(covariant _WalletMonthCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.expanded != null && widget.expanded != _expanded) {
-      _expanded = widget.expanded!;
-    }
-  }
-
-  String get scope => widget.wallet ?? 'All wallets';
-
-  @override
-  Widget build(BuildContext c) {
-    final expanded = widget.expanded ?? _expanded;
-    final month = widget.month;
-    final period = month.period;
-    final last = DateTime(period.year, period.month + 1, 0);
-    final amount = widget.masked
-        ? walletMaskedAmount(widget.currency)
-        : money(month.net, widget.currency);
-    final safe = widget.masked
-        ? walletMaskedAmount(widget.currency)
-        : money(month.safe, widget.currency);
-    final theme = Theme.of(c);
-    return Surface(
-      padding: const EdgeInsets.fromLTRB(6, 4, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                tooltip: 'Previous month',
-                onPressed: widget.onPeriod == null
-                    ? null
-                    : withFeedback(
-                        () => widget.onPeriod!(
-                          DateTime(period.year, period.month - 1),
-                        ),
-                      ),
-                icon: const Icon(LucideIcons.chevronLeft),
-              ),
-              Expanded(
-                child: Text(
-                  DateFormat('MMMM yyyy').format(period),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Next month',
-                onPressed: widget.onPeriod == null
-                    ? null
-                    : withFeedback(
-                        () => widget.onPeriod!(
-                          DateTime(period.year, period.month + 1),
-                        ),
-                      ),
-                icon: const Icon(LucideIcons.chevronRight),
-              ),
-              IconButton(
-                tooltip: expanded ? 'Minimize month card' : 'Expand month card',
-                onPressed: withFeedback(() {
-                  final next = !expanded;
-                  if (widget.onExpandedChanged != null) {
-                    widget.onExpandedChanged!(next);
-                  } else {
-                    setState(() => _expanded = next);
-                  }
-                }),
-                icon: Icon(
-                  expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-                  size: 18,
-                ),
-              ),
-            ],
-          ),
-          if (!expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 0, 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Month net · $scope',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    amount,
-                    style: const TextStyle(
-                      fontFamily: 'Geist Mono',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'MONTH NET · ${scope.toUpperCase()}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                letterSpacing: 1.6,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                amount,
-                                style: const TextStyle(
-                                  fontFamily: 'Geist Mono',
-                                  fontSize: 30,
-                                  height: 1.05,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: -1,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Semantics(
-                        label:
-                            '${(month.used * 100).round()} percent of the month elapsed',
-                        child: SizedBox(
-                          width: 58,
-                          height: 58,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              SizedBox.expand(
-                                child: CircularProgressIndicator(
-                                  value: month.used,
-                                  strokeWidth: 4,
-                                  backgroundColor:
-                                      theme.colorScheme.surfaceContainerHighest,
-                                ),
-                              ),
-                              Text(
-                                '${(month.used * 100).round()}%',
-                                style: const TextStyle(
-                                  fontFamily: 'Geist Mono',
-                                  fontSize: 11,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${DateFormat('MMM').format(period)} · ${last.day} days · ${(month.used * 100).round()}% of period elapsed',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Semantics(
-                      button: widget.onScope != null,
-                      label: 'Finance scope, currently $scope',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: widget.onScope,
-                        child: Container(
-                          constraints: const BoxConstraints(maxWidth: 230),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 7,
-                          ),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(LucideIcons.wallet, size: 14),
-                              const SizedBox(width: 6),
-                              Flexible(
-                                child: Text(
-                                  scope,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                LucideIcons.chevronDown,
-                                size: 14,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Divider(),
-                  const Text(
-                    'Safe to spend',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      safe,
-                      style: const TextStyle(
-                        fontFamily: 'Geist Mono',
-                        fontSize: 28,
-                        height: 1.05,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: -.8,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    month.commitments == 0
-                        ? 'No remaining planned expenses or savings for $scope in ${DateFormat('MMMM').format(period)}.'
-                        : 'After ${money(month.commitments, widget.currency)} in remaining planned expenses and savings for $scope.',
-                    style: TextStyle(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  LayoutBuilder(
-                    builder: (c, constraints) {
-                      final columns = constraints.maxWidth < 260 ? 2 : 3;
-                      final width =
-                          (constraints.maxWidth - 12 * (columns - 1)) / columns;
-                      return Wrap(
-                        spacing: 12,
-                        runSpacing: 16,
-                        children: [
-                          for (final value in [
-                            ('Income', month.income),
-                            ('Spent', month.expenses),
-                            ('Saved', month.savings),
-                          ])
-                            SizedBox(
-                              width: width,
-                              child: _MonthMetric(
-                                label: value.$1,
-                                value: widget.masked
-                                    ? walletMaskedAmount(widget.currency)
-                                    : money(value.$2, widget.currency),
-                              ),
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                  if (widget.wallets.length > 1 && widget.onScope != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      widget.wallet == null
-                          ? 'Tap the scope chip to read one wallet only. Cards below stay separate.'
-                          : 'Charts, planner and timeline below follow $scope. Tap a card to open it.',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        height: 1.35,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _MonthMetric extends StatelessWidget {

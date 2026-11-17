@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -300,7 +301,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+    expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
     await tester.tap(find.text('All wallets'));
     await tester.pumpAndSettle();
     expect(find.text('Finance scope'), findsOneWidget);
@@ -374,7 +375,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+    expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
 
     await tester.tap(find.text('All wallets'));
     await tester.pumpAndSettle();
@@ -384,7 +385,7 @@ void main() {
     await tester.tap(gcash);
     await tester.pumpAndSettle();
 
-    expect(find.text('MONTH NET · GCASH'), findsOneWidget);
+    expect(find.text('MONTHLY NET · GCASH'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Savings'));
     await tester.pumpAndSettle();
@@ -668,8 +669,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // 1. Total balance and Month net start synchronized for all wallets.
-      expect(find.text('TOTAL BALANCE'), findsWidgets);
-      expect(find.text('MONTH NET · ALL WALLETS'), findsOneWidget);
+      expect(find.text('AVAILABLE BALANCE'), findsWidgets);
+      expect(find.text('MONTHLY NET · ALL WALLETS'), findsOneWidget);
       expect(find.text('₱1,000.00'), findsWidgets);
 
       // 2. Add a new wallet/payment method from Finance "+" button.
@@ -710,8 +711,8 @@ void main() {
       await tester.tap(mayaChoice);
       await tester.pumpAndSettle();
 
-      expect(find.text('WALLET BALANCE · MAYA'), findsOneWidget);
-      expect(find.text('MONTH NET · MAYA'), findsOneWidget);
+      expect(find.text('AVAILABLE · MAYA'), findsOneWidget);
+      expect(find.text('MONTHLY NET · MAYA'), findsOneWidget);
       expect(find.text(money(-25000, 'PHP')), findsWidgets);
 
       // 5. Card design preference updates immediately via dataProvider.
@@ -1036,6 +1037,147 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pumpAndSettle();
       await tester.runAsync(() => db.close());
+    },
+  );
+
+  test(
+    'unified finance scope: carryover, exclusions, cross-scope transfers, historical edits, and savings consistency',
+    () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      try {
+        await db.pref('methods', jsonEncode(['Maya', 'MariBank', 'HiddenStash']));
+        await db.pref('wallet:HiddenStash:include', 'false');
+
+        // Case 1-7: October closes with ₱30 (3000 minor), Nov receives ₱5,000, spends ₱2,000 -> ₱3,030, Dec opens with ₱3,030.
+        await db
+            .into(db.entries)
+            .insert(dated('oct-inc', '2026-10-15', 'income', 3000, 'Maya'));
+        await db
+            .into(db.entries)
+            .insert(dated('nov-inc', '2026-11-05', 'income', 500000, 'Maya'));
+        await db
+            .into(db.entries)
+            .insert(dated('nov-exp', '2026-11-10', 'expense', 200000, 'MariBank'));
+
+        var d = await db.readAll();
+        var oct = financeMonth(d, DateTime(2026, 10), null, const []);
+        var nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        var dec = financeMonth(d, DateTime(2026, 12), null, const []);
+
+        expect(oct.opening, 0);
+        expect(oct.net, 3000);
+        expect(oct.closing, 3000);
+        expect(nov.opening, 3000);
+        expect(nov.income, 500000);
+        expect(nov.expenses, 200000);
+        expect(nov.net, 300000);
+        expect(nov.closing, 303000);
+        expect(dec.opening, 303000);
+        expect(dec.closing, 303000);
+        // Navigating back to October preserves ₱30 closing.
+        expect(financeMonth(d, DateTime(2026, 10), null, const []).closing, 3000);
+        expect(d.availableBalance(), 303000);
+
+        // Case 8 & 10: Excluded wallet activity is omitted from both monthly & all-time totals;
+        // transfers across included/excluded boundary reconcile opening, net, closing, and available.
+        await db
+            .into(db.entries)
+            .insert(dated('stash-inc', '2026-11-11', 'income', 900000, 'HiddenStash'));
+        await db
+            .into(db.entries)
+            .insert(dated('msg-inc', '2026-11-11', 'income', 77700, 'messaging'));
+        d = await db.readAll();
+        expect(d.availableBalance(), 303000);
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        expect(nov.income, 500000);
+        expect(nov.closing, 303000);
+        expect(d.scopedEntries(month: '2026-11').map((e) => e.id), [
+          'nov-inc',
+          'nov-exp',
+        ]);
+
+        // Case 9: Included -> Included transfer (Maya -> MariBank) keeps zero aggregate impact.
+        await db.saveTransfer(
+          day: '2026-11-12',
+          amount: 100000,
+          currency: 'PHP',
+          fromMethod: 'Maya',
+          toMethod: 'MariBank',
+        );
+        d = await db.readAll();
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        expect(nov.transferNet, 0);
+        expect(nov.income, 500000);
+        expect(nov.expenses, 200000);
+        expect(nov.closing, 303000);
+        expect(d.availableBalance(), 303000);
+
+        // Case 10b: Included -> Excluded transfer (Maya -> HiddenStash ₱500) decreases included balance by ₱500.
+        await db.saveTransfer(
+          day: '2026-11-13',
+          amount: 50000,
+          currency: 'PHP',
+          fromMethod: 'Maya',
+          toMethod: 'HiddenStash',
+        );
+        d = await db.readAll();
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        dec = financeMonth(d, DateTime(2026, 12), null, const []);
+        expect(nov.transferNet, -50000);
+        expect(nov.net, 250000);
+        expect(nov.closing, 253000);
+        expect(dec.opening, 253000);
+        expect(d.availableBalance(), 253000);
+
+        // Case 10c: Excluded -> Included transfer (HiddenStash -> MariBank ₱200) increases included balance by ₱200.
+        await db.saveTransfer(
+          day: '2026-11-14',
+          amount: 20000,
+          currency: 'PHP',
+          fromMethod: 'HiddenStash',
+          toMethod: 'MariBank',
+        );
+        d = await db.readAll();
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        expect(nov.transferNet, -30000);
+        expect(nov.closing, 273000);
+        expect(d.availableBalance(), 273000);
+
+        // Case 12: Savings allocation subtracts once from balance and is counted once in savings.
+        await db
+            .into(db.entries)
+            .insert(dated('nov-sav', '2026-11-15', 'savings', 10000, 'Maya'));
+        d = await db.readAll();
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        expect(nov.savings, 10000);
+        expect(nov.closing, 263000);
+        expect(d.availableBalance(), 263000);
+
+        // Case 11: Editing historical October transaction recalculates Nov opening, Nov closing, Dec opening & Available.
+        await (db.update(db.entries)..where((t) => t.id.equals('oct-inc')))
+            .write(const EntriesCompanion(amount: Value(8000)));
+        d = await db.readAll();
+        oct = financeMonth(d, DateTime(2026, 10), null, const []);
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        dec = financeMonth(d, DateTime(2026, 12), null, const []);
+        expect(oct.closing, 8000);
+        expect(nov.opening, 8000);
+        expect(nov.closing, 268000);
+        expect(dec.opening, 268000);
+        expect(d.availableBalance(), 268000);
+
+        // Deleting historical October transaction recalculates again cleanly.
+        await (db.delete(db.entries)..where((t) => t.id.equals('oct-inc'))).go();
+        d = await db.readAll();
+        nov = financeMonth(d, DateTime(2026, 11), null, const []);
+        dec = financeMonth(d, DateTime(2026, 12), null, const []);
+        expect(nov.opening, 0);
+        expect(nov.closing, 260000);
+        expect(dec.opening, 260000);
+        expect(d.availableBalance(), 260000);
+      } finally {
+        await db.close();
+      }
     },
   );
 }
