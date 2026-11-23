@@ -385,7 +385,7 @@ class _UpdateSheetState extends State<_UpdateSheet>
           ),
           if (widget.info.notes.isNotEmpty) ...[
             const SizedBox(height: 16),
-            Text(widget.info.notes),
+            _MarkdownNotes(widget.info.notes),
           ],
           if (_busy) ...[
             const SizedBox(height: 20),
@@ -407,5 +407,399 @@ class _UpdateSheetState extends State<_UpdateSheet>
         ],
       ),
     );
+  }
+}
+
+/// Renders release-note Markdown without external package dependencies.
+class _MarkdownNotes extends StatelessWidget {
+  final String source;
+  const _MarkdownNotes(this.source);
+
+  static final _headingRe = RegExp(r'^(#{1,6})\s+(.*)$');
+  static final _hrRe = RegExp(r'^\s*(?:[-*_]\s*){3,}$');
+  static final _ulRe = RegExp(r'^(\s*)[-*+]\s+(.*)$');
+  static final _olRe = RegExp(r'^(\s*)(\d+)\.\s+(.*)$');
+  static final _taskRe = RegExp(r'^\[( |x|X)\]\s+(.*)$');
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final base =
+        theme.textTheme.bodyMedium ??
+        TextStyle(fontSize: 14, height: 1.45, color: colors.onSurface);
+    final lines = source.replaceAll('\r\n', '\n').split('\n');
+    final blocks = <Widget>[];
+    var i = 0;
+
+    while (i < lines.length) {
+      final line = lines[i];
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('```')) {
+        final codeLines = <String>[];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.add(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        blocks.add(
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.outlineVariant),
+            ),
+            child: Text(
+              codeLines.join('\n'),
+              style: TextStyle(
+                fontFamily: 'Geist Mono',
+                fontSize: 12.5,
+                height: 1.4,
+                color: colors.onSurface,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      if (_hrRe.hasMatch(trimmed)) {
+        blocks.add(
+          Divider(height: 12, thickness: 1, color: colors.outlineVariant),
+        );
+        i++;
+        continue;
+      }
+
+      final heading = _headingRe.firstMatch(trimmed);
+      if (heading != null) {
+        final level = heading.group(1)!.length;
+        final text = heading.group(2)!.replaceFirst(RegExp(r'\s+#+\s*$'), '');
+        final style = base.copyWith(
+          fontSize: level == 1
+              ? 18
+              : level == 2
+              ? 16
+              : 14.5,
+          fontWeight: FontWeight.w600,
+          height: 1.3,
+        );
+        blocks.add(
+          Semantics(
+            header: true,
+            child: Text.rich(_inlineSpan(text, style, colors)),
+          ),
+        );
+        i++;
+        continue;
+      }
+
+      if (trimmed.startsWith('>')) {
+        final quoteLines = <String>[];
+        while (i < lines.length && lines[i].trim().startsWith('>')) {
+          quoteLines.add(lines[i].trim().replaceFirst(RegExp(r'^>\s?'), ''));
+          i++;
+        }
+        blocks.add(
+          Container(
+            padding: const EdgeInsets.only(left: 12),
+            decoration: BoxDecoration(
+              border: Border(
+                left: BorderSide(color: colors.outlineVariant, width: 3),
+              ),
+            ),
+            child: Text.rich(
+              _inlineSpan(
+                quoteLines.join(' '),
+                base.copyWith(color: colors.onSurfaceVariant),
+                colors,
+              ),
+            ),
+          ),
+        );
+        continue;
+      }
+
+      final ul = _ulRe.firstMatch(line);
+      final ol = ul == null ? _olRe.firstMatch(line) : null;
+      if (ul != null || ol != null) {
+        final items = <Widget>[];
+        while (i < lines.length) {
+          final current = lines[i];
+          final mUl = _ulRe.firstMatch(current);
+          final mOl = mUl == null ? _olRe.firstMatch(current) : null;
+          if (mUl == null && mOl == null) break;
+          final indent = ((mUl?.group(1) ?? mOl!.group(1))!).length;
+          final nested = indent >= 2;
+          var body = (mUl?.group(2) ?? mOl!.group(3))!.trim();
+          final task = _taskRe.firstMatch(body);
+          final String marker;
+          if (task != null) {
+            final checked = task.group(1)!.toLowerCase() == 'x';
+            marker = checked ? '☑' : '☐';
+            body = task.group(2)!.trim();
+          } else if (mOl != null) {
+            marker = '${mOl.group(2)!}.';
+          } else {
+            marker = nested ? '◦' : '•';
+          }
+          items.add(
+            Padding(
+              padding: EdgeInsets.only(left: nested ? 16 : 0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: mOl != null ? 24 : 16,
+                    child: Text(
+                      marker,
+                      style: base.copyWith(color: colors.onSurfaceVariant),
+                    ),
+                  ),
+                  Expanded(child: Text.rich(_inlineSpan(body, base, colors))),
+                ],
+              ),
+            ),
+          );
+          i++;
+        }
+        blocks.add(
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var j = 0; j < items.length; j++) ...[
+                if (j > 0) const SizedBox(height: 6),
+                items[j],
+              ],
+            ],
+          ),
+        );
+        continue;
+      }
+
+      final paraLines = <String>[];
+      while (i < lines.length) {
+        final cur = lines[i];
+        final curTrim = cur.trim();
+        if (curTrim.isEmpty ||
+            curTrim.startsWith('```') ||
+            curTrim.startsWith('>') ||
+            _hrRe.hasMatch(curTrim) ||
+            _headingRe.hasMatch(curTrim) ||
+            _ulRe.hasMatch(cur) ||
+            _olRe.hasMatch(cur)) {
+          break;
+        }
+        paraLines.add(curTrim);
+        i++;
+      }
+      blocks.add(Text.rich(_inlineSpan(paraLines.join(' '), base, colors)));
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var j = 0; j < blocks.length; j++) ...[
+          if (j > 0) const SizedBox(height: 10),
+          blocks[j],
+        ],
+      ],
+    );
+  }
+
+  static InlineSpan _inlineSpan(
+    String text,
+    TextStyle style,
+    ColorScheme colors,
+  ) => TextSpan(style: style, children: _parseInline(text, style, colors));
+
+  static bool _isWordChar(String s, int index) {
+    if (index < 0 || index >= s.length) return false;
+    final code = s.codeUnitAt(index);
+    return (code >= 48 && code <= 57) ||
+        (code >= 65 && code <= 90) ||
+        (code >= 97 && code <= 122);
+  }
+
+  static List<InlineSpan> _parseInline(
+    String text,
+    TextStyle style,
+    ColorScheme colors,
+  ) {
+    final spans = <InlineSpan>[];
+    final buf = StringBuffer();
+
+    void flushText() {
+      if (buf.isNotEmpty) {
+        spans.add(TextSpan(text: buf.toString()));
+        buf.clear();
+      }
+    }
+
+    var i = 0;
+    while (i < text.length) {
+      final ch = text[i];
+
+      if (ch == r'\' && i + 1 < text.length) {
+        buf.write(text[i + 1]);
+        i += 2;
+        continue;
+      }
+
+      if (ch == '`') {
+        final end = text.indexOf('`', i + 1);
+        if (end != -1) {
+          flushText();
+          spans.add(
+            TextSpan(
+              text: text.substring(i + 1, end),
+              style: style.copyWith(
+                fontFamily: 'Geist Mono',
+                fontSize: (style.fontSize ?? 14) * .92,
+                backgroundColor: colors.surfaceContainerHigh,
+              ),
+            ),
+          );
+          i = end + 1;
+          continue;
+        }
+      }
+
+      if (ch == '[') {
+        final closeBracket = text.indexOf(']', i + 1);
+        if (closeBracket != -1 &&
+            closeBracket + 1 < text.length &&
+            text[closeBracket + 1] == '(') {
+          final closeParen = text.indexOf(')', closeBracket + 2);
+          if (closeParen != -1) {
+            final label = text.substring(i + 1, closeBracket);
+            final target = text.substring(closeBracket + 2, closeParen).trim();
+            if (target.startsWith('https://') ||
+                target.startsWith('http://') ||
+                target.startsWith('#')) {
+              flushText();
+              spans.add(
+                TextSpan(
+                  style: style.copyWith(
+                    decoration: TextDecoration.underline,
+                    decorationColor: colors.onSurfaceVariant,
+                  ),
+                  children: _parseInline(label, style, colors),
+                ),
+              );
+              i = closeParen + 1;
+              continue;
+            }
+          }
+        }
+      }
+
+      if (text.startsWith('***', i) || text.startsWith('___', i)) {
+        final delim = text.substring(i, i + 3);
+        final end = text.indexOf(delim, i + 3);
+        if (end != -1) {
+          flushText();
+          final innerStyle = style.copyWith(
+            fontWeight: FontWeight.w600,
+            fontStyle: FontStyle.italic,
+          );
+          spans.add(
+            TextSpan(
+              style: innerStyle,
+              children: _parseInline(
+                text.substring(i + 3, end),
+                innerStyle,
+                colors,
+              ),
+            ),
+          );
+          i = end + 3;
+          continue;
+        }
+      }
+
+      if (text.startsWith('**', i) || text.startsWith('__', i)) {
+        final delim = text.substring(i, i + 2);
+        final end = text.indexOf(delim, i + 2);
+        if (end != -1) {
+          flushText();
+          final innerStyle = style.copyWith(fontWeight: FontWeight.w600);
+          spans.add(
+            TextSpan(
+              style: innerStyle,
+              children: _parseInline(
+                text.substring(i + 2, end),
+                innerStyle,
+                colors,
+              ),
+            ),
+          );
+          i = end + 2;
+          continue;
+        }
+      }
+
+      if (text.startsWith('~~', i)) {
+        final end = text.indexOf('~~', i + 2);
+        if (end != -1) {
+          flushText();
+          final innerStyle = style.copyWith(
+            decoration: TextDecoration.lineThrough,
+          );
+          spans.add(
+            TextSpan(
+              style: innerStyle,
+              children: _parseInline(
+                text.substring(i + 2, end),
+                innerStyle,
+                colors,
+              ),
+            ),
+          );
+          i = end + 2;
+          continue;
+        }
+      }
+
+      if (ch == '*' || (ch == '_' && !_isWordChar(text, i - 1))) {
+        final end = text.indexOf(ch, i + 1);
+        if (end != -1 &&
+            end > i + 1 &&
+            text[i + 1] != ' ' &&
+            text[end - 1] != ' ' &&
+            (ch != '_' || !_isWordChar(text, end + 1))) {
+          flushText();
+          final innerStyle = style.copyWith(fontStyle: FontStyle.italic);
+          spans.add(
+            TextSpan(
+              style: innerStyle,
+              children: _parseInline(
+                text.substring(i + 1, end),
+                innerStyle,
+                colors,
+              ),
+            ),
+          );
+          i = end + 1;
+          continue;
+        }
+      }
+
+      buf.write(ch);
+      i++;
+    }
+
+    flushText();
+    return spans;
   }
 }

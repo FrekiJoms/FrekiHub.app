@@ -213,4 +213,56 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pumpAndSettle();
   });
+
+  testWidgets('showUpdateSheet renders Markdown release notes cleanly', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: Design.theme(false),
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => AppUpdater.showUpdateSheet(
+                context,
+                const AppUpdateInfo(
+                  versionCode: 3,
+                  versionName: '1.5.6',
+                  apkUrl: 'https://example.com/app-release.apk',
+                  notes:
+                      "## What's Changed\n"
+                      '- **Faster** sync for `app_release_v1.apk`\n'
+                      '1. Fixed [notes](https://example.com/notes)\n'
+                      '> Restart optional',
+                ),
+                current: const AppVersionInfo(
+                  versionName: '1.5.5',
+                  versionCode: 2,
+                ),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    expect(find.text("What's Changed"), findsOneWidget);
+    expect(find.textContaining('##'), findsNothing);
+    expect(
+      find.textContaining('Faster sync for app_release_v1.apk'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('**'), findsNothing);
+    expect(find.textContaining('`'), findsNothing);
+    expect(find.textContaining('Fixed notes'), findsOneWidget);
+    expect(find.textContaining('https://example.com/notes'), findsNothing);
+    expect(find.text('Restart optional'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
+  });
 }
