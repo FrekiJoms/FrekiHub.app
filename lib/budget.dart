@@ -20,7 +20,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
   late String _timelineSort; // date | amount | type
   late bool _timelineDesc;
   late bool _historyExpanded;
-  late bool _monthCardExpanded;
   bool _historyShowAll = false;
   static const int _compactHistoryLimit = 5;
   Future<void> occurrence(Projection p) => panel(
@@ -173,8 +172,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
       _timelineSort = 'date';
     }
     _timelineDesc = widget.data.prefs['financeHistoryDesc'] == 'true';
-    _monthCardExpanded =
-        widget.data.prefs['financeMonthCardExpanded'] != 'false';
     _scrollController.addListener(_updateCompactProgress);
     WidgetsBinding.instance.addPostFrameCallback((_) => _measureCard());
   }
@@ -200,11 +197,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
     if (oldWidget.data.prefs['financeHistoryDesc'] !=
         widget.data.prefs['financeHistoryDesc']) {
       _timelineDesc = widget.data.prefs['financeHistoryDesc'] == 'true';
-    }
-    if (oldWidget.data.prefs['financeMonthCardExpanded'] !=
-        widget.data.prefs['financeMonthCardExpanded']) {
-      _monthCardExpanded =
-          widget.data.prefs['financeMonthCardExpanded'] != 'false';
     }
     if (wallet != null &&
         !widget.data.walletMethods.any(
@@ -296,10 +288,11 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
         .scopedEntries(wallet: wallet)
         .where((e) => e.kind == 'savings')
         .fold(0, (sum, e) => sum + e.amount);
-    final savingsEntries = d.savingsByWallet.entries
-        .where((e) => eligibleAll.contains(e.key.toLowerCase()))
-        .toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final savingsEntries =
+        d.savingsByWallet.entries
+            .where((e) => eligibleAll.contains(e.key.toLowerCase()))
+            .toList()
+          ..sort((a, b) => b.value.compareTo(a.value));
     final breakdown = <String, int>{};
     for (final e
         in d
@@ -439,16 +432,6 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
               maskedOverride: masked,
               onToggleMasked: _toggleMasked,
               totalCardKey: _totalCardKey,
-              monthCardExpanded: _monthCardExpanded,
-              onMonthCardExpandedChanged: (expanded) {
-                setState(() => _monthCardExpanded = expanded);
-                unawaited(
-                  ref
-                      .read(databaseProvider)
-                      .pref('financeMonthCardExpanded', '$expanded')
-                      .catchError((Object _) {}),
-                );
-              },
               onPeriod: (next) =>
                   setState(() => period = DateTime(next.year, next.month)),
               onWallet: (name) => setState(() => wallet = name),
@@ -600,6 +583,24 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                                                       categories[i].key,
                                                     ),
                                                   ),
+                                                  if (summary.expenses > 0)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            right: 8,
+                                                          ),
+                                                      child: Text(
+                                                        '${(categories[i].value * 100 / summary.expenses).round()}%',
+                                                        style: TextStyle(
+                                                          fontFamily:
+                                                              'Geist Mono',
+                                                          fontSize: 11,
+                                                          color: Theme.of(c)
+                                                              .colorScheme
+                                                              .onSurfaceVariant,
+                                                        ),
+                                                      ),
+                                                    ),
                                                   Text(
                                                     money(
                                                       categories[i].value,
@@ -870,6 +871,7 @@ class _BudgetScreenState extends ConsumerState<BudgetScreen> {
                               item: timelineRows[i],
                               currency: d.currency,
                               showDay: true,
+                              masked: masked,
                             ),
                             if (i !=
                                 (_historyShowAll
@@ -1133,10 +1135,12 @@ class _TimelineRow extends StatelessWidget {
   final _TimelineItem item;
   final String currency;
   final bool showDay;
+  final bool masked;
   const _TimelineRow({
     required this.item,
     required this.currency,
     this.showDay = false,
+    this.masked = false,
   });
 
   @override
@@ -1170,6 +1174,8 @@ class _TimelineRow extends StatelessWidget {
     }
     final amountText = item.error != null
         ? 'Needs review'
+        : masked
+        ? walletMaskedAmount(currency)
         : '$sign${money(item.amount, currency)}';
     return InkWell(
       onTap: item.onTap == null ? null : withFeedback(item.onTap!),

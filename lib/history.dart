@@ -629,6 +629,15 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       hasLive: hasLive,
                       breakdown: breakdown,
                       hairline: hairline,
+                      activeKind: kind == 'All types' ? null : kind,
+                      onSelectKind: (selectedKind) {
+                        ActionFeedback.tap();
+                        setState(() {
+                          kind = kind == selectedKind
+                              ? 'All types'
+                              : selectedKind;
+                        });
+                      },
                     ),
                   ),
                 ),
@@ -1522,6 +1531,8 @@ class _InlineSessionSummary extends StatelessWidget {
   final int count, days, totalSeconds;
   final List<MapEntry<String, int>> breakdown;
   final Color hairline;
+  final String? activeKind;
+  final ValueChanged<String>? onSelectKind;
   const _InlineSessionSummary({
     required this.filtered,
     required this.count,
@@ -1530,6 +1541,8 @@ class _InlineSessionSummary extends StatelessWidget {
     required this.hasLive,
     required this.breakdown,
     required this.hairline,
+    this.activeKind,
+    this.onSelectKind,
   });
 
   @override
@@ -1632,27 +1645,43 @@ class _InlineSessionSummary extends StatelessWidget {
               runSpacing: 4,
               children: [
                 for (final entry in breakdown)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: sessionTypeColor(entry.key, dark),
-                          shape: BoxShape.circle,
-                        ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: onSelectKind == null
+                        ? null
+                        : () => onSelectKind!(entry.key),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
                       ),
-                      const SizedBox(width: 5),
-                      Text(
-                        '${entry.key} ${sessionDurationLabel(entry.value)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: colors.onSurfaceVariant,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: sessionTypeColor(entry.key, dark),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            '${entry.key} ${sessionDurationLabel(entry.value)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: activeKind == entry.key
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: activeKind == entry.key
+                                  ? colors.onSurface
+                                  : colors.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
               ],
             ),

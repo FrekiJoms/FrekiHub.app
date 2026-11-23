@@ -511,6 +511,86 @@ Future<void> discardWalletCardImage(String? path) async {
   } catch (_) {}
 }
 
+/// Cleans up temporary export/picker files, orphaned wallet card images,
+/// abandoned native installer sessions, and optional in-memory image caches
+/// without touching saved database records or active custom wallet cards.
+Future<void> cleanAppStorageCache(
+  AppDatabase db, {
+  bool clearMemoryCaches = false,
+}) async {
+  try {
+    final prefs = await db.readPreferences();
+    final activeImages = <String>{
+      for (final entry in prefs.entries)
+        if (walletImagePreference(entry.key) && entry.value.trim().isNotEmpty)
+          File(entry.value.trim()).uri.pathSegments
+              .lastWhere((s) => s.isNotEmpty, orElse: () => ''),
+    }..remove('');
+
+    try {
+      final support = await getApplicationSupportDirectory();
+      final cardDir = Directory('${support.path}/${walletImageFolder()}');
+      if (await cardDir.exists()) {
+        await for (final entity in cardDir.list(followLinks: false)) {
+          if (entity is File) {
+            final name = entity.uri.pathSegments.lastWhere(
+              (s) => s.isNotEmpty,
+              orElse: () => '',
+            );
+            if (name.isNotEmpty && !activeImages.contains(name)) {
+              try {
+                await entity.delete();
+              } catch (_) {}
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      final temp = await getTemporaryDirectory();
+      if (await temp.exists()) {
+        await for (final entity in temp.list(followLinks: false)) {
+          final name = entity.uri.pathSegments.lastWhere(
+            (s) => s.isNotEmpty,
+            orElse: () => '',
+          );
+          final lower = name.toLowerCase();
+          if (entity is File &&
+              (lower.startsWith('frekihub-') ||
+                  lower.startsWith('frxnance-') ||
+                  lower.endsWith('.json') ||
+                  lower.endsWith('.apk') ||
+                  lower.endsWith('.tmp'))) {
+            try {
+              await entity.delete();
+            } catch (_) {}
+          } else if (entity is Directory &&
+              (lower == 'file_picker' ||
+                  lower == 'share_plus' ||
+                  lower == 'updates')) {
+            try {
+              await entity.delete(recursive: true);
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (_) {}
+  } catch (_) {}
+
+  if (clearMemoryCaches) {
+    _WalletAppIcons.clearCache();
+    try {
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+    } catch (_) {}
+  }
+
+  try {
+    await NativeSession.channel.invokeMethod<void>('clearAppCache');
+  } catch (_) {}
+}
+
 class WalletCard extends StatelessWidget {
   final WalletAccount account;
   final String currency;

@@ -44,6 +44,12 @@ private var smsPermissionResult: MethodChannel.Result? = null
             val prefs = getSharedPreferences("session", MODE_PRIVATE)
             try { when (call.method) {
                 "appVersion" -> result.success(AppUpdater.packageInfo(this))
+                "clearAppCache" -> {
+                    Thread {
+                        clearTemporaryCache()
+                        Handler(Looper.getMainLooper()).post { result.success(null) }
+                    }.start()
+                }
                 "installUpdate" -> {
                     val args = call.arguments as? Map<*, *>
                     val url = args?.get("url") as? String ?: ""
@@ -408,6 +414,30 @@ private var smsPermissionResult: MethodChannel.Result? = null
         permPrefs.edit().putBoolean(key, true).apply()
         assignPending(result)
         requestPermissions(permissions, requestCode)
+    }
+
+    private fun clearTemporaryCache() {
+        AppUpdater.pruneAbandonedSessions(this)
+        val roots = listOfNotNull(cacheDir, externalCacheDir)
+        for (root in roots) {
+            val children = try {
+                root.listFiles()
+            } catch (_: Exception) {
+                null
+            } ?: continue
+            for (child in children) {
+                val name = child.name.lowercase()
+                if (name == "flutter_engine" || name.startsWith("libCachedImageData")) continue
+                try {
+                    if (child.isDirectory && (name == "file_picker" || name == "share_plus" || name == "updates" || name == "image_picker")) {
+                        child.deleteRecursively()
+                    } else if (child.isFile && (name.startsWith("frekihub-") || name.startsWith("frxnance-") || name.endsWith(".json") || name.endsWith(".apk") || name.endsWith(".tmp"))) {
+                        child.delete()
+                    }
+                } catch (_: Exception) {
+                }
+            }
+        }
     }
 
     private fun loadInstalledApps(): List<Map<String, String>> {

@@ -145,9 +145,39 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       } else if (mounted && result.status == ShareResultStatus.unavailable) {
         toast(context, 'Backup prepared', icon: DataAction.exported.icon);
       }
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+      unawaited(cleanAppStorageCache(ref.read(databaseProvider)));
     });
     if (mounted) {
-      setState(() => busy = false);
+      setState(() {
+        busy = false;
+        busyAction = null;
+      });
+    }
+  }
+
+  Future<void> clearCache() async {
+    if (busy) return;
+    setState(() {
+      busy = true;
+      busyAction = 'cache';
+    });
+    await guarded(
+      context,
+      () => cleanAppStorageCache(
+        ref.read(databaseProvider),
+        clearMemoryCaches: true,
+      ),
+      success: 'Cache cleared',
+      successIcon: DataAction.deleted.icon,
+    );
+    if (mounted) {
+      setState(() {
+        busy = false;
+        busyAction = null;
+      });
     }
   }
 
@@ -204,6 +234,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           await ref.read(databaseProvider).readAll(),
         );
         await NativeSession.stop();
+        unawaited(
+          cleanAppStorageCache(
+            ref.read(databaseProvider),
+            clearMemoryCaches: true,
+          ),
+        );
         final running = (await ref.read(databaseProvider).readAll()).running;
         if (running != null && mounted) {
           if (!await NativeSession.cache(running) || !mounted) return;
@@ -272,6 +308,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           await ref.read(databaseProvider).clear();
           await NativeSession.channel.invokeMethod('automationReset');
           await NativeSession.stop();
+          unawaited(
+            cleanAppStorageCache(
+              ref.read(databaseProvider),
+              clearMemoryCaches: true,
+            ),
+          );
         },
         success: 'All data cleared',
         successIcon: DataAction.deleted.icon,
@@ -496,6 +538,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   child: const Text('Restore a backup'),
                 ),
               ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: withFeedback(busy ? null : clearCache),
+                icon: const Icon(LucideIcons.sparkles, size: 18),
+                label: SkeletonValue(
+                  loading: busy && busyAction == 'cache',
+                  semanticsLabel: 'Clearing cache',
+                  child: const Text('Clear cache'),
+                ),
+              ),
               const SizedBox(height: 16),
               TextButton(
                 onPressed: withFeedback(busy ? null : clear),
@@ -628,6 +680,13 @@ class _ManageListState extends ConsumerState<_ManageList> {
               if (pkg != null && apps.remove(pkg)) {
                 appsChanged = true;
               }
+              final img = prefs['wallet:$item:image'];
+              if (img != null) {
+                await (db.delete(
+                  db.preferences,
+                )..where((t) => t.key.equals('wallet:$item:image'))).go();
+                unawaited(discardWalletCardImage(img));
+              }
             }
             if (appsChanged) {
               config['apps'] = apps.toList();
@@ -641,6 +700,7 @@ class _ManageListState extends ConsumerState<_ManageList> {
       });
       committed = true;
       if (widget.setting == 'methods') {
+        unawaited(cleanAppStorageCache(db));
         unawaited(
           db.readAll().then(AutomationSync.configure).catchError((Object _) {}),
         );
@@ -805,36 +865,41 @@ class _ManageListState extends ConsumerState<_ManageList> {
     }
   }
 
+  Future<void> _submitNewItem(BuildContext c) async {
+    if (saving) return;
+    final value = name.text.trim();
+    if (value.isEmpty ||
+        items.any((s) => s.toLowerCase() == value.toLowerCase())) {
+      toast(c, 'Enter a new, unique name.', error: true);
+      return;
+    }
+    await save([...items, value], clearName: true);
+  }
+
   @override
   Widget build(BuildContext c) => PanelContent(
     header: Column(
       children: [
-        Text(
-          widget.setting == 'categories' ? 'Categories' : 'Payment methods',
-          style: Theme.of(c).textTheme.titleLarge,
+        PanelHeading(
+          title: widget.setting == 'categories'
+              ? 'Categories'
+              : 'Payment methods',
+          trailing: IconButton(
+            tooltip: 'Close',
+            onPressed: withFeedback(() => Navigator.pop(c)),
+            icon: const Icon(LucideIcons.x, size: 18),
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         TextField(
           controller: name,
+          textCapitalization: TextCapitalization.words,
+          onSubmitted: (_) => _submitNewItem(c),
           decoration: InputDecoration(
             labelText: 'Add a name',
             suffixIcon: IconButton(
               tooltip: 'Add',
-              onPressed: withFeedback(
-                saving
-                    ? null
-                    : () async {
-                        final value = name.text.trim();
-                        if (value.isEmpty ||
-                            items.any(
-                              (s) => s.toLowerCase() == value.toLowerCase(),
-                            )) {
-                          toast(c, 'Enter a new, unique name.', error: true);
-                          return;
-                        }
-                        await save([...items, value], clearName: true);
-                      },
-              ),
+              onPressed: withFeedback(saving ? null : () => _submitNewItem(c)),
               icon: SkeletonValue(
                 loading: saving && savingItem == null,
                 semanticsLabel: 'Saving list item',

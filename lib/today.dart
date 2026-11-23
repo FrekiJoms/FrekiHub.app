@@ -361,12 +361,29 @@ class _TodayScreenState extends ConsumerState<TodayScreen>
                 ),
                 const SizedBox(height: 12),
                 RepaintBoundary(
-                  child: TextField(
-                    controller: note,
-                    focusNode: noteFocus,
-                    decoration: const InputDecoration(
-                      labelText: 'What are you working on?',
-                      prefixIcon: Icon(LucideIcons.pencilLine, size: 18),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: note,
+                    builder: (c, value, _) => TextField(
+                      controller: note,
+                      focusNode: noteFocus,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        labelText: 'What are you working on?',
+                        prefixIcon: const Icon(
+                          LucideIcons.pencilLine,
+                          size: 18,
+                        ),
+                        suffixIcon: value.text.isEmpty || busy
+                            ? null
+                            : IconButton(
+                                tooltip: 'Clear note',
+                                onPressed: withFeedback(() {
+                                  note.clear();
+                                  unawaited(flushNote());
+                                }),
+                                icon: const Icon(LucideIcons.x, size: 16),
+                              ),
+                      ),
                     ),
                   ),
                 ),

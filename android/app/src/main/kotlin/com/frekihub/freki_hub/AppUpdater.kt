@@ -35,6 +35,20 @@ object AppUpdater {
     fun canInstall(context: Context): Boolean =
         context.packageManager.canRequestPackageInstalls()
 
+    fun pruneAbandonedSessions(context: Context) {
+        if (installing.get()) return
+        try {
+            val installer = context.packageManager.packageInstaller
+            for (info in installer.mySessions) {
+                try {
+                    installer.abandonSession(info.sessionId)
+                } catch (_: Exception) {
+                }
+            }
+        } catch (_: Exception) {
+        }
+    }
+
     fun openInstallSettings(context: Context) {
         val intent = Intent(
             android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,

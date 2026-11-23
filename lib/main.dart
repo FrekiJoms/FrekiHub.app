@@ -174,6 +174,8 @@ class _AppShellState extends ConsumerState<AppShell>
     );
     if (startupReady && state == AppLifecycleState.resumed) {
       unawaited(reconcile().then((_) => mounted ? retrySessionTimer() : null));
+    } else if (startupReady && state == AppLifecycleState.paused) {
+      unawaited(cleanAppStorageCache(ref.read(databaseProvider)));
     }
   }
 
@@ -414,6 +416,7 @@ class _AppShellState extends ConsumerState<AppShell>
         if (mounted) {
           unawaited(reconcile());
           unawaited(_checkForUpdate());
+          unawaited(cleanAppStorageCache(ref.read(databaseProvider)));
         }
       });
     }
@@ -426,185 +429,200 @@ class _AppShellState extends ConsumerState<AppShell>
         child: child!,
       ),
       child: StartupIntro(
-        child: Scaffold(
-          resizeToAvoidBottomInset: false,
-          backgroundColor: Colors.transparent,
-          body: GlassScaffold(
+        child: PopScope(
+          canPop: index < 4,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && index >= 4) {
+              ActionFeedback.tap(transition: true);
+              setState(() {
+                slideDirection = index == 5 ? 1 : -1;
+                index = lastTab;
+              });
+            }
+          },
+          child: Scaffold(
             resizeToAvoidBottomInset: false,
-            background: const CanvasBackground(),
-            edgeFade: false,
-            body: SafeArea(
-              bottom: false,
-              child: async.when(
-                data: (data) => Stack(
-                  children: [
-                    Positioned.fill(
-                      child: ClipRect(
-                        child: FadeTransition(
-                          opacity: CurvedAnimation(
-                            parent: _jumpFadeController,
-                            curve: Curves.easeOut,
-                          ),
-                          child: TickerMode(
-                            enabled: index < 4,
-                            child: IgnorePointer(
-                              ignoring: index >= 4,
-                              child: NotificationListener<ScrollNotification>(
-                                onNotification: (n) {
-                                  if (n.depth != 0) return false;
-                                  if (n is ScrollStartNotification) {
-                                    _swiping.value = true;
-                                  } else if (n is ScrollEndNotification) {
-                                    _swiping.value = false;
-                                    final settled = _tabController.hasClients
-                                        ? (_tabController.page?.round() ??
-                                              lastTab)
-                                        : lastTab;
-                                    final currentTab = index <= 3
-                                        ? index
-                                        : lastTab;
-                                    if (settled != currentTab &&
-                                        !_tabAnimating) {
-                                      setState(() {
-                                        slideDirection = settled > currentTab
-                                            ? 1
-                                            : -1;
-                                        index = settled;
-                                        lastTab = settled;
-                                      });
+            backgroundColor: Colors.transparent,
+            body: GlassScaffold(
+              resizeToAvoidBottomInset: false,
+              background: const CanvasBackground(),
+              edgeFade: false,
+              body: SafeArea(
+                bottom: false,
+                child: async.when(
+                  data: (data) => Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ClipRect(
+                          child: FadeTransition(
+                            opacity: CurvedAnimation(
+                              parent: _jumpFadeController,
+                              curve: Curves.easeOut,
+                            ),
+                            child: TickerMode(
+                              enabled: index < 4,
+                              child: IgnorePointer(
+                                ignoring: index >= 4,
+                                child: NotificationListener<ScrollNotification>(
+                                  onNotification: (n) {
+                                    if (n.depth != 0) return false;
+                                    if (n is ScrollStartNotification) {
+                                      _swiping.value = true;
+                                    } else if (n is ScrollEndNotification) {
+                                      _swiping.value = false;
+                                      final settled = _tabController.hasClients
+                                          ? (_tabController.page?.round() ??
+                                                lastTab)
+                                          : lastTab;
+                                      final currentTab = index <= 3
+                                          ? index
+                                          : lastTab;
+                                      if (settled != currentTab &&
+                                          !_tabAnimating) {
+                                        setState(() {
+                                          slideDirection = settled > currentTab
+                                              ? 1
+                                              : -1;
+                                          index = settled;
+                                          lastTab = settled;
+                                        });
+                                      }
                                     }
-                                  }
-                                  return false;
-                                },
-                                child: PageView(
-                                  controller: _tabController,
-                                  physics: index >= 4
-                                      ? const NeverScrollableScrollPhysics()
-                                      : const ClampingScrollPhysics(),
-                                  onPageChanged: (_) {},
-                                  children: _buildTabPages(data),
+                                    return false;
+                                  },
+                                  child: PageView(
+                                    controller: _tabController,
+                                    physics: index >= 4
+                                        ? const NeverScrollableScrollPhysics()
+                                        : const ClampingScrollPhysics(),
+                                    onPageChanged: (_) {},
+                                    children: _buildTabPages(data),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        ignoring: index < 4,
-                        child: AnimatedSwitcher(
-                          duration: Motion.duration(c),
-                          reverseDuration: Motion.duration(c, 220),
-                          switchInCurve: Motion.curve,
-                          switchOutCurve: Motion.curve,
-                          transitionBuilder: (child, animation) {
-                            if (child.key == const ValueKey('none')) {
-                              return const SizedBox.shrink();
-                            }
-                            final edgeX = child.key == const ValueKey(5)
-                                ? -0.08
-                                : 0.08;
-                            return IgnorePointer(
-                              ignoring: child.key != ValueKey(index),
-                              child: FadeTransition(
-                                opacity: animation,
-                                child: SlideTransition(
-                                  position: Tween<Offset>(
-                                    begin: Offset(edgeX, 0),
-                                    end: Offset.zero,
-                                  ).animate(animation),
-                                  child: child,
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          ignoring: index < 4,
+                          child: AnimatedSwitcher(
+                            duration: Motion.duration(c),
+                            reverseDuration: Motion.duration(c, 220),
+                            switchInCurve: Motion.curve,
+                            switchOutCurve: Motion.curve,
+                            transitionBuilder: (child, animation) {
+                              if (child.key == const ValueKey('none')) {
+                                return const SizedBox.shrink();
+                              }
+                              final edgeX = child.key == const ValueKey(5)
+                                  ? -0.08
+                                  : 0.08;
+                              return IgnorePointer(
+                                ignoring: child.key != ValueKey(index),
+                                child: FadeTransition(
+                                  opacity: animation,
+                                  child: SlideTransition(
+                                    position: Tween<Offset>(
+                                      begin: Offset(edgeX, 0),
+                                      end: Offset.zero,
+                                    ).animate(animation),
+                                    child: child,
+                                  ),
                                 ),
+                              );
+                            },
+                            child: index >= 4
+                                ? ColoredBox(
+                                    key: ValueKey(index),
+                                    color: Theme.of(c).scaffoldBackgroundColor,
+                                    child: index == 5
+                                        ? CalendarScreen(data: data)
+                                        : SettingsScreen(data: data),
+                                  )
+                                : const SizedBox.shrink(key: ValueKey('none')),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: MediaQuery.viewPaddingOf(c).bottom + 12,
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: PillNavigation(
+                              index: index <= 3 ? index : lastTab,
+                              tabController: _tabController,
+                              swiping: _swiping,
+                              onQuickAdd: (kind) => openQuickAdd(
+                                c,
+                                data,
+                                index == 5
+                                    ? (data.prefs['calendarSelected'] ??
+                                          dayKey(DateTime.now()))
+                                    : dayKey(DateTime.now()),
+                                kind,
                               ),
-                            );
+                              onChanged: _goToTab,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 16,
+                        left: 16,
+                        child: GlassCircleButton(
+                          tooltip: index == 5 ? 'Close calendar' : 'Calendar',
+                          icon: LucideIcons.calendarDays,
+                          selected: index == 5,
+                          onPressed: () {
+                            ActionFeedback.tap(transition: true);
+                            setState(() {
+                              slideDirection = index == 5 ? 1 : -1;
+                              index = index == 5 ? lastTab : 5;
+                            });
                           },
-                          child: index >= 4
-                              ? ColoredBox(
-                                  key: ValueKey(index),
-                                  color: Theme.of(c).scaffoldBackgroundColor,
-                                  child: index == 5
-                                      ? CalendarScreen(data: data)
-                                      : SettingsScreen(data: data),
-                                )
-                              : const SizedBox.shrink(key: ValueKey('none')),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      left: 16,
-                      right: 16,
-                      bottom: MediaQuery.viewPaddingOf(c).bottom + 12,
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 560),
-                          child: PillNavigation(
-                            index: index <= 3 ? index : lastTab,
-                            tabController: _tabController,
-                            swiping: _swiping,
-                            onQuickAdd: (kind) => openQuickAdd(
-                              c,
-                              data,
-                              dayKey(DateTime.now()),
-                              kind,
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: GlassCircleButton(
+                          tooltip: index == 4 ? 'Close settings' : 'Settings',
+                          icon: LucideIcons.settings2,
+                          selected: index == 4,
+                          onPressed: () {
+                            ActionFeedback.tap(transition: true);
+                            setState(() {
+                              slideDirection = index == 4 ? -1 : 1;
+                              index = index == 4 ? lastTab : 4;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  loading: () =>
+                      const StartupLoading(stage: 'Opening your records'),
+                  error: (e, _) => Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Your data could not be opened.'),
+                          const SizedBox(height: 16),
+                          Text('$e'),
+                          TextButton(
+                            onPressed: withFeedback(
+                              () => ref.invalidate(dataProvider),
                             ),
-                            onChanged: _goToTab,
+                            child: const Text('Retry'),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                    Positioned(
-                      top: 16,
-                      left: 16,
-                      child: GlassCircleButton(
-                        tooltip: index == 5 ? 'Close calendar' : 'Calendar',
-                        icon: LucideIcons.calendarDays,
-                        selected: index == 5,
-                        onPressed: () {
-                          ActionFeedback.tap(transition: true);
-                          setState(() {
-                            slideDirection = index == 5 ? 1 : -1;
-                            index = index == 5 ? lastTab : 5;
-                          });
-                        },
-                      ),
-                    ),
-                    Positioned(
-                      top: 16,
-                      right: 16,
-                      child: GlassCircleButton(
-                        tooltip: index == 4 ? 'Close settings' : 'Settings',
-                        icon: LucideIcons.settings2,
-                        selected: index == 4,
-                        onPressed: () {
-                          ActionFeedback.tap(transition: true);
-                          setState(() {
-                            slideDirection = index == 4 ? -1 : 1;
-                            index = index == 4 ? lastTab : 4;
-                          });
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                loading: () =>
-                    const StartupLoading(stage: 'Opening your records'),
-                error: (e, _) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Your data could not be opened.'),
-                        const SizedBox(height: 16),
-                        Text('$e'),
-                        TextButton(
-                          onPressed: withFeedback(
-                            () => ref.invalidate(dataProvider),
-                          ),
-                          child: const Text('Retry'),
-                        ),
-                      ],
                     ),
                   ),
                 ),

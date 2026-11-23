@@ -78,8 +78,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     for (final e in widget.data.entries) {
       entriesByDay.putIfAbsent(e.day, () => []).add(e);
     }
-    for (final list in entriesByDay.values) {
-      list.sort((a, b) => a.id.compareTo(b.id));
+    for (final day in entriesByDay.keys.toList()) {
+      entriesByDay[day] = _deduplicateDayEntries(entriesByDay[day]!);
     }
   }
 
@@ -332,13 +332,33 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            _periodTitle(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.35,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: withFeedback(() async {
+                              final picked = await showWheelDatePicker(
+                                context: c,
+                                initialDate: selected,
+                                firstDate: DateTime(2000),
+                                lastDate: DateTime(2100),
+                              );
+                              if (picked != null && mounted) {
+                                _selectDate(picked);
+                              }
+                            }),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 2,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                _periodTitle(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.35,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -2155,6 +2175,28 @@ Widget _buildEntryCard(BuildContext c, AppData d, Entry e) {
   );
 }
 
+List<Entry> _deduplicateDayEntries(Iterable<Entry> raw) {
+  final sorted = raw.toList()..sort((a, b) => a.id.compareTo(b.id));
+  final outPrefixes = <String>{
+    for (final e in sorted)
+      if (e.kind == 'transfer_out' &&
+          AppDatabase.transferPrefix(e.occurrence) != null)
+        AppDatabase.transferPrefix(e.occurrence)!,
+  };
+  final seenInPrefixes = <String>{};
+  final result = <Entry>[];
+  for (final e in sorted) {
+    final prefix = AppDatabase.transferPrefix(e.occurrence);
+    if (prefix != null && e.kind == 'transfer_in') {
+      if (outPrefixes.contains(prefix) || !seenInPrefixes.add(prefix)) {
+        continue;
+      }
+    }
+    result.add(e);
+  }
+  return result;
+}
+
 class DayPanel extends ConsumerWidget {
   final String day;
   final AppData initialData;
@@ -2165,8 +2207,9 @@ class DayPanel extends ConsumerWidget {
     final d = ref.watch(dataProvider).value ?? initialData;
     final sessions = d.sessions.where((s) => s.day == day).toList()
       ..sort((a, b) => a.started.compareTo(b.started));
-    final entries = d.entries.where((e) => e.day == day).toList()
-      ..sort((a, b) => a.id.compareTo(b.id));
+    final entries = _deduplicateDayEntries(
+      d.entries.where((e) => e.day == day),
+    );
 
     return PanelContent(
       scrollable: true,

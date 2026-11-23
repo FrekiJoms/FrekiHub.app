@@ -579,6 +579,25 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                 : 'Edit condition',
             Column(
               children: [
+                if (editing != null && !sourceMode)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: withFeedback(
+                        () => setState(() {
+                          editing = null;
+                          ruleRunning = false;
+                          placed = false;
+                          place = null;
+                          name.clear();
+                          lat.clear();
+                          lng.clear();
+                        }),
+                      ),
+                      icon: const Icon(LucideIcons.plus, size: 16),
+                      label: const Text('New condition'),
+                    ),
+                  ),
                 spaced(
                   TextField(
                     controller: name,
@@ -650,6 +669,7 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                       ? 'Drag selected place into If'
                       : 'Drag ${name.text} into If',
                 ),
+                onTap: withFeedback(() => setState(() => placed = true)),
               ),
             ),
           if (requiresPlace)
@@ -659,18 +679,22 @@ class _SyntaxBuilderScreenState extends ConsumerState<SyntaxBuilderScreen>
                 onAcceptWithDetails: (_) => setState(() => placed = true),
                 builder: (c, candidates, rejected) => Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Theme.of(c).colorScheme.surfaceContainerHigh,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        placed
-                            ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
-                            : 'Drop a location here',
-                        textAlign: TextAlign.center,
+                    InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: withFeedback(() => setState(() => placed = true)),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Theme.of(c).colorScheme.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          placed
+                              ? 'Within ${radius.round()} m of ${name.text.isEmpty ? 'selected place' : name.text}'
+                              : 'Drop a location here',
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                     Slider(

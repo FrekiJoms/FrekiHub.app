@@ -90,7 +90,14 @@ class _LogsSheetState extends ConsumerState<LogsSheet> {
   Widget build(BuildContext context) {
     final data = ref.watch(dataProvider).value;
     return PanelContent(
-      header: const PanelHeading(title: 'Activity logs'),
+      header: PanelHeading(
+        title: 'Activity logs',
+        trailing: IconButton(
+          tooltip: 'Close',
+          onPressed: withFeedback(() => Navigator.pop(context)),
+          icon: const Icon(LucideIcons.x, size: 18),
+        ),
+      ),
       scrollable: true,
       child: data == null ? const SkeletonList() : logs(context, ref, data),
     );

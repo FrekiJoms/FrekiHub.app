@@ -18,8 +18,6 @@ class WalletSection extends ConsumerStatefulWidget {
   final GlobalKey? totalCardKey;
   final VoidCallback? onToggleMasked;
   final Widget? belowMonthCard;
-  final bool? monthCardExpanded;
-  final ValueChanged<bool>? onMonthCardExpandedChanged;
   const WalletSection({
     super.key,
     required this.data,
@@ -33,8 +31,6 @@ class WalletSection extends ConsumerStatefulWidget {
     this.totalCardKey,
     this.onToggleMasked,
     this.belowMonthCard,
-    this.monthCardExpanded,
-    this.onMonthCardExpandedChanged,
   });
   @override
   ConsumerState<WalletSection> createState() => _WalletSectionState();
@@ -191,8 +187,10 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
     }
     try {
       final db = ref.read(databaseProvider);
+      String? removedImage;
       await db.transaction(() async {
         final prefs = await db.readPreferences();
+        removedImage = prefs['wallet:${account.name}:image'];
         final data = AppData(const [], const [], const [], prefs);
         final nextMethods = data.methods
             .where((m) => m.trim().toLowerCase() != targetLower)
@@ -212,7 +210,14 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
             await db.pref('automation', jsonEncode(config));
           }
         }
+        if (removedImage != null) {
+          await (db.delete(
+            db.preferences,
+          )..where((t) => t.key.equals('wallet:${account.name}:image'))).go();
+        }
       });
+      unawaited(discardWalletCardImage(removedImage));
+      unawaited(cleanAppStorageCache(db));
       unawaited(
         db.readAll().then(AutomationSync.configure).catchError((Object _) {}),
       );
@@ -295,6 +300,25 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
                   Navigator.pop(sheet);
                   _focus(account);
                 },
+          onOpenEntry: (entry) {
+            Navigator.pop(sheet);
+            final isTransfer =
+                entry.kind == 'transfer_in' || entry.kind == 'transfer_out';
+            panel(
+              context,
+              isTransfer && entry.occurrence != null
+                  ? WalletTransferSheet(
+                      data: widget.data,
+                      existingOccurrence: entry.occurrence,
+                    )
+                  : EntryForm(
+                      data: widget.data,
+                      day: entry.day,
+                      kind: isTransfer ? 'expense' : entry.kind,
+                      entry: entry,
+                    ),
+            );
+          },
         ),
       ),
     );
@@ -397,8 +421,6 @@ class _WalletSectionState extends ConsumerState<WalletSection> {
           masked: _effectiveMasked,
           onToggle: _toggleMasked,
           month: widget.month,
-          expanded: widget.monthCardExpanded,
-          onExpandedChanged: widget.onMonthCardExpandedChanged,
           onPeriod: widget.onPeriod,
           onScope: widget.onWallet == null ? null : () => _scope(accounts),
         ),
@@ -471,7 +493,7 @@ bool _sameNames(List<String> a, List<String> b) {
   return true;
 }
 
-class _WalletOverviewCard extends StatefulWidget {
+class _WalletOverviewCard extends StatelessWidget {
   final GlobalKey? totalCardKey;
   final int total, assets, liabilities, count;
   final String? wallet;
@@ -480,8 +502,6 @@ class _WalletOverviewCard extends StatefulWidget {
   final bool masked;
   final VoidCallback onToggle;
   final FinanceMonth? month;
-  final bool? expanded;
-  final ValueChanged<bool>? onExpandedChanged;
   final ValueChanged<DateTime>? onPeriod;
   final VoidCallback? onScope;
   const _WalletOverviewCard({
@@ -496,56 +516,28 @@ class _WalletOverviewCard extends StatefulWidget {
     required this.masked,
     required this.onToggle,
     required this.month,
-    this.expanded,
-    this.onExpandedChanged,
     required this.onPeriod,
     required this.onScope,
   });
 
-  @override
-  State<_WalletOverviewCard> createState() => _WalletOverviewCardState();
-}
+  String _short(int amount) =>
+      masked ? walletMaskedAmount(currency) : money(amount, currency);
 
-class _WalletOverviewCardState extends State<_WalletOverviewCard> {
-  late bool _expanded = widget.expanded ?? true;
-
-  @override
-  void didUpdateWidget(covariant _WalletOverviewCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.expanded != null && widget.expanded != _expanded) {
-      _expanded = widget.expanded!;
-    }
-  }
-
-  String _short(int amount) => widget.masked
-      ? walletMaskedAmount(widget.currency)
-      : money(amount, widget.currency);
-
-  String get scope => widget.wallet ?? 'All wallets';
-
-  void _toggleExpanded() {
-    final next = !(widget.expanded ?? _expanded);
-    if (widget.onExpandedChanged != null) {
-      widget.onExpandedChanged!(next);
-    } else {
-      setState(() => _expanded = next);
-    }
-  }
+  String get scope => wallet ?? 'All wallets';
 
   @override
   Widget build(BuildContext c) {
     final theme = Theme.of(c);
-    final month = widget.month;
-    final expanded = widget.expanded ?? _expanded;
-    final availableLabel = widget.masked
+    final month = this.month;
+    final availableLabel = masked
         ? 'Available balance, amounts hidden'
-        : 'Available balance ${money(widget.total, widget.currency)}';
+        : 'Available balance ${money(total, currency)}';
 
     final topHero = KeyedSubtree(
-      key: widget.totalCardKey,
+      key: totalCardKey,
       child: Semantics(
         container: true,
-        label: '$availableLabel, across ${widget.count} wallets',
+        label: '$availableLabel, across $count wallets',
         child: Container(
           padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
           decoration: BoxDecoration(
@@ -565,9 +557,9 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                 children: [
                   Expanded(
                     child: Text(
-                      widget.wallet == null
+                      wallet == null
                           ? 'AVAILABLE BALANCE'
-                          : 'AVAILABLE · ${widget.wallet!.toUpperCase()}',
+                          : 'AVAILABLE · ${wallet!.toUpperCase()}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -578,13 +570,13 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                       ),
                     ),
                   ),
-                  if (widget.onScope != null) ...[
+                  if (onScope != null) ...[
                     Semantics(
                       button: true,
                       label: 'Finance scope, currently $scope',
                       child: InkWell(
                         borderRadius: BorderRadius.circular(999),
-                        onTap: withFeedback(widget.onScope!),
+                        onTap: withFeedback(onScope!),
                         child: Container(
                           constraints: const BoxConstraints(maxWidth: 150),
                           padding: const EdgeInsets.symmetric(
@@ -625,10 +617,10 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                   ],
                   Semantics(
                     button: true,
-                    label: widget.masked ? 'Show amounts' : 'Hide amounts',
+                    label: masked ? 'Show amounts' : 'Hide amounts',
                     child: IconButton(
-                      tooltip: widget.masked ? 'Show amounts' : 'Hide amounts',
-                      onPressed: widget.onToggle,
+                      tooltip: masked ? 'Show amounts' : 'Hide amounts',
+                      onPressed: onToggle,
                       style: IconButton.styleFrom(
                         minimumSize: const Size(34, 34),
                         maximumSize: const Size(34, 34),
@@ -637,7 +629,7 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                         foregroundColor: Colors.white,
                       ),
                       icon: Icon(
-                        widget.masked ? LucideIcons.eyeOff : LucideIcons.eye,
+                        masked ? LucideIcons.eyeOff : LucideIcons.eye,
                         size: 16,
                       ),
                     ),
@@ -653,7 +645,7 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        _short(widget.total),
+                        _short(total),
                         style: const TextStyle(
                           color: Colors.white,
                           fontFamily: 'Geist Mono',
@@ -667,7 +659,7 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '${widget.count} ${widget.count == 1 ? 'wallet' : 'wallets'}',
+                    '$count ${count == 1 ? 'wallet' : 'wallets'}',
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: .55),
                       fontSize: 10,
@@ -683,21 +675,21 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                     Expanded(
                       child: _TotalMetric(
                         label: 'Assets',
-                        value: _short(widget.assets),
+                        value: _short(assets),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _TotalMetric(
                         label: 'Owed',
-                        value: _short(widget.liabilities),
+                        value: _short(liabilities),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: _TotalMetric(
                         label: 'Wallets',
-                        value: '${widget.count}',
+                        value: '$count',
                         numeric: true,
                       ),
                     ),
@@ -735,7 +727,7 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
         children: [
           topHero,
           Padding(
-            padding: const EdgeInsets.fromLTRB(6, 4, 12, 12),
+            padding: const EdgeInsets.fromLTRB(6, 4, 6, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -743,74 +735,68 @@ class _WalletOverviewCardState extends State<_WalletOverviewCard> {
                   children: [
                     IconButton(
                       tooltip: 'Previous month',
-                      onPressed: widget.onPeriod == null
+                      onPressed: onPeriod == null
                           ? null
                           : withFeedback(
-                              () => widget.onPeriod!(
+                              () => onPeriod!(
                                 DateTime(period.year, period.month - 1),
                               ),
                             ),
                       icon: const Icon(LucideIcons.chevronLeft),
                     ),
                     Expanded(
-                      child: Text(
-                        DateFormat('MMMM yyyy').format(period),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: onPeriod == null
+                            ? null
+                            : withFeedback(() {
+                                final now = DateTime.now();
+                                if (period.year != now.year ||
+                                    period.month != now.month) {
+                                  onPeriod!(DateTime(now.year, now.month));
+                                }
+                              }),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 6),
+                          child: Text(
+                            DateFormat('MMMM yyyy').format(period),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
                       ),
                     ),
                     IconButton(
                       tooltip: 'Next month',
-                      onPressed: widget.onPeriod == null
+                      onPressed: onPeriod == null
                           ? null
                           : withFeedback(
-                              () => widget.onPeriod!(
+                              () => onPeriod!(
                                 DateTime(period.year, period.month + 1),
                               ),
                             ),
                       icon: const Icon(LucideIcons.chevronRight),
                     ),
-                    TextButton.icon(
-                      onPressed: withFeedback(_toggleExpanded),
-                      style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                      ),
-                      icon: Icon(
-                        expanded
-                            ? LucideIcons.chevronUp
-                            : LucideIcons.chevronDown,
-                        size: 15,
-                      ),
-                      label: Text(
-                        expanded ? 'Show less' : 'Show more',
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                    ),
                   ],
                 ),
-                if (expanded)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 6, 4),
-                    child: Row(
-                      children: [
-                        for (final value in [
-                          ('Income', month.income),
-                          ('Spent', month.expenses),
-                          ('Saved', month.savings),
-                        ])
-                          Expanded(
-                            child: _MonthMetric(
-                              label: value.$1,
-                              value: _short(value.$2),
-                            ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Row(
+                    children: [
+                      for (final value in [
+                        ('Income', month.income),
+                        ('Spent', month.expenses),
+                        ('Saved', month.savings),
+                      ])
+                        Expanded(
+                          child: _MonthMetric(
+                            label: value.$1,
+                            value: _short(value.$2),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
+                ),
               ],
             ),
           ),
@@ -1931,6 +1917,13 @@ class _WalletAppIcons {
   static final Set<String> _precached = {};
   static final ValueNotifier<int> version = ValueNotifier<int>(0);
 
+  static void clearCache() {
+    if (_cache.isEmpty && _precached.isEmpty) return;
+    _cache.clear();
+    _precached.clear();
+    version.value++;
+  }
+
   static String _requestToken(String name, String? packageName) {
     final pkg = packageName?.trim() ?? '';
     return pkg.isEmpty ? name : '$name|$pkg';
@@ -2196,6 +2189,7 @@ class _WalletDetail extends StatelessWidget {
   final bool selected;
   final VoidCallback onEdit, onFront, onTransfer;
   final VoidCallback? onFocus;
+  final ValueChanged<Entry>? onOpenEntry;
   const _WalletDetail({
     required this.account,
     required this.entries,
@@ -2206,6 +2200,7 @@ class _WalletDetail extends StatelessWidget {
     required this.onFront,
     required this.onTransfer,
     required this.onFocus,
+    this.onOpenEntry,
   });
 
   @override
@@ -2347,7 +2342,9 @@ class _WalletDetail extends StatelessWidget {
                   ),
                   subtitle: Text(sub, style: const TextStyle(fontSize: 11)),
                   trailing: Text(
-                    '${isIn ? '+' : '−'}${money(entry.amount, currency)}',
+                    masked
+                        ? walletMaskedAmount(currency)
+                        : '${isIn ? '+' : '−'}${money(entry.amount, currency)}',
                     style: TextStyle(
                       fontFamily: 'Geist Mono',
                       fontSize: 11,
@@ -2356,6 +2353,9 @@ class _WalletDetail extends StatelessWidget {
                           : Theme.of(c).colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  onTap: onOpenEntry == null
+                      ? null
+                      : withFeedback(() => onOpenEntry!(entry)),
                 );
               },
             ),
@@ -3360,7 +3360,7 @@ class _WalletTransferSheetState extends ConsumerState<WalletTransferSheet> {
   }
 
   Future<void> _pickDay() async {
-    final picked = await showDatePicker(
+    final picked = await showWheelDatePicker(
       context: context,
       initialDate: calendarDate(_day),
       firstDate: DateTime(2000),

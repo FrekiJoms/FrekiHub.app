@@ -328,11 +328,23 @@ class _EntryFormState extends ConsumerState<EntryForm> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         spaced(
-          selectField('Type', kind, [
-            'expense',
-            'income',
-            'savings',
-          ], (v) => setState(() => kind = v)),
+          selectField('Type', kind, ['expense', 'income', 'savings'], (v) {
+            setState(() {
+              final previousDefault = kind == 'income'
+                  ? 'Salary'
+                  : kind == 'savings'
+                  ? 'Savings'
+                  : widget.data.categories.first;
+              kind = v;
+              if (widget.entry == null && category == previousDefault) {
+                category = v == 'income'
+                    ? 'Salary'
+                    : v == 'savings'
+                    ? 'Savings'
+                    : widget.data.categories.first;
+              }
+            });
+          }),
         ),
         spaced(
           TextField(
@@ -367,16 +379,19 @@ class _EntryFormState extends ConsumerState<EntryForm> {
             'Category',
             category,
             {...widget.data.categories, category}.toList(),
-            (v) => category = v,
+            (v) => setState(() => category = v),
           ),
         ),
         spaced(
           selectField(
             'Payment method',
             method,
-            {...widget.data.walletMethods, ...widget.data.methods, method}
-                .toList(),
-            (v) => method = v,
+            {
+              ...widget.data.walletMethods,
+              ...widget.data.methods,
+              method,
+            }.toList(),
+            (v) => setState(() => method = v),
           ),
         ),
         spaced(
@@ -662,16 +677,19 @@ class _RuleFormState extends ConsumerState<RuleForm> {
             'Category',
             category,
             {...widget.data.categories, category}.toList(),
-            (v) => category = v,
+            (v) => setState(() => category = v),
           ),
         ),
         spaced(
           selectField(
             'Payment method',
             method,
-            {...widget.data.walletMethods, ...widget.data.methods, method}
-                .toList(),
-            (v) => method = v,
+            {
+              ...widget.data.walletMethods,
+              ...widget.data.methods,
+              method,
+            }.toList(),
+            (v) => setState(() => method = v),
           ),
         ),
       ],

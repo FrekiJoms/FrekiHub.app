@@ -471,6 +471,8 @@ class _MapScreenState extends ConsumerState<MapScreen>
   }
 
   Future<void> openMapOptions() async {
+    final now = DateTime.now();
+    final isTodayView = period == 'day' && dayKey(date) == dayKey(now);
     final result = await panel<String>(
       context,
       _MapOptionsSheet(
@@ -479,6 +481,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
         locatedCount: visible.length,
         unlocatedCount: unlocated.length,
         selectedCount: selected.length,
+        showJumpToToday: !isTodayView,
         onTraceChanged: (value) {
           setState(() => trace = value);
           unawaited(guarded(context, saveView));
@@ -499,6 +502,17 @@ class _MapScreenState extends ConsumerState<MapScreen>
     if (!mounted) return;
     if (result == 'logs') {
       await showRecords();
+    } else if (result == 'today') {
+      setState(() {
+        period = 'day';
+        date = DateTime.now();
+        range = MapRange.period('day', date);
+        selected.clear();
+        inspectedIds.clear();
+        activeRouteId = null;
+        watch();
+      });
+      await guarded(context, saveView);
     }
   }
 
@@ -1688,6 +1702,7 @@ class _MapOptionsSheet extends StatefulWidget {
   final int locatedCount;
   final int unlocatedCount;
   final int selectedCount;
+  final bool showJumpToToday;
   final ValueChanged<bool> onTraceChanged;
   final ValueChanged<bool> onMutedChanged;
   final VoidCallback onClearSelection;
@@ -1698,6 +1713,7 @@ class _MapOptionsSheet extends StatefulWidget {
     required this.locatedCount,
     required this.unlocatedCount,
     required this.selectedCount,
+    this.showJumpToToday = false,
     required this.onTraceChanged,
     required this.onMutedChanged,
     required this.onClearSelection,
@@ -1750,6 +1766,18 @@ class _MapOptionsSheetState extends State<_MapOptionsSheet> {
             },
           ),
           const Divider(height: 16),
+          if (widget.showJumpToToday)
+            ListTile(
+              leading: const Icon(LucideIcons.calendarCheck2),
+              title: const Text('Jump to today'),
+              subtitle: const Text('Switch back to today’s day timeline'),
+              trailing: Icon(
+                LucideIcons.chevronRight,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              onTap: withFeedback(() => Navigator.pop(context, 'today')),
+            ),
           ListTile(
             leading: const Icon(LucideIcons.listFilter),
             title: const Text('Timeline logs'),
@@ -2283,7 +2311,11 @@ class _MapLogSheetState extends State<_MapLogSheet> {
       child: records.isEmpty && unlocated.isEmpty
           ? ListView(
               children: const [
-                Center(child: Text('No records with a usable location')),
+                EmptyState(
+                  'No records with a usable location',
+                  'Locations recorded during this timeline will appear here.',
+                  LucideIcons.mapPin,
+                ),
               ],
             )
           : ListView.builder(
@@ -2292,17 +2324,37 @@ class _MapLogSheetState extends State<_MapLogSheet> {
               itemBuilder: (c, i) {
                 if (i >= records.length) {
                   final row = unlocated[i - records.length];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: LogRow(
-                      key: ValueKey('map-log-${row['id']}'),
-                      details: logDetails(row),
-                      action: deleteAction(row['id'] as String),
-                      title: row['title']?.toString() ?? 'Activity',
-                      dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(
-                        DateTime.fromMillisecondsSinceEpoch(row['time'] as int),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (i == records.length && records.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(4, 8, 4, 8),
+                          child: Text(
+                            'UNLOCATED LOGS (${unlocated.length})',
+                            style: TextStyle(
+                              fontSize: 10,
+                              letterSpacing: 1.4,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(c).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: LogRow(
+                          key: ValueKey('map-log-${row['id']}'),
+                          details: logDetails(row),
+                          action: deleteAction(row['id'] as String),
+                          title: row['title']?.toString() ?? 'Activity',
+                          dateTime: DateFormat('d MMM yyyy, HH:mm:ss').format(
+                            DateTime.fromMillisecondsSinceEpoch(
+                              row['time'] as int,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   );
                 }
                 final record = records[i];

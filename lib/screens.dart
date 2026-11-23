@@ -509,6 +509,12 @@ void openQuickAdd(BuildContext c, AppData data, String day, String kind) {
     panel(c, SessionForm(data: data, day: day));
   } else if (kind == 'rule') {
     panel(c, RuleForm(data: data));
+  } else if (kind == 'transfer') {
+    if (data.walletMethods.length < 2) {
+      toast(c, 'Add another wallet first to transfer money.', error: true);
+      return;
+    }
+    panel(c, WalletTransferSheet(data: data, initialDay: day));
   } else {
     panel(c, EntryForm(data: data, day: day, kind: kind));
   }
@@ -525,21 +531,23 @@ Future<void> quickAdd(BuildContext c, AppData data, String day) => panel<void>(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final kind in ['session', 'expense', 'income', 'savings', 'rule'])
+        for (final kind in [
+          'session',
+          'expense',
+          'income',
+          'savings',
+          if (data.walletMethods.length >= 2) 'transfer',
+          'rule',
+        ])
           spaced(
             OutlinedButton(
               onPressed: withFeedback(() {
                 Navigator.pop(c);
-                if (kind == 'session') {
-                  panel(c, SessionForm(data: data, day: day));
-                } else if (kind == 'rule') {
-                  panel(c, RuleForm(data: data));
-                } else {
-                  panel(c, EntryForm(data: data, day: day, kind: kind));
-                }
+                openQuickAdd(c, data, day, kind);
               }),
               child: Text(switch (kind) {
                 'session' => 'Add session / log',
+                'transfer' => 'Transfer money',
                 'rule' => 'Add budget rule',
                 _ => 'Add $kind',
               }),
