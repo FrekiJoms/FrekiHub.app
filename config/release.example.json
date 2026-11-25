@@ -1,0 +1,8 @@
+{
+  "keystorePath": "~/frekihub-release.jks",
+  "keystorePassword": "CHANGE_ME",
+  "keyAlias": "frekihub",
+  "keyPassword": "CHANGE_ME",
+  "deviceId": "YOUR_ADB_DEVICE_ID",
+  "githubToken": ""
+}

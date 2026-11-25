@@ -58,3 +58,6 @@ app.*.map.json
 
 # Local update endpoint override
 /config/update.local.json
+
+# Local release signing and publishing config
+/config/release.local.json
