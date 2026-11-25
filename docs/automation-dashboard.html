@@ -1,0 +1,2715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FrekiHub Automation Command Dashboard</title>
+  <meta name="description" content="Interactive execution timeline, workflow architecture, and searchable command library for FrekiHub release and Frxnance companion sync automation.">
+
+  <!-- External libraries with automatic offline fallbacks -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.7/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-powershell.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-http.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js" defer></script>
+
+  <style>
+    /* =====================================================================
+       Apple Developer Utility Light Theme — Clean Hierarchy, Uniform Borders
+       ===================================================================== */
+    :root {
+      --canvas: #F5F5F7;
+      --surface: #FFFFFF;
+      --surface-muted: #FAFAFC;
+      --surface-hover: #F2F2F7;
+      --surface-code: #F6F7F9;
+      --console-bg: #18181B;
+      --console-head: #222226;
+
+      --glass: rgba(255, 255, 255, 0.82);
+      --border: rgba(60, 60, 67, 0.12);
+      --border-strong: rgba(60, 60, 67, 0.22);
+
+      --ink: #1D1D1F;
+      --ink-2: #48484A;
+      --ink-3: #6E6E73;
+      --ink-4: #8E8E93;
+
+      --blue: #007AFF;
+      --blue-hover: #0066D6;
+      --blue-tint: rgba(0, 122, 255, 0.09);
+      --blue-ring: rgba(0, 122, 255, 0.28);
+
+      --green: #1E8E3E;
+      --green-dot: #34C759;
+      --green-tint: rgba(52, 199, 89, 0.12);
+
+      --amber: #B25000;
+      --amber-dot: #FF9500;
+      --amber-tint: rgba(255, 149, 0, 0.11);
+
+      --red: #D70015;
+      --red-dot: #FF3B30;
+      --red-tint: rgba(255, 59, 48, 0.11);
+
+      --indigo: #5856D6;
+      --indigo-tint: rgba(88, 86, 214, 0.10);
+
+      --r-sm: 8px;
+      --r-md: 12px;
+      --r-lg: 16px;
+      --r-pill: 999px;
+
+      --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.04), 0 0.5px 1px rgba(0, 0, 0, 0.05);
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      --font-mono: "SF Mono", ui-monospace, "Geist Mono", "Cascadia Code", Consolas, monospace;
+      --ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    html {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      background: var(--canvas);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--canvas);
+    }
+
+    body.reduced-motion *, body.reduced-motion *::before, body.reduced-motion *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+      border-radius: 6px;
+    }
+
+    .icon-sm { width: 14px; height: 14px; flex-shrink: 0; stroke-width: 1.9; }
+    .icon-md { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 1.9; }
+
+    /* =====================================================================
+       Top Bar (Liquid Glass) — Single Clear Navigation Layer
+       ===================================================================== */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: var(--glass);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: #FFFFFF;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      color: var(--ink);
+    }
+
+    .brand-sub {
+      font-size: 11.5px;
+      color: var(--ink-3);
+      font-family: var(--font-mono);
+      line-height: 1.2;
+    }
+
+    /* Apple Segmented Control */
+    .segmented {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(118, 118, 128, 0.12);
+      padding: 3px;
+      border-radius: 10px;
+      gap: 2px;
+    }
+
+    .seg-tab {
+      border: none;
+      background: transparent;
+      color: var(--ink-2);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 5px 13px;
+      border-radius: 7.5px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 150ms var(--ease), color 150ms var(--ease), box-shadow 150ms var(--ease);
+    }
+
+    .seg-tab:hover { color: var(--ink); }
+
+    .seg-tab[aria-selected="true"] {
+      background: var(--surface);
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 0.5px 1px rgba(0, 0, 0, 0.04);
+    }
+
+    .seg-count {
+      font-size: 11px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink-3);
+      background: rgba(118, 118, 128, 0.12);
+      padding: 0 6px;
+      border-radius: var(--r-pill);
+      line-height: 1.5;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 6px 11px;
+      border-radius: var(--r-sm);
+      cursor: pointer;
+      transition: background 140ms var(--ease), border-color 140ms var(--ease), transform 90ms var(--ease);
+      box-shadow: var(--shadow-xs);
+      white-space: nowrap;
+    }
+
+    .btn:hover { background: var(--surface-hover); border-color: var(--border-strong); }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn[aria-pressed="true"] { background: var(--blue-tint); border-color: rgba(0, 122, 255, 0.35); color: var(--blue); }
+
+    .btn-primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #FFFFFF;
+      font-weight: 600;
+    }
+    .btn-primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+
+    .btn-icon {
+      padding: 6px;
+      width: 32px;
+      height: 32px;
+      justify-content: center;
+    }
+
+    /* =====================================================================
+       Main Workspace Container & Crisp Typography Hierarchy
+       ===================================================================== */
+    .workspace {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px 20px 36px;
+    }
+
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
+
+    .panel-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-sm);
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    /* Compact Hero Header inside Pipeline */
+    .page-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .page-head h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.028em;
+      color: var(--ink);
+    }
+
+    .page-head p {
+      margin: 3px 0 0;
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+
+    .page-head code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: rgba(60, 60, 67, 0.07);
+      padding: 1px 5px;
+      border-radius: 5px;
+      color: var(--ink);
+    }
+
+    .head-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meta-sep { color: var(--border-strong); }
+
+    /* =====================================================================
+       VIEW 1: Pipeline Rail + Integrated Playback Bar + Top-Aligned Split
+       ===================================================================== */
+    .pipeline-board {
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .board-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .board-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .select-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .ios-select {
+      appearance: none;
+      background: var(--surface-muted) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236E6E73' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--ink);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 5.5px 28px 5.5px 10px;
+      cursor: pointer;
+    }
+    .ios-select:hover { border-color: var(--border-strong); background-color: var(--surface); }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 11.5px;
+      color: var(--ink-3);
+      flex-wrap: wrap;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+
+    /* Compact 8-Step SVG Pipeline Grid */
+    .pipeline-canvas {
+      position: relative;
+      padding: 4px 0;
+    }
+
+    .pipeline-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      overflow: visible;
+    }
+
+    .conn-track {
+      fill: none;
+      stroke: rgba(60, 60, 67, 0.13);
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .conn-progress {
+      fill: none;
+      stroke: var(--blue);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .conn-progress.is-done { stroke: var(--green-dot); }
+    .conn-progress.is-skipped { stroke: rgba(142, 142, 147, 0.45); stroke-dasharray: 4 4; }
+
+    .conn-packet {
+      fill: var(--blue);
+      opacity: 0;
+    }
+
+    .pipeline-grid {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      column-gap: 18px;
+      row-gap: 24px;
+    }
+
+    /* Uniform 1px Border Stage Node — Compact, Scannable, Zero Clutter */
+    .stage-node {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 10px 12px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-family: var(--font-sans);
+      color: inherit;
+      width: 100%;
+      transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease), background 150ms var(--ease);
+    }
+
+    .stage-node:hover {
+      border-color: var(--border-strong);
+      background: var(--surface-muted);
+    }
+
+    .stage-node.is-selected {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2.5px var(--blue-ring);
+      background: var(--surface);
+    }
+
+    .stage-node.is-flag-hit {
+      border-color: var(--indigo);
+      box-shadow: 0 0 0 2px rgba(88, 86, 214, 0.24);
+    }
+
+    .stage-node[data-status="running"] {
+      border-color: var(--blue);
+      background: rgba(0, 122, 255, 0.035);
+    }
+
+    .stage-node[data-status="completed"] {
+      border-color: rgba(52, 199, 89, 0.48);
+    }
+
+    .stage-node[data-status="failed"] {
+      border-color: rgba(255, 59, 48, 0.65);
+      background: rgba(255, 59, 48, 0.035);
+    }
+
+    .stage-node[data-status="skipped"] {
+      background: var(--surface-muted);
+      opacity: 0.72;
+    }
+
+    .stage-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .stage-step-id {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .step-circle {
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      background: var(--surface-hover);
+      color: var(--ink-2);
+      display: grid;
+      place-items: center;
+      font-size: 10.5px;
+      font-weight: 700;
+    }
+    .stage-node[data-status="running"] .step-circle { background: var(--blue); color: #FFF; }
+    .stage-node[data-status="completed"] .step-circle { background: var(--green-dot); color: #FFF; }
+    .stage-node[data-status="failed"] .step-circle { background: var(--red-dot); color: #FFF; }
+
+    .stage-name {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.014em;
+      color: var(--ink);
+      line-height: 1.25;
+    }
+
+    .stage-artifact {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-3);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .stage-bar {
+      height: 2.5px;
+      border-radius: 99px;
+      background: rgba(60, 60, 67, 0.08);
+      overflow: hidden;
+    }
+
+    .stage-bar-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 99px;
+      background: var(--blue);
+    }
+    .stage-node[data-status="completed"] .stage-bar-fill { background: var(--green-dot); }
+    .stage-node[data-status="failed"] .stage-bar-fill { background: var(--red-dot); }
+    .stage-node[data-status="skipped"] .stage-bar-fill { background: rgba(142, 142, 147, 0.45); }
+
+    /* Status Pill */
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: var(--r-pill);
+      background: rgba(118, 118, 128, 0.11);
+      color: var(--ink-3);
+      text-transform: capitalize;
+      white-space: nowrap;
+    }
+    .status-pill.running { background: var(--blue-tint); color: var(--blue); }
+    .status-pill.completed { background: var(--green-tint); color: var(--green); }
+    .status-pill.failed { background: var(--red-tint); color: var(--red); }
+    .status-pill.skipped { background: rgba(118, 118, 128, 0.12); color: var(--ink-4); }
+    .status-pill.blocked { background: var(--amber-tint); color: var(--amber); }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .status-pill.running .status-dot { animation: pulse 1.1s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Integrated Inline Playback Bar (Never covers content!) */
+    .playback-bar {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .transport-btns {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .scrubber-wrap {
+      flex: 1;
+      min-width: 180px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .scrubber-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .scrubber-label {
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .scrubber-count { color: var(--ink-3); font-family: var(--font-mono); font-size: 11.5px; }
+
+    .scrubber-range {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 99px;
+      background: rgba(60, 60, 67, 0.14);
+      cursor: pointer;
+    }
+
+    .scrubber-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      border: 2px solid var(--blue);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+    }
+
+    .speed-pills {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(118, 118, 128, 0.11);
+      padding: 2px;
+      border-radius: 8px;
+    }
+
+    .speed-btn {
+      border: none;
+      background: transparent;
+      color: var(--ink-3);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 7px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .speed-btn.active {
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Top-Aligned Detail Split — Zero Stretched Blank Voids */
+    .detail-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.38fr) minmax(0, 0.92fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .inspector {
+      padding: 18px 20px;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .inspector-kicker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+      flex-wrap: wrap;
+    }
+
+    .kicker-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    .source-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--ink-2);
+      background: var(--surface-hover);
+      padding: 2px 7px;
+      border-radius: 5px;
+    }
+
+    .inspector h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.024em;
+      color: var(--ink);
+      line-height: 1.25;
+    }
+
+    .inspector-summary {
+      margin: 0 0 14px;
+      font-size: 13.5px;
+      color: var(--ink-2);
+      line-height: 1.55;
+    }
+
+    /* Clean Uniform-Border Caution Callout */
+    .caution-note {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 9px 11px;
+      margin-bottom: 14px;
+      border-radius: var(--r-sm);
+      background: var(--amber-tint);
+      border: 1px solid rgba(255, 149, 0, 0.28);
+      color: #7D3C00;
+      font-size: 12.2px;
+      line-height: 1.45;
+    }
+
+    /* Clean Code Block */
+    .code-box {
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--surface-code);
+      overflow: hidden;
+      margin-bottom: 14px;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 10px;
+      background: rgba(60, 60, 67, 0.03);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .code-head-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .kind-pill {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1.5px 7px;
+      border-radius: var(--r-pill);
+    }
+    .kind-pill.executable { background: var(--blue-tint); color: var(--blue); }
+    .kind-pill.example { background: var(--indigo-tint); color: var(--indigo); }
+    .kind-pill.runtime { background: var(--green-tint); color: var(--green); }
+    .kind-pill.caution { background: var(--amber-tint); color: var(--amber); }
+
+    .copy-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-family: var(--font-sans);
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 3.5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 130ms var(--ease);
+    }
+    .copy-btn:hover { border-color: var(--border-strong); color: var(--ink); }
+    .copy-btn.copied { background: var(--green-tint); border-color: rgba(52, 199, 89, 0.4); color: var(--green); }
+
+    pre.code-pre, pre[class*="language-"] {
+      margin: 0;
+      padding: 10px 12px;
+      overflow-x: auto;
+      background: transparent !important;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--ink);
+    }
+
+    code[class*="language-"] {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      background: transparent !important;
+      text-shadow: none !important;
+    }
+
+    /* Xcode Light Prism Token Colors */
+    .token.comment { color: #707F8C; font-style: italic; }
+    .token.punctuation, .token.operator { color: #515154; }
+    .token.property, .token.number, .token.boolean { color: #1C00CF; }
+    .token.string, .token.attr-name { color: #C41A16; }
+    .token.keyword { color: #9B2393; font-weight: 500; }
+    .token.function { color: #0F68A0; }
+    .token.variable { color: #326D74; }
+
+    /* Clean Hairline Key-Value Specification List (Replaces Boxy Nested Cards) */
+    .spec-list {
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .spec-row {
+      display: grid;
+      grid-template-columns: 116px minmax(0, 1fr);
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px solid var(--border);
+      align-items: baseline;
+    }
+
+    .spec-row:last-child { border-bottom: none; padding-bottom: 2px; }
+
+    .spec-key {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .spec-key.ok { color: var(--green); }
+    .spec-key.err { color: var(--red); }
+
+    .spec-val {
+      font-size: 12.8px;
+      color: var(--ink-2);
+      line-height: 1.48;
+    }
+
+    .dep-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .dep-tag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--ink-2);
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      padding: 1.5px 6px;
+      border-radius: 5px;
+    }
+
+    .inspector-nav {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    /* Compact Live Console & Artifact Checklist */
+    .console-card {
+      background: var(--console-bg);
+      border: 1px solid rgba(0, 0, 0, 0.16);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .console-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 13px;
+      background: var(--console-head);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .console-head-left {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dots { display: inline-flex; gap: 5px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; }
+    .dot.r { background: #FF5F56; }
+    .dot.y { background: #FFBD2E; }
+    .dot.g { background: #27C93F; }
+
+    .console-title {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .exit-pill {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: var(--r-pill);
+      background: rgba(255, 255, 255, 0.10);
+      color: rgba(255, 255, 255, 0.78);
+    }
+    .exit-pill.ok { background: rgba(52, 199, 89, 0.22); color: #63E686; }
+    .exit-pill.err { background: rgba(255, 59, 48, 0.26); color: #FF8A80; }
+    .exit-pill.run { background: rgba(0, 122, 255, 0.28); color: #64B5FF; }
+
+    .console-body {
+      padding: 12px 13px;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.58;
+      color: #E5E5EA;
+      max-height: 290px;
+      overflow-y: auto;
+    }
+
+    .log-line { margin: 0 0 2px; white-space: pre-wrap; word-break: break-word; }
+    .log-line.step { color: #64D2FF; font-weight: 600; margin-top: 6px; }
+    .log-line.step:first-child { margin-top: 0; }
+    .log-line.ok { color: #63E686; }
+    .log-line.warn { color: #FFD60A; }
+    .log-line.err { color: #FF6961; font-weight: 600; }
+    .log-line.dim { color: #98989D; }
+
+    .artifact-strip {
+      padding: 10px 13px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.025);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .art-chip {
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: rgba(255, 255, 255, 0.52);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      padding: 2px 7px;
+      border-radius: 6px;
+    }
+    .art-chip.ok { color: #63E686; background: rgba(52, 199, 89, 0.14); border-color: rgba(52, 199, 89, 0.34); }
+    .art-chip.warn { color: #FFBE5C; background: rgba(255, 149, 0, 0.14); border-color: rgba(255, 149, 0, 0.34); }
+    .art-chip.err { color: #FF8A80; background: rgba(255, 59, 48, 0.18); border-color: rgba(255, 59, 48, 0.38); }
+
+    /* =====================================================================
+       VIEW 2: Command Explorer — Single-Column Grouped Rows (Zero Void Gaps)
+       ===================================================================== */
+    .explorer-toolbar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .search-wrap {
+      position: relative;
+      flex: 1 1 240px;
+      max-width: 340px;
+    }
+
+    .search-wrap input {
+      width: 100%;
+      background: var(--surface-hover);
+      border: 1px solid transparent;
+      border-radius: var(--r-sm);
+      padding: 6.5px 38px 6.5px 30px;
+      font-family: var(--font-sans);
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .search-wrap input:focus {
+      background: var(--surface);
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px var(--blue-tint);
+      outline: none;
+    }
+
+    .search-ico {
+      position: absolute;
+      left: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--ink-4);
+      pointer-events: none;
+      display: grid;
+      place-items: center;
+    }
+
+    .search-kbd {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--ink-4);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0 5px;
+    }
+
+    .pill-row {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .pill-filter {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--ink-2);
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 4.5px 10px;
+      border-radius: var(--r-pill);
+      cursor: pointer;
+    }
+    .pill-filter:hover { background: var(--surface-hover); color: var(--ink); }
+    .pill-filter.active { background: var(--ink); border-color: var(--ink); color: #FFFFFF; }
+
+    .explorer-sub {
+      padding: 8px 16px;
+      background: var(--surface-muted);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 12px;
+      color: var(--ink-3);
+    }
+
+    /* Grouped List Items with Clean Hairline Separators — Uniform 1px Outer Card */
+    .cmd-rows {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .cmd-row {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      transition: background 140ms var(--ease);
+    }
+    .cmd-row:last-child { border-bottom: none; }
+    .cmd-row:hover { background: rgba(245, 245, 247, 0.55); }
+
+    .cmd-row-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .cmd-row-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .cmd-row-title {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.014em;
+      color: var(--ink);
+    }
+
+    .cmd-row-desc {
+      margin: 0;
+      font-size: 12.8px;
+      color: var(--ink-3);
+      line-height: 1.48;
+      max-width: 820px;
+    }
+
+    .cmd-row-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cmd-row .code-box { margin-bottom: 0; }
+
+    .details-drawer {
+      display: none;
+      margin-top: 2px;
+      padding: 10px 12px;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+    }
+    .details-drawer.open { display: block; }
+
+    .details-drawer .spec-list { border-top: none; }
+    .details-drawer .spec-row { padding: 6px 0; grid-template-columns: 112px minmax(0, 1fr); }
+
+    .empty-msg {
+      padding: 36px 20px;
+      text-align: center;
+      color: var(--ink-3);
+    }
+
+    /* =====================================================================
+       VIEW 3: Flags & Security Boundaries (Top-Aligned Clean Tables)
+       ===================================================================== */
+    .arch-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .table-head-bar {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .table-head-bar h2 {
+      margin: 0;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .table-head-bar span { font-size: 12px; color: var(--ink-3); }
+
+    .table-scroll { overflow-x: auto; }
+
+    .ios-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+    }
+
+    .ios-table th {
+      text-align: left;
+      padding: 8px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--ink-4);
+      background: var(--surface-muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .ios-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--ink-2);
+      vertical-align: top;
+    }
+
+    .ios-table tr:last-child td { border-bottom: none; }
+    .ios-table tbody tr { cursor: pointer; transition: background 120ms; }
+    .ios-table tbody tr:hover { background: var(--surface-hover); }
+    .ios-table tbody tr.is-active { background: var(--indigo-tint); }
+
+    .flag-name {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+
+    .stage-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1px 5.5px;
+      border-radius: 5px;
+      background: var(--surface-hover);
+      color: var(--ink-2);
+      margin: 0 3px 2px 0;
+    }
+
+    .sec-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .sec-card { padding: 14px 16px; }
+
+    .sec-card h3 {
+      margin: 0 0 10px;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .sec-rows {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sec-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6.5px 0;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--ink-3);
+    }
+
+    .sec-row code {
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      color: var(--ink);
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      z-index: 90;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(29, 29, 31, 0.92);
+      color: #FFFFFF;
+      font-size: 12.5px;
+      font-weight: 500;
+      padding: 7px 14px;
+      border-radius: var(--r-pill);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* =====================================================================
+       Responsive Breakpoints
+       ===================================================================== */
+    @media (max-width: 1020px) {
+      .pipeline-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
+      .detail-split { grid-template-columns: minmax(0, 1fr); }
+      .arch-split { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    @media (max-width: 700px) {
+      .topbar-inner { padding: 9px 14px; }
+      .segmented { order: 3; width: 100%; justify-content: space-between; }
+      .seg-tab { flex: 1; justify-content: center; padding: 5px 6px; font-size: 12px; white-space: nowrap; }
+      .seg-count { display: none; }
+      .workspace { padding: 14px 14px 28px; }
+      .pipeline-grid { grid-template-columns: minmax(0, 1fr); row-gap: 14px; }
+      .spec-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+      .details-drawer .spec-row { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite">
+    <i data-lucide="check-circle-2" class="icon-sm"></i>
+    <span id="toastText">Copied</span>
+  </div>
+
+  <!-- Top Navigation -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <i data-lucide="workflow" class="icon-md"></i>
+        </div>
+        <div>
+          <div class="brand-title">FrekiHub Automation</div>
+          <div class="brand-sub">FrekiJoms/FrekiHub.app</div>
+        </div>
+      </div>
+
+      <div class="segmented" role="tablist" aria-label="Dashboard views">
+        <button class="seg-tab" role="tab" aria-selected="true" data-view="pipeline" type="button">
+          Pipeline <span class="seg-count">8</span>
+        </button>
+        <button class="seg-tab" role="tab" aria-selected="false" data-view="commands" type="button">
+          Commands <span class="seg-count" id="tabCmdCount">18</span>
+        </button>
+        <button class="seg-tab" role="tab" aria-selected="false" data-view="flags" type="button">
+          Flags &amp; Security <span class="seg-count">12</span>
+        </button>
+      </div>
+
+      <div class="topbar-actions">
+        <button id="motionToggleBtn" class="btn" type="button" aria-pressed="false" title="Toggle reduced motion">
+          <i data-lucide="sparkles" class="icon-sm"></i>
+          <span>Motion</span>
+        </button>
+        <button id="quickCopyBtn" class="btn btn-primary" type="button">
+          <i data-lucide="copy" class="icon-sm"></i>
+          <span>Copy Release Cmd</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- ===============================================================
+         VIEW 1: Interactive Pipeline & Synchronized Inspector
+         =============================================================== -->
+    <section id="view-pipeline" class="view-panel active" role="tabpanel">
+      <div class="page-head">
+        <div>
+          <h1>Release &amp; Companion Sync Pipeline</h1>
+          <p>Step through <code>.\publish_release.ps1</code> from pre-flight checks to GitHub Release, ADB upgrade, and Frxnance verification.</p>
+        </div>
+        <div class="head-meta">
+          <span id="engineBadge">GSAP 3</span>
+          <span class="meta-sep">·</span>
+          <span>Keys: Space, ← / →, R</span>
+        </div>
+      </div>
+
+      <!-- Compact Pipeline Rail + Integrated Playback Controls -->
+      <div class="panel-card pipeline-board">
+        <div class="board-top">
+          <div class="board-controls">
+            <label for="scenarioSelect" class="select-label">Scenario</label>
+            <select id="scenarioSelect" class="ios-select" aria-label="Select workflow scenario">
+              <option value="happy">Full Release Run (Happy Path)</option>
+              <option value="dryrun">Dry Run Preview (-DryRun)</option>
+              <option value="fail-adb">Failure: Stage 1 — ADB Device Offline</option>
+              <option value="fail-version">Failure: Stage 2 — VersionCode Downgrade Guard</option>
+              <option value="fail-signing">Failure: Stage 3 — Missing Keystore</option>
+              <option value="fail-upload">Failure: Stage 5 — APK Upload Interrupted (Draft Safe)</option>
+              <option value="fail-frxnance">Failure: Stage 7 — Frxnance Test Failure</option>
+            </select>
+            <button id="clearFlagBtn" class="btn" type="button" hidden>
+              <i data-lucide="x" class="icon-sm"></i>
+              <span>Clear Flag Filter</span>
+            </button>
+          </div>
+
+          <div class="legend" aria-label="Status legend">
+            <span><span class="legend-dot" style="background:#8E8E93;"></span>Pending</span>
+            <span><span class="legend-dot" style="background:var(--blue);"></span>Executing</span>
+            <span><span class="legend-dot" style="background:var(--green-dot);"></span>Completed</span>
+            <span><span class="legend-dot" style="background:var(--amber-dot);"></span>Skipped / Blocked</span>
+            <span><span class="legend-dot" style="background:var(--red-dot);"></span>Failed</span>
+          </div>
+        </div>
+
+        <div id="pipelineCanvas" class="pipeline-canvas">
+          <svg id="pipelineSvg" class="pipeline-svg" aria-hidden="true"></svg>
+          <div id="pipelineGrid" class="pipeline-grid" role="list" aria-label="Workflow stages"></div>
+        </div>
+
+        <!-- Inline Transport Bar -->
+        <div class="playback-bar" role="region" aria-label="Timeline playback controls">
+          <div class="transport-btns">
+            <button id="restartBtn" class="btn btn-icon" type="button" title="Restart (R)" aria-label="Restart">
+              <i data-lucide="rotate-ccw" class="icon-sm"></i>
+            </button>
+            <button id="stepBackBtn" class="btn btn-icon" type="button" title="Step back (Left Arrow)" aria-label="Step back">
+              <i data-lucide="skip-back" class="icon-sm"></i>
+            </button>
+            <button id="playPauseBtn" class="btn btn-primary" type="button" title="Play or pause (Space)">
+              <i data-lucide="play" class="icon-sm"></i>
+              <span id="playPauseLabel">Play</span>
+            </button>
+            <button id="stepForwardBtn" class="btn btn-icon" type="button" title="Step forward (Right Arrow)" aria-label="Step forward">
+              <i data-lucide="skip-forward" class="icon-sm"></i>
+            </button>
+          </div>
+
+          <div class="scrubber-wrap">
+            <div class="scrubber-top">
+              <span id="scrubberLabel" class="scrubber-label">Ready — Press Play or click any stage</span>
+              <span id="scrubberCount" class="scrubber-count">0 / 8</span>
+            </div>
+            <input id="scrubberRange" class="scrubber-range" type="range" min="0" max="1000" value="0" aria-label="Timeline scrubber">
+          </div>
+
+          <div class="speed-pills" role="group" aria-label="Playback speed">
+            <button class="speed-btn" data-speed="0.75" type="button">0.75×</button>
+            <button class="speed-btn active" data-speed="1" type="button">1×</button>
+            <button class="speed-btn" data-speed="1.5" type="button">1.5×</button>
+            <button class="speed-btn" data-speed="2" type="button">2×</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Synchronized Top-Aligned Stage Inspector + Compact Live Trace -->
+      <div class="detail-split">
+        <article id="stageInspector" class="panel-card inspector" aria-live="polite"></article>
+
+        <aside class="console-card" aria-label="Live execution output">
+          <div class="console-head">
+            <div class="console-head-left">
+              <span class="dots" aria-hidden="true"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></span>
+              <span class="console-title">pwsh — FrekiHub.app</span>
+            </div>
+            <span id="consoleExit" class="exit-pill">IDLE</span>
+          </div>
+          <div id="consoleBody" class="console-body" role="log"></div>
+          <div id="artifactStrip" class="artifact-strip" aria-label="Pipeline artifacts"></div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===============================================================
+         VIEW 2: Searchable Command Explorer (Compact Single-Column Rows)
+         =============================================================== -->
+    <section id="view-commands" class="view-panel" role="tabpanel">
+      <div class="page-head">
+        <div>
+          <h1>Command Explorer</h1>
+          <p>Every verified PowerShell, Flutter, Gradle, Git, GitHub API, ADB, and Frxnance command in the project.</p>
+        </div>
+        <div class="head-meta">
+          <span id="explorerCount">18 of 18</span>
+          <button id="expandAllBtn" class="btn" type="button">Expand All</button>
+          <button id="collapseAllBtn" class="btn" type="button">Collapse All</button>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <div class="explorer-toolbar">
+          <div class="search-wrap">
+            <span class="search-ico" aria-hidden="true"><i data-lucide="search" class="icon-sm"></i></span>
+            <input id="cmdSearch" type="search" placeholder="Search commands, flags, errors..." aria-label="Search commands">
+            <span class="search-kbd" aria-hidden="true">/</span>
+          </div>
+
+          <div id="catPills" class="pill-row" role="tablist" aria-label="Command categories">
+            <button class="pill-filter active" data-cat="all" type="button">All</button>
+            <button class="pill-filter" data-cat="orchestrator" type="button">Orchestrator</button>
+            <button class="pill-filter" data-cat="build" type="button">Build &amp; Signing</button>
+            <button class="pill-filter" data-cat="git" type="button">Git &amp; Release API</button>
+            <button class="pill-filter" data-cat="adb" type="button">ADB &amp; Logs</button>
+            <button class="pill-filter" data-cat="sync" type="button">Frxnance Sync</button>
+          </div>
+        </div>
+
+        <div class="explorer-sub">
+          <div class="pill-row" role="group" aria-label="Type filter">
+            <span>Type:</span>
+            <button class="btn" data-kind="all" aria-pressed="true" type="button">All</button>
+            <button class="btn" data-kind="executable" aria-pressed="false" type="button">Executable</button>
+            <button class="btn" data-kind="example" aria-pressed="false" type="button">Examples &amp; API</button>
+            <button class="btn" data-kind="warning" aria-pressed="false" type="button">Caution / Remote</button>
+          </div>
+          <span>Click <strong>Details</strong> on any row for parameters, prerequisites, and error fixes.</span>
+        </div>
+
+        <div id="cmdRows" class="cmd-rows"></div>
+      </div>
+    </section>
+
+    <!-- ===============================================================
+         VIEW 3: Script Parameters & Security Boundaries
+         =============================================================== -->
+    <section id="view-flags" class="view-panel" role="tabpanel">
+      <div class="page-head">
+        <div>
+          <h1>Parameters &amp; Security Boundaries</h1>
+          <p>Click any <code>publish_release.ps1</code> flag row to highlight its affected stages in the Pipeline view.</p>
+        </div>
+      </div>
+
+      <div class="arch-split">
+        <div class="panel-card">
+          <div class="table-head-bar">
+            <h2>publish_release.ps1 Parameters</h2>
+            <span>12 flags</span>
+          </div>
+          <div class="table-scroll">
+            <table class="ios-table">
+              <thead>
+                <tr>
+                  <th>Parameter</th>
+                  <th>Type</th>
+                  <th>Stages</th>
+                  <th>Behavior</th>
+                </tr>
+              </thead>
+              <tbody id="flagsBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="sec-stack">
+          <div class="panel-card sec-card">
+            <h3><i data-lucide="shield-check" class="icon-sm" style="color:var(--green);"></i> Tracked in Git</h3>
+            <div class="sec-rows">
+              <div class="sec-row"><code>publish_release.ps1</code><span>Release orchestrator</span></div>
+              <div class="sec-row"><code>config/release.example.json</code><span>Signing &amp; device template</span></div>
+              <div class="sec-row"><code>config/update.example.json</code><span>Public repo pointer</span></div>
+              <div class="sec-row"><code>config/geoapify.example.json</code><span>Map key template</span></div>
+              <div class="sec-row"><code>sync_from_frekihub.ps1</code><span>Companion sync script</span></div>
+            </div>
+          </div>
+
+          <div class="panel-card sec-card">
+            <h3><i data-lucide="lock" class="icon-sm" style="color:var(--amber);"></i> Git-Ignored Local Secrets</h3>
+            <div class="sec-rows">
+              <div class="sec-row"><code>config/release.local.json</code><span>Keystore creds &amp; device ID</span></div>
+              <div class="sec-row"><code>config/geoapify.local.json</code><span>Local Geoapify API key</span></div>
+              <div class="sec-row"><code>config/update.local.json</code><span>Compiled UPDATE_URL</span></div>
+              <div class="sec-row"><code>~/frekihub-release.jks</code><span>Owner signing keystore</span></div>
+              <div class="sec-row"><code>build/app/outputs/flutter-apk/</code><span>Compiled APKs</span></div>
+            </div>
+          </div>
+
+          <div class="panel-card sec-card">
+            <h3><i data-lucide="key-round" class="icon-sm" style="color:var(--blue);"></i> Credential Precedence</h3>
+            <p style="margin:0; font-size:12.4px; color:var(--ink-2); line-height:1.55;">
+              <strong>GitHub Token:</strong> <code>-GitHubToken</code> → <code>$env:GITHUB_TOKEN</code> → <code>$env:GH_TOKEN</code> → <code>release.local.json</code> → <code>gh auth token</code> → <code>git credential fill</code>.<br>
+              <strong>Signing Env Vars:</strong> Scoped inside <code>try / finally</code> and restored immediately after <code>flutter build apk --release</code>.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const STAGES = [
+        {
+          num: 1, shortName: 'Pre-flight & Auth', title: 'Pre-flight Validation & Config Resolution',
+          source: 'publish_release.ps1:106–197', kind: 'executable', lang: 'powershell',
+          command: `.\\publish_release.ps1 -DryRun -Notes "Preview release notes"`,
+          description: 'Validates all local prerequisites before mutating pubspec.yaml or compiling: checks config/geoapify.local.json, non-empty UPDATE_URL in config/update.local.json, signing credentials and ~/frekihub-release.jks, ADB device authorization via adb devices, Frxnance sync script presence, and GitHub Bearer token resolution.',
+          inputs: 'config/geoapify.local.json, config/update.local.json, config/release.local.json, ~/frekihub-release.jks, USB ADB device',
+          outputs: 'Verified repo (FrekiJoms/FrekiHub.app), keystore config, authorized ADB serial, GitHub auth token',
+          dependencies: ['pubspec.yaml', 'config/*.local.json', 'adb.exe', 'git'],
+          success: 'All configs, keystore file, ADB device state ("device"), sync script, and GitHub token validate cleanly.',
+          failure: 'Throws immediately with zero file changes if any JSON, keystore, password, USB connection, or GitHub token is missing.',
+          warning: null, artifact: 'Configs & Auth',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Checking release prerequisites' },
+              { t: 'dim', s: 'Verified pubspec.yaml, config/geoapify.local.json, config/update.local.json' },
+              { t: 'dim', s: 'Keystore verified: ~/frekihub-release.jks (alias: frekihub)' },
+              { t: 'ok', s: 'ADB target authorized; GitHub token resolved via Git Credential Manager' }
+            ],
+            dryrun: [
+              { t: 'step', s: '==> Checking release prerequisites' },
+              { t: 'ok', s: 'DryRun active: validated configs and FrekiJoms/FrekiHub.app without prompting tokens' }
+            ],
+            'fail-adb': [
+              { t: 'step', s: '==> Checking release prerequisites' },
+              { t: 'err', s: "THROW: ADB device '<DEVICE_ID>' is not connected/authorized (online: none)." },
+              { t: 'warn', s: 'Recovery: Enable USB debugging, pass -DeviceId <serial>, or rerun with -SkipInstall.' }
+            ]
+          }
+        },
+        {
+          num: 2, shortName: 'Version & Notes', title: 'Monotonic VersionCode & Release Notes Resolution',
+          source: 'publish_release.ps1:199–320', kind: 'executable', lang: 'powershell',
+          command: `.\\publish_release.ps1 -Bump patch -Notes "- Improved update flow"`,
+          description: 'Parses pubspec.yaml (X.Y.Z+N), scans all local Git tags (e.g. 1.5.6+5, v1.6.0+1), and checks GitHub /releases/latest to compute highestKnownCode. Enforces strictly increasing +N so Android PackageInstaller and AppUpdater accept the upgrade, generates Markdown notes from -Notes, -NotesFile, or git log, and writes UTF-8 (no BOM) back to pubspec.yaml.',
+          inputs: 'pubspec.yaml (1.6.0+1), git tag --list (+5 max), GET /releases/latest, -Notes / git log',
+          outputs: 'Updated pubspec.yaml (1.6.1+6), tag v1.6.1+6, Markdown changelog body',
+          dependencies: ['Stage 1', 'git tag --list', 'git log <lastTag>..HEAD'],
+          success: 'newCode > highestKnownCode, no local tag collision, and pubspec.yaml updated cleanly (or exits cleanly on -DryRun).',
+          failure: 'Blocks +N <= highestKnownCode before editing pubspec.yaml to prevent INSTALL_FAILED_VERSION_DOWNGRADE.',
+          warning: 'Passing -ForceVersion disables the monotonic +N guard; never use it for builds shipped to existing installers.',
+          artifact: 'pubspec: 1.6.1+6',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Resolving version and versionCode' },
+              { t: 'dim', s: 'Current pubspec : 1.6.0+1 (highest known versionCode: 5)' },
+              { t: 'dim', s: 'Next version    : 1.6.1+6 (tag: v1.6.1+6)' },
+              { t: 'ok', s: 'Updated pubspec.yaml -> version: 1.6.1+6' }
+            ],
+            dryrun: [
+              { t: 'step', s: '==> Resolving version and versionCode' },
+              { t: 'dim', s: 'Current pubspec : 1.6.0+1 (highest known versionCode: 5) -> Next: 1.6.1+6' },
+              { t: 'ok', s: '==> Dry run complete (no files modified, no APK built, no release published)' }
+            ],
+            'fail-version': [
+              { t: 'step', s: '==> Resolving version and versionCode' },
+              { t: 'err', s: 'THROW: New versionCode (+2) must be greater than highest existing versionCode (+5).' },
+              { t: 'warn', s: 'Recovery: Omit +N or specify +6 so Android & AppUpdater recognize the upgrade.' }
+            ]
+          }
+        },
+        {
+          num: 3, shortName: 'Release APK Build', title: 'Signed Release APK Build & Gradle Gate',
+          source: 'publish_release.ps1:322–351 · build.gradle.kts:71–80', kind: 'executable', lang: 'powershell',
+          command: `flutter build apk --release \`
+  --dart-define-from-file=config/geoapify.local.json \`
+  --dart-define-from-file=config/update.local.json`,
+          description: 'Scopes FREKIHUB_KEYSTORE_* environment variables inside try/finally so secrets never persist in your shell. Gradle executes verifyReleaseSigning, compiles Dart + Kotlin with both Geoapify and UPDATE_URL defines, and signs build\\app\\outputs\\flutter-apk\\app-release.apk (minSdk 35).',
+          inputs: 'Bumped pubspec.yaml, config/geoapify.local.json, config/update.local.json, scoped signing env vars',
+          outputs: 'Signed build\\app\\outputs\\flutter-apk\\app-release.apk (non-debug filename)',
+          dependencies: ['Stage 2', 'Flutter SDK', 'JDK 17', 'verifyReleaseSigning'],
+          success: 'verifyReleaseSigning passes, flutter build apk --release exits 0, signing env vars restore in finally, and APK exists.',
+          failure: 'verifyReleaseSigning fails if any signing env var or .jks file is missing, or Flutter exits non-zero on compile errors.',
+          warning: null, artifact: 'app-release.apk',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Building signed release APK with Geoapify + Update defines' },
+              { t: 'dim', s: 'Gradle :app:verifyReleaseSigning -> PASSED' },
+              { t: 'ok', s: 'Built APK: build\\app\\outputs\\flutter-apk\\app-release.apk (48.4 MiB)' },
+              { t: 'dim', s: 'Restored FREKIHUB_KEYSTORE_* env vars in finally block' }
+            ],
+            'fail-signing': [
+              { t: 'step', s: '==> Building signed release APK with Geoapify + Update defines' },
+              { t: 'err', s: 'Execution failed for task :app:verifyReleaseSigning.' },
+              { t: 'warn', s: 'Recovery: Confirm ~/frekihub-release.jks exists and config/release.local.json has valid credentials.' }
+            ]
+          }
+        },
+        {
+          num: 4, shortName: 'Git Commit & Tag', title: 'Isolated pubspec.yaml Commit, Tag & Push',
+          source: 'publish_release.ps1:353–366', kind: 'executable', lang: 'bash',
+          command: `git commit --only -m v1.6.1+6 -- pubspec.yaml
+git tag v1.6.1+6
+git push origin HEAD v1.6.1+6`,
+          description: 'Commits exclusively pubspec.yaml using git commit --only so unrelated local working-tree modifications stay untouched. Tags HEAD with vX.Y.Z+N and pushes both commit and tag to origin.',
+          inputs: 'Updated pubspec.yaml, tag v1.6.1+6, branch HEAD',
+          outputs: 'Remote commit and tag v1.6.1+6 on FrekiJoms/FrekiHub.app',
+          dependencies: ['Stage 3', 'Git remote origin'],
+          success: 'Only pubspec.yaml commits, tag attaches cleanly, and git push exits 0.',
+          failure: 'Fails if remote rejects push or tag already exists on origin. Bypass with -SkipGitPush.',
+          warning: 'Remote Git Mutation: Pushes commit and tag vX.Y.Z+N to origin; preview with -DryRun first.',
+          artifact: 'Tag: v1.6.1+6',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Committing pubspec.yaml, tagging v1.6.1+6, and pushing to origin' },
+              { t: 'dim', s: '[main] v1.6.1+6 — 1 file changed (unrelated edits preserved)' },
+              { t: 'ok', s: 'Pushed HEAD and tag v1.6.1+6 to origin' }
+            ]
+          }
+        },
+        {
+          num: 5, shortName: 'GitHub Release', title: 'Atomic GitHub Release Draft, Asset Upload & Publish',
+          source: 'publish_release.ps1:368–431', kind: 'example', lang: 'http',
+          command: `# 1. Stage hidden draft
+POST https://api.github.com/repos/FrekiJoms/FrekiHub.app/releases
+{"tag_name":"v1.6.1+6","name":"FrekiHub 1.6.1","body":"...","draft":true,"prerelease":false}
+
+# 2. Upload release APK asset
+POST https://uploads.github.com/repos/FrekiJoms/FrekiHub.app/releases/{id}/assets?name=app-release.apk
+
+# 3. Publish atomically as Latest
+PATCH https://api.github.com/repos/FrekiJoms/FrekiHub.app/releases/{id}
+{"draft":false,"prerelease":false,"make_latest":"true"}`,
+          description: 'Creates the release as draft: true first so /releases/latest never exposes an APK-less release during upload. Streams app-release.apk (Content-Type: application/vnd.android.package-archive), verifies state == "uploaded", and flips draft: false + make_latest: "true". Re-running on an existing tag removes stale assets before uploading.',
+          inputs: 'v1.6.1+6 SHA, Markdown notes, app-release.apk, GitHub Bearer token',
+          outputs: 'Published Latest GitHub Release with verified HTTPS app-release.apk asset',
+          dependencies: ['Stage 3 (APK)', 'Stage 4 (Tag)', 'GitHub REST API'],
+          success: 'Draft created, APK upload reports state="uploaded", and PATCH publishes release as Latest.',
+          failure: 'Network drop or 401/403 keeps release hidden as Draft so installed apps stay unaffected.',
+          warning: 'Live User Impact: Final PATCH immediately updates /releases/latest for all installed FrekiHub devices.',
+          artifact: 'GitHub: Latest',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Publishing GitHub Release v1.6.1+6 on FrekiJoms/FrekiHub.app' },
+              { t: 'dim', s: 'Created draft release -> uploading app-release.apk (48.4 MiB)...' },
+              { t: 'dim', s: 'Asset verified: app-release.apk (state=uploaded)' },
+              { t: 'ok', s: 'Published latest release: .../releases/tag/v1.6.1+6' }
+            ],
+            'fail-upload': [
+              { t: 'step', s: '==> Publishing GitHub Release v1.6.1+6 on FrekiJoms/FrekiHub.app' },
+              { t: 'err', s: 'THROW: Asset upload failed while streaming app-release.apk.' },
+              { t: 'warn', s: 'Draft Safe: Release remains unpublished. Re-run script to reuse draft and retry upload.' }
+            ]
+          }
+        },
+        {
+          num: 6, shortName: 'ADB Install', title: 'Local Device Upgrade via ADB',
+          source: 'publish_release.ps1:433–440', kind: 'executable', lang: 'powershell',
+          command: `& "$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe" \`
+  -s <DEVICE_ID> install -r build\\app\\outputs\\flutter-apk\\app-release.apk`,
+          description: 'Installs app-release.apk onto the configured Android device using adb install -r, upgrading in place while preserving all local SQLite sessions, Finance records, wallets, and preferences.',
+          inputs: 'build\\app\\outputs\\flutter-apk\\app-release.apk, authorized ADB serial',
+          outputs: 'Upgraded com.frekihub.freki_hub on phone with intact local database',
+          dependencies: ['Stage 3 (APK)', 'adb.exe', 'USB Debugging'],
+          success: 'adb install -r prints "Success" and exits 0.',
+          failure: 'Fails with INSTALL_FAILED_UPDATE_INCOMPATIBLE if signing key differs or versionCode regressed. Bypass with -SkipInstall.',
+          warning: 'Matching signing key required for in-place upgrades; do not uninstall unless data is backed up first.',
+          artifact: 'ADB: Installed',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Installing app-release.apk onto target ADB device' },
+              { t: 'ok', s: 'Performing Streamed Install -> Success (local data preserved)' }
+            ]
+          }
+        },
+        {
+          num: 7, shortName: 'Frxnance Sync', title: 'Frxnance Companion Sync & Verification',
+          source: 'publish_release.ps1:442–449 · sync_from_frekihub.ps1', kind: 'executable', lang: 'powershell',
+          command: `& "..\\Frekihub - Frxnance.app\\sync_from_frekihub.ps1" -Verify`,
+          description: 'Syncs shared Dart modules (wallets, components, sheets, controls, pickers, theme_reveal, app_update), adapts wallet_views.dart (3-arg AppData) and budget.dart (removes saveWithLocation), copies assets, renames package to com.frxnance.financing in FinanceNotificationParser.java / RuntimeEvents.kt / AppUpdater.kt, flags newer manual-merge files, and runs flutter analyze + flutter test.',
+          inputs: 'FrekiHub shared Dart, assets, Java/Kotlin sources',
+          outputs: 'Synced Frekihub - Frxnance.app with passing flutter analyze & flutter test',
+          dependencies: ['Sibling Frekihub - Frxnance.app', 'Flutter CLI'],
+          success: 'Shared files copy/transform cleanly and both flutter analyze and flutter test exit 0.',
+          failure: 'Fails if budget.dart saveWithLocation block changed or Frxnance tests fail. Bypass with -SkipSync.',
+          warning: 'Review any yellow warnings for manual-merge files (design.dart, forms.dart, data.dart, settings.dart, MainActivity.kt).',
+          artifact: 'Frxnance: Verified',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Syncing and verifying companion app (Frekihub - Frxnance.app)' },
+              { t: 'dim', s: 'Synced 9 Dart modules, 4 asset dirs, Parser/RuntimeEvents/AppUpdater' },
+              { t: 'dim', s: 'flutter analyze -> No issues found!' },
+              { t: 'ok', s: 'flutter test -> All tests passed! Shipped v1.6.1+6' }
+            ],
+            'fail-frxnance': [
+              { t: 'step', s: '==> Syncing and verifying companion app (Frekihub - Frxnance.app)' },
+              { t: 'err', s: 'THROW: sync_from_frekihub.ps1 -Verify failed — flutter test exited with code 1.' },
+              { t: 'warn', s: 'Recovery: Port any newer manual-merge edits in Frekihub - Frxnance.app and re-run -Verify.' }
+            ]
+          }
+        },
+        {
+          num: 8, shortName: 'In-App Delivery', title: 'End-User In-App Update & PackageInstaller Flow',
+          source: 'lib/app_update.dart:40–342 · AppUpdater.kt', kind: 'runtime', lang: 'json',
+          command: `// Client query: GET https://api.github.com/repos/FrekiJoms/FrekiHub.app/releases/latest
+{
+  "tag_name": "v1.6.1+6",
+  "body": "- Release notes rendered by _MarkdownNotes",
+  "assets": [{ "name": "app-release.apk", "browser_download_url": "https://.../app-release.apk" }]
+}`,
+          description: 'On app launch or Settings -> Check for updates, AppUpdater resolves UPDATE_URL to /releases/latest, parses +6 from tag_name, selects the non-debug HTTPS .apk asset, compares 6 > installed, and opens the floating "Update available" panel drawer. Tapping Update requests REQUEST_INSTALL_PACKAGES once, streams into PackageInstaller.Session with progress, and upgrades in place.',
+          inputs: 'GitHub /releases/latest JSON + installed APK compiled with UPDATE_URL',
+          outputs: 'Floating Update Available modal -> PackageInstaller confirmation -> seamless upgrade',
+          dependencies: ['Stage 5 (Latest Release)', 'Prior APK with UPDATE_URL', 'Matching keystore'],
+          success: 'AppUpdateInfo.parse validates HTTPS APK with versionCode > installed; PackageInstaller commits cleanly.',
+          failure: 'Older APKs built without UPDATE_URL stay silent; mismatched keystore fails Android install.',
+          warning: 'Prerequisite: Initial distributed APK must be built with --dart-define-from-file=config/update.local.json.',
+          artifact: 'Client: v1.6.1 (6)',
+          logs: {
+            happy: [
+              { t: 'step', s: '==> Client Runtime Verification (AppUpdater.check)' },
+              { t: 'dim', s: 'GET /releases/latest -> HTTP 200 (tag_name: v1.6.1+6 -> code 6 > installed 5)' },
+              { t: 'ok', s: 'Floating "Update available" drawer opened -> PackageInstaller ready' }
+            ]
+          }
+        }
+      ];
+
+      const COMMANDS = [
+        {
+          id: 'c1', title: 'Standard One-Command Patch Release', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: 'Publishes Latest GitHub Release and pushes tag vX.Y.Z+N to origin.',
+          desc: 'Runs the full 7-stage release pipeline, bumping patch semver and strictly monotonic +N versionCode.',
+          code: `.\\publish_release.ps1 -Notes "- Faster startup\`n- Fixed wallet card layout"`,
+          syntax: '.\\publish_release.ps1 [-Notes <Markdown>] [-Bump patch|minor|major|build]',
+          params: '-Notes sets Markdown release notes shown in the Update drawer; omit to auto-generate from git log.',
+          prereqs: 'Run in FrekiHub.app with config/geoapify.local.json, config/update.local.json, config/release.local.json, and USB phone.',
+          output: 'Bumped pubspec.yaml, signed app-release.apk, pushed tag, Latest GitHub Release, ADB upgrade, Frxnance verify.',
+          errors: 'Fails in pre-flight if phone is unplugged (pass -SkipInstall) or GitHub auth is missing.',
+          source: 'publish_release.ps1'
+        },
+        {
+          id: 'c2', title: 'Pre-flight Dry Run Preview (-DryRun)', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Checks configs, computes monotonic +N across pubspec/tags/GitHub, and previews notes with zero side effects.',
+          code: `.\\publish_release.ps1 -DryRun -Notes "Preview release notes"`,
+          syntax: '.\\publish_release.ps1 -DryRun [-Bump ...] [-Version ...] [-Notes ...]',
+          params: '-DryRun exits cleanly after Step 1 without editing pubspec.yaml, building, pushing, or installing.',
+          prereqs: 'config/geoapify.local.json and config/update.local.json present.',
+          output: 'Prints current version, highest known versionCode, resolved next version/tag, targets, and notes.',
+          errors: 'Catches invalid -Version syntax or +N downgrade violations before making any changes.',
+          source: 'publish_release.ps1:307–310'
+        },
+        {
+          id: 'c3', title: 'Auto-Changelog Release from Git History', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: 'Publishes Latest GitHub Release and pushes tag to origin.',
+          desc: 'Runs the full pipeline while generating Markdown bullets from non-merge commits since the previous tag.',
+          code: `.\\publish_release.ps1`,
+          syntax: '.\\publish_release.ps1',
+          params: 'Defaults to -Bump patch and filters out bare version-bump commits from git log <lastTag>..HEAD.',
+          prereqs: 'Standard release prerequisites and clean commit subjects.',
+          output: 'Falls back to "- Maintenance and stability improvements." if no feature commits exist.',
+          errors: 'Preview auto-generated notes first with .\\publish_release.ps1 -DryRun.',
+          source: 'publish_release.ps1:284–298'
+        },
+        {
+          id: 'c4', title: 'Minor or Major Feature Release', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: 'Publishes a new minor/major Latest release to all installed devices.',
+          desc: 'Increments minor (X.Y+1.0) or major (X+1.0.0) version name while preserving monotonic +N build numbers.',
+          code: `.\\publish_release.ps1 -Bump minor -Notes "### New Features\`n- Added workflow improvements"`,
+          syntax: '.\\publish_release.ps1 -Bump <patch|minor|major|build> -Notes <Markdown>',
+          params: 'Valid -Bump values: patch, minor, major, build (increments +N only).',
+          prereqs: 'Standard release prerequisites.',
+          output: 'Example: 1.6.0+1 with tag history +5 resolves to 1.7.0+6 (v1.7.0+6).',
+          errors: 'ValidateSet rejects unsupported bump names.',
+          source: 'publish_release.ps1:4–5, 256–262'
+        },
+        {
+          id: 'c5', title: 'Explicit Version with Markdown File', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: 'Publishes tag and Latest GitHub Release.',
+          desc: 'Sets an explicit semver (auto-assigning monotonic +N when omitted) and reads multi-line Markdown notes from disk.',
+          code: `.\\publish_release.ps1 -Version 1.6.5 -NotesFile .\\notes.md`,
+          syntax: '.\\publish_release.ps1 -Version <X.Y.Z[+N]> -NotesFile <path>',
+          params: '-NotesFile takes priority over -Notes and git log; leading "v" in -Version is stripped automatically.',
+          prereqs: 'Readable UTF-8 Markdown file; explicit +N must exceed highestKnownCode.',
+          output: 'Markdown headings, lists, quotes, and inline code render in AppUpdater._MarkdownNotes.',
+          errors: 'Throws if NotesFile does not exist or +N is <= highestKnownCode.',
+          source: 'publish_release.ps1:244–282'
+        },
+        {
+          id: 'c6', title: 'Publish Release Without Phone Connected', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: 'Publishes live release without running local ADB smoke install.',
+          desc: 'Runs build, Git push, GitHub Release, and Frxnance verify while skipping ADB device checks and installation.',
+          code: `.\\publish_release.ps1 -SkipInstall -Notes "Hotfix release"`,
+          syntax: '.\\publish_release.ps1 -SkipInstall [-Notes <Markdown>]',
+          params: '-SkipInstall skips both pre-flight adb devices validation and Stage 6 adb install -r.',
+          prereqs: 'Keystore, local configs, GitHub token, and Frxnance sibling repo.',
+          output: 'Publishes release and logs "ADB target: skipped (-SkipInstall)".',
+          errors: 'Verify the live update manually on an Android 15+ device afterwards.',
+          source: 'publish_release.ps1:165, 434'
+        },
+        {
+          id: 'c7', title: 'Local Signed Build & Phone Install Only', cat: 'orchestrator', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Builds signed release APK and installs on phone without pushing to Git, creating a GitHub Release, or syncing Frxnance.',
+          code: `.\\publish_release.ps1 -SkipGitPush -SkipGitHubRelease -SkipSync`,
+          syntax: '.\\publish_release.ps1 -SkipGitPush -SkipGitHubRelease -SkipSync',
+          params: 'Combines skip switches for private local testing of release binaries.',
+          prereqs: 'Local signing config, Geoapify/Update JSONs, and connected USB phone.',
+          output: 'Signed app-release.apk installed locally; pubspec.yaml bumped locally.',
+          errors: 'Revert pubspec.yaml if you decide not to publish the local test build.',
+          source: 'publish_release.ps1:354, 368, 443'
+        },
+        {
+          id: 'c8', title: 'Manual Signed Release APK Build', cat: 'build', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Exact Flutter build command used in Stage 3 with release signing environment variables and Dart define files.',
+          code: `$env:FREKIHUB_KEYSTORE_PATH     = "$HOME\\frekihub-release.jks"
+$env:FREKIHUB_KEYSTORE_PASSWORD = '<KEYSTORE_PASSWORD>'
+$env:FREKIHUB_KEY_ALIAS         = 'frekihub'
+$env:FREKIHUB_KEY_PASSWORD      = '<KEY_PASSWORD>'
+
+flutter build apk --release \`
+  --dart-define-from-file=config/geoapify.local.json \`
+  --dart-define-from-file=config/update.local.json`,
+          syntax: 'flutter build apk --release --dart-define-from-file=config/geoapify.local.json --dart-define-from-file=config/update.local.json',
+          params: 'FREKIHUB_KEYSTORE_* env vars configure android/app/build.gradle.kts release signingConfig.',
+          prereqs: 'Flutter SDK, JDK 17, valid keystore, and both Git-ignored local config JSONs.',
+          output: 'build\\app\\outputs\\flutter-apk\\app-release.apk.',
+          errors: 'Gradle verifyReleaseSigning fails if any signing env var is empty or keystore path is missing.',
+          source: 'publish_release.ps1:324–345 · build.gradle.kts:8–53'
+        },
+        {
+          id: 'c9', title: 'Local Release Config Template (Git-Ignored)', cat: 'build', kind: 'example', lang: 'json',
+          warning: 'Never commit config/release.local.json — copy from release.example.json.',
+          desc: 'JSON schema loaded by publish_release.ps1 to keep keystore credentials and default device ID outside Git.',
+          code: `{
+  "keystorePath": "~/frekihub-release.jks",
+  "keystorePassword": "CHANGE_ME",
+  "keyAlias": "frekihub",
+  "keyPassword": "CHANGE_ME",
+  "deviceId": "YOUR_ADB_DEVICE_ID",
+  "githubToken": ""
+}`,
+          syntax: 'Copy-Item config/release.example.json config/release.local.json',
+          params: 'keystorePath expands ~/ or $HOME; leave githubToken blank to use Git Credential Manager.',
+          prereqs: 'Confirm .gitignore excludes /config/release.local.json.',
+          output: 'Read automatically by publish_release.ps1 unless overridden by env vars or flags.',
+          errors: 'Placeholder "CHANGE_ME" values are explicitly rejected before building.',
+          source: 'config/release.example.json · .gitignore:62–63'
+        },
+        {
+          id: 'c10', title: 'Incremental Debug Install (Development)', cat: 'build', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Builds and installs a local debug APK incrementally onto a connected device without cleaning or publishing.',
+          code: `.\\android\\gradlew.bat -p android :app:installDebug`,
+          syntax: '.\\android\\gradlew.bat -p android ["-Pdart-defines=<b64,b64>"] :app:installDebug',
+          params: 'Pass base64-encoded -Pdart-defines for GEOAPIFY_API_KEY and UPDATE_URL when testing those features in debug.',
+          prereqs: 'Authorized Android 15+ (API 35+) device in adb devices.',
+          output: 'Installs debug APK while preserving debug app data.',
+          errors: 'Cannot replace a release-signed APK in place (signing certificates differ).',
+          source: 'docs/DEVELOPMENT.md:128–131'
+        },
+        {
+          id: 'c11', title: 'Native Kotlin Compile Check (No APK)', cat: 'build', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Compiles Android Kotlin classes without invoking Flutter APK packaging.',
+          code: `.\\android\\gradlew.bat -p android :app:compileDebugKotlin -x :app:compileFlutterBuildDebug --no-daemon '-Pkotlin.compiler.execution.strategy=in-process' --console=plain`,
+          syntax: 'gradlew.bat -p android :app:compileDebugKotlin -x :app:compileFlutterBuildDebug',
+          params: '-x excludes Flutter bundling for rapid Kotlin verification.',
+          prereqs: 'JDK 17 and completed flutter pub get.',
+          output: 'BUILD SUCCESSFUL confirming Kotlin syntax and Android API compatibility.',
+          errors: 'Set JAVA_HOME and JAVA_TOOL_OPTIONS unixdomain tmpdir if JVM loopback fails on Windows.',
+          source: 'docs/DEVELOPMENT.md:112–120'
+        },
+        {
+          id: 'c12', title: 'Isolated pubspec.yaml Commit, Tag & Push', cat: 'git', kind: 'executable', lang: 'bash',
+          warning: 'Remote Git Mutation: Pushes commit and tag to origin.',
+          desc: 'Git sequence used in Stage 4 to commit only pubspec.yaml while keeping unrelated local edits untouched.',
+          code: `git commit --only -m v1.6.1+6 -- pubspec.yaml
+git tag v1.6.1+6
+git push origin HEAD v1.6.1+6`,
+          syntax: 'git commit --only -m <tag> -- pubspec.yaml && git tag <tag> && git push origin HEAD <tag>',
+          params: '--only isolates pubspec.yaml even if other files are modified or staged.',
+          prereqs: 'Updated pubspec.yaml and HTTPS push access to origin.',
+          output: 'New release commit and vX.Y.Z+N tag pushed to FrekiJoms/FrekiHub.app.',
+          errors: 'Fails on tag collision or non-fast-forward branch.',
+          source: 'publish_release.ps1:354–366'
+        },
+        {
+          id: 'c13', title: 'Git Credential Manager Token Lookup', cat: 'git', kind: 'example', lang: 'powershell',
+          warning: 'Never echo or save the returned credential token to logs or tracked files.',
+          desc: 'Internal fallback in Get-GitHubAuthToken that reuses your existing github.com HTTPS login.',
+          code: `"protocol=https\`nhost=github.com\`n\`n" | git credential fill`,
+          syntax: 'Get-GitHubAuthToken (internal helper)',
+          params: 'Extracts password=<token> in memory for GitHub API Bearer headers.',
+          prereqs: 'Signed in via Windows Git Credential Manager.',
+          output: 'Provides valid GitHub OAuth/PAT token without installing gh CLI.',
+          errors: 'Falls back to clear error message instructing GITHUB_TOKEN or release.local.json if empty.',
+          source: 'publish_release.ps1:72–81'
+        },
+        {
+          id: 'c14', title: 'Atomic GitHub Release REST Sequence', cat: 'git', kind: 'example', lang: 'http',
+          warning: 'Final PATCH immediately exposes the release on /releases/latest.',
+          desc: 'Three-step GitHub API flow ensuring /releases/latest always has app-release.apk attached before going live.',
+          code: `# 1. Create hidden draft
+POST https://api.github.com/repos/FrekiJoms/FrekiHub.app/releases
+{"tag_name":"v1.6.1+6","name":"FrekiHub 1.6.1","body":"...","draft":true,"prerelease":false}
+
+# 2. Stream release APK
+POST https://uploads.github.com/repos/FrekiJoms/FrekiHub.app/releases/{id}/assets?name=app-release.apk
+
+# 3. Publish as Latest
+PATCH https://api.github.com/repos/FrekiJoms/FrekiHub.app/releases/{id}
+{"draft":false,"prerelease":false,"make_latest":"true"}`,
+          syntax: 'Invoke-GitHubJson + Invoke-RestMethod -InFile $ApkPath',
+          params: 'Asset name must end in .apk and exclude "debug" for release updater selection.',
+          prereqs: 'GitHub token with Releases write access and built app-release.apk.',
+          output: 'Published release HTML URL; /releases/latest returns valid update payload.',
+          errors: 'Interrupted uploads stay hidden as Draft and clean up safely on retry.',
+          source: 'publish_release.ps1:372–431 · lib/app_update.dart:56–99'
+        },
+        {
+          id: 'c15', title: 'ADB Device Check & In-Place APK Upgrade', cat: 'adb', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Confirms connected phone serial and upgrades FrekiHub in place keeping all local records.',
+          code: `$adb = "$env:LOCALAPPDATA\\Android\\Sdk\\platform-tools\\adb.exe"
+& $adb devices
+& $adb -s <DEVICE_ID> install -r build\\app\\outputs\\flutter-apk\\app-release.apk`,
+          syntax: 'adb.exe -s <DEVICE_ID> install -r build\\app\\outputs\\flutter-apk\\app-release.apk',
+          params: '-s targets exact device; -r preserves local SQLite data and preferences.',
+          prereqs: 'Android SDK platform-tools, USB debugging authorized, matching keystore signature.',
+          output: '"Performing Streamed Install" -> "Success".',
+          errors: 'INSTALL_FAILED_UPDATE_INCOMPATIBLE indicates signature mismatch; VERSION_DOWNGRADE indicates low +N.',
+          source: 'publish_release.ps1:166–188, 434–440'
+        },
+        {
+          id: 'c16', title: 'Live FrekiHub Android Logcat Capture', cat: 'adb', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Streams Flutter and AndroidRuntime logs for only the running FrekiHub PID into .tmp/logs without rebuilding.',
+          code: `.\\tools\\debug-logs.ps1`,
+          syntax: '.\\tools\\debug-logs.ps1 [-DeviceId <serial>]',
+          params: 'Optional -DeviceId when multiple devices are connected.',
+          prereqs: 'FrekiHub open on the connected phone.',
+          output: 'Live log stream + saved .tmp/logs/freki-YYYYMMDD-HHmmss.txt.',
+          errors: 'Throws if app is closed; restart capture after process restart.',
+          source: 'tools/debug-logs.ps1:1–29'
+        },
+        {
+          id: 'c17', title: 'Frxnance Companion Sync & Verify', cat: 'sync', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Syncs shared Finance/UI/updater modules into sibling Frekihub - Frxnance.app and runs flutter analyze + flutter test.',
+          code: `& "..\\Frekihub - Frxnance.app\\sync_from_frekihub.ps1" -Verify`,
+          syntax: 'sync_from_frekihub.ps1 [-Source <path>] [-Verify]',
+          params: '-Verify executes analyzer and full test suite in Frxnance after copying/transforming shared files.',
+          prereqs: 'Sibling ..\\Frekihub - Frxnance.app folder and Flutter SDK.',
+          output: 'Synced file list, manual-merge warnings if applicable, 0 analyzer issues, passing tests.',
+          errors: 'Throws if saveWithLocation anchor in budget.dart changed or Frxnance tests fail.',
+          source: '../Frekihub - Frxnance.app/sync_from_frekihub.ps1'
+        },
+        {
+          id: 'c18', title: 'Pre-Release Static Analysis & Tests', cat: 'sync', kind: 'executable', lang: 'powershell',
+          warning: null,
+          desc: 'Standard quality gate recommended before cutting any release.',
+          code: `flutter analyze
+flutter test
+git diff --check`,
+          syntax: 'flutter analyze && flutter test && git diff --check',
+          params: 'Pass specific test paths (e.g. test/app_update_test.dart) for targeted runs.',
+          prereqs: 'Run in FrekiHub.app project root.',
+          output: 'No issues found!, all checks passed, clean whitespace check.',
+          errors: 'Resolve analyzer diagnostics or test regressions prior to publishing.',
+          source: 'docs/DEVELOPMENT.md:32–37'
+        }
+      ];
+
+      const FLAGS = [
+        { name: '-Version', meta: 'string', stages: [2, 4, 5], desc: 'Explicit X.Y.Z or X.Y.Z+N version (auto-assigns monotonic +N if omitted).' },
+        { name: '-Bump', meta: 'patch|minor|major|build', stages: [2], desc: 'Semver increment strategy when -Version is omitted (default: patch).' },
+        { name: '-Notes', meta: 'string', stages: [2, 5, 8], desc: 'Inline Markdown release notes shown in GitHub Release and Update drawer.' },
+        { name: '-NotesFile', meta: 'path', stages: [2, 5, 8], desc: 'Reads Markdown changelog from file (overrides -Notes and git log).' },
+        { name: '-DeviceId', meta: 'string', stages: [1, 6], desc: 'Overrides default ADB serial from config/release.local.json.' },
+        { name: '-GitHubToken', meta: 'string', stages: [1, 2, 5], desc: 'Top-priority GitHub Bearer token override.' },
+        { name: '-DryRun', meta: 'switch', stages: [1, 2, 3, 4, 5, 6, 7], desc: 'Previews version/notes and exits cleanly without mutating files or publishing.' },
+        { name: '-SkipInstall', meta: 'switch', stages: [1, 6], desc: 'Skips ADB device verification and Stage 6 adb install -r.' },
+        { name: '-SkipSync', meta: 'switch', stages: [1, 7], desc: 'Skips companion Frekihub - Frxnance.app sync and verification.' },
+        { name: '-SkipGitHubRelease', meta: 'switch', stages: [1, 5, 8], desc: 'Skips GitHub token check and Stage 5 release API calls.' },
+        { name: '-SkipGitPush', meta: 'switch', stages: [4], desc: 'Skips isolated pubspec.yaml commit, tag, and push to origin.' },
+        { name: '-ForceVersion', meta: 'switch', stages: [2], desc: 'Overrides monotonic +N and local-tag collision guards (use with caution).' }
+      ];
+
+      const SCENARIOS = {
+        happy: { outcomes: ['completed','completed','completed','completed','completed','completed','completed','completed'], failIndex: -1 },
+        dryrun: { outcomes: ['completed','completed','skipped','skipped','skipped','skipped','skipped','skipped'], failIndex: -1 },
+        'fail-adb': { outcomes: ['failed','blocked','blocked','blocked','blocked','blocked','blocked','blocked'], failIndex: 0 },
+        'fail-version': { outcomes: ['completed','failed','blocked','blocked','blocked','blocked','blocked','blocked'], failIndex: 1 },
+        'fail-signing': { outcomes: ['completed','completed','failed','blocked','blocked','blocked','blocked','blocked'], failIndex: 2 },
+        'fail-upload': { outcomes: ['completed','completed','completed','completed','failed','blocked','blocked','blocked'], failIndex: 4 },
+        'fail-frxnance': { outcomes: ['completed','completed','completed','completed','completed','completed','failed','blocked'], failIndex: 6 }
+      };
+
+      const state = {
+        view: 'pipeline',
+        scenario: 'happy',
+        selectedStage: 0,
+        activeStage: 0,
+        speed: 1,
+        reducedMotion: window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+        isPlaying: false,
+        search: '',
+        cat: 'all',
+        kind: 'all',
+        expanded: new Set(),
+        activeFlag: null,
+        windows: [],
+        conns: []
+      };
+
+      let tl = null;
+      let toastTimer = null;
+
+      function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      }
+
+      function highlight(code, lang) {
+        if (window.Prism && window.Prism.languages[lang]) {
+          try { return window.Prism.highlight(code, window.Prism.languages[lang], lang); } catch (_) {}
+        }
+        return esc(code)
+          .replace(/(^|\n)(#[^\n]*|\/\/[^\n]*)/g, '$1<span class="token comment">$2</span>')
+          .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, '<span class="token string">$1</span>')
+          .replace(/(\$[A-Za-z_][A-Za-z0-9_:]*)/g, '<span class="token variable">$1</span>')
+          .replace(/\b(flutter|git|POST|PATCH|GET|true|false)\b/g, '<span class="token keyword">$1</span>')
+          .replace(/(\s)(-[A-Za-z][A-Za-z0-9-]*)/g, '$1<span class="token function">$2</span>');
+      }
+
+      function icons() {
+        if (window.lucide && typeof window.lucide.createIcons === 'function') {
+          window.lucide.createIcons();
+        } else {
+          const map = { play:'▶', pause:'❚❚', 'skip-back':'⏮', 'skip-forward':'⏭', 'rotate-ccw':'↺', copy:'⧉', check:'✓', 'check-circle-2':'✓', search:'⌕', workflow:'◈', sparkles:'✦', 'alert-triangle':'⚠', 'shield-check':'✓', lock:'⚿', 'key-round':'⚷', x:'×', 'arrow-left':'←', 'arrow-right':'→', 'chevron-down':'▾' };
+          document.querySelectorAll('i[data-lucide]').forEach((el) => {
+            if (!el.innerHTML) { el.textContent = map[el.getAttribute('data-lucide')] || '•'; el.style.fontStyle = 'normal'; }
+          });
+        }
+      }
+
+      function toast(msg) {
+        const el = document.getElementById('toast');
+        document.getElementById('toastText').textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2000);
+      }
+
+      async function copyText(text, btn) {
+        let ok = false;
+        if (navigator.clipboard && window.isSecureContext) {
+          try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
+        }
+        if (!ok) {
+          try {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:-9999px;';
+            document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); document.body.removeChild(ta);
+          } catch (_) {}
+        }
+        toast(ok ? 'Copied command to clipboard' : 'Select text to copy');
+        if (ok && btn) {
+          const orig = btn.dataset.orig || btn.innerHTML;
+          btn.dataset.orig = orig;
+          btn.classList.add('copied');
+          btn.innerHTML = '<i data-lucide="check" class="icon-sm"></i><span>Copied</span>';
+          icons();
+          clearTimeout(btn._t);
+          btn._t = setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; icons(); }, 1500);
+        }
+      }
+
+      /* Built-in RAF fallback timeline when offline */
+      function createFallbackTl(dur, onUpdate, onComplete) {
+        let cur = 0, paused = true, rate = 1, raf = null, last = null, dest = null;
+        function tick(ts) {
+          if (last === null) last = ts;
+          const dt = Math.min((ts - last) / 1000, 0.1) * rate;
+          last = ts;
+          if (dest !== null) {
+            const diff = dest - cur;
+            cur += Math.sign(diff) * Math.min(Math.abs(diff), dt * 3);
+            onUpdate();
+            if (Math.abs(dest - cur) < 0.004) { cur = dest; dest = null; paused = true; onUpdate(); raf = null; return; }
+            raf = requestAnimationFrame(tick); return;
+          }
+          if (!paused) {
+            cur = Math.min(dur, cur + dt);
+            onUpdate();
+            if (cur >= dur) { paused = true; raf = null; if (onComplete) onComplete(); return; }
+            raf = requestAnimationFrame(tick);
+          } else raf = null;
+        }
+        const go = () => { last = null; if (!raf) raf = requestAnimationFrame(tick); };
+        return {
+          duration: () => dur,
+          time(v) { if (!arguments.length) return cur; cur = Math.max(0, Math.min(dur, v)); onUpdate(); return this; },
+          timeScale(s) { rate = s; return this; },
+          play() { dest = null; paused = false; go(); return this; },
+          pause() { dest = null; paused = true; if (raf) { cancelAnimationFrame(raf); raf = null; } return this; },
+          tweenTo(t) { if (state.reducedMotion) return this.time(t); paused = true; dest = Math.max(0, Math.min(dur, t)); go(); return this; },
+          kill() { this.pause(); }
+        };
+      }
+
+      function renderPipeline() {
+        const grid = document.getElementById('pipelineGrid');
+        grid.innerHTML = STAGES.map((st, i) => `
+          <button type="button" class="stage-node ${i === state.selectedStage ? 'is-selected' : ''}" data-idx="${i}" data-status="pending" role="listitem">
+            <div class="stage-row-top">
+              <span class="stage-step-id"><span class="step-circle">${st.num}</span>Stage ${st.num}</span>
+              <span class="status-pill pending" data-pill><span class="status-dot"></span><span data-ptxt>Pending</span></span>
+            </div>
+            <h3 class="stage-name">${esc(st.shortName)}</h3>
+            <div class="stage-artifact">${esc(st.artifact)}</div>
+            <div class="stage-bar"><div class="stage-bar-fill" data-fill></div></div>
+          </button>
+        `).join('');
+
+        grid.querySelectorAll('.stage-node').forEach((btn) => {
+          btn.addEventListener('click', () => selectStage(Number(btn.dataset.idx), true));
+        });
+      }
+
+      function layoutConnectors() {
+        const canvas = document.getElementById('pipelineCanvas');
+        const svg = document.getElementById('pipelineSvg');
+        const nodes = Array.from(document.querySelectorAll('.stage-node'));
+        if (!canvas || !svg || nodes.length < 2 || canvas.offsetWidth === 0) return;
+
+        const cr = canvas.getBoundingClientRect();
+        svg.setAttribute('viewBox', `0 0 ${cr.width} ${cr.height}`);
+        svg.innerHTML = '';
+        state.conns = [];
+
+        for (let i = 0; i < nodes.length - 1; i++) {
+          const a = nodes[i].getBoundingClientRect(), b = nodes[i + 1].getBoundingClientRect();
+          const ax = a.left - cr.left, ay = a.top - cr.top, bx = b.left - cr.left, by = b.top - cr.top;
+          let d = '';
+          if (Math.abs(ay - by) < 24) {
+            d = `M ${ax + a.width} ${ay + a.height / 2} L ${bx} ${by + b.height / 2}`;
+          } else if (Math.abs(ax - bx) < 24) {
+            d = `M ${ax + a.width / 2} ${ay + a.height} L ${bx + b.width / 2} ${by}`;
+          } else {
+            const x1 = ax + a.width / 2, y1 = ay + a.height, x2 = bx + b.width / 2, y2 = by;
+            const my = y1 + (y2 - y1) / 2, r = Math.min(10, Math.abs(my - y1)), dir = x2 < x1 ? -1 : 1;
+            d = `M ${x1} ${y1} L ${x1} ${my - r} Q ${x1} ${my} ${x1 + dir * r} ${my} L ${x2 - dir * r} ${my} Q ${x2} ${my} ${x2} ${my + r} L ${x2} ${y2}`;
+          }
+          const ns = 'http://www.w3.org/2000/svg';
+          const tr = document.createElementNS(ns, 'path'); tr.setAttribute('d', d); tr.setAttribute('class', 'conn-track');
+          const pr = document.createElementNS(ns, 'path'); pr.setAttribute('d', d); pr.setAttribute('class', 'conn-progress');
+          const dt = document.createElementNS(ns, 'circle'); dt.setAttribute('r', '3.5'); dt.setAttribute('class', 'conn-packet');
+          svg.append(tr, pr, dt);
+          const len = Math.max(1, pr.getTotalLength());
+          pr.style.strokeDasharray = `${len}`; pr.style.strokeDashoffset = `${len}`;
+          state.conns.push({ pr, dt, len });
+        }
+        if (tl) sync(tl.time());
+      }
+
+      function buildTimeline() {
+        if (tl) tl.kill();
+        const plan = SCENARIOS[state.scenario];
+        const stopAt = plan.failIndex >= 0 ? plan.failIndex : STAGES.length - 1;
+        state.windows = [];
+        let cur = 0;
+        for (let i = 0; i < STAGES.length; i++) {
+          const out = plan.outcomes[i];
+          if (i > stopAt) { state.windows.push({ start: cur, settle: cur, end: cur, out: 'blocked', dead: true }); continue; }
+          const d = out === 'skipped' ? 0.3 : 1.0;
+          const cd = (i < stopAt && out !== 'failed') ? 0.42 : 0;
+          state.windows.push({ start: cur, settle: cur + d, end: cur + d + cd, out, dead: false });
+          cur += d + cd;
+        }
+        const total = Math.max(0.5, cur);
+        const hasGsap = typeof window.gsap !== 'undefined';
+        document.getElementById('engineBadge').textContent = hasGsap ? 'GSAP 3' : 'Built-in RAF';
+
+        if (hasGsap) {
+          tl = window.gsap.timeline({
+            paused: true,
+            onUpdate: () => sync(tl.time()),
+            onComplete: () => { state.isPlaying = false; updatePlayBtn(); }
+          });
+          tl.to({ t: 0 }, { t: total, duration: total, ease: 'none' }, 0);
+        } else {
+          tl = createFallbackTl(total, () => sync(tl.time()), () => { state.isPlaying = false; updatePlayBtn(); });
+        }
+        tl.timeScale(state.speed);
+        state.isPlaying = false;
+        state.selectedStage = 0;
+        state.activeStage = 0;
+        updatePlayBtn();
+        sync(0);
+      }
+
+      function sync(t) {
+        if (!tl) return;
+        const plan = SCENARIOS[state.scenario];
+        const total = tl.duration();
+        const nodes = document.querySelectorAll('.stage-node');
+        let latest = 0, running = -1, done = 0;
+
+        for (let i = 0; i < STAGES.length; i++) {
+          const w = state.windows[i], n = nodes[i];
+          if (!n) continue;
+          let st = 'pending', pct = 0;
+          if (t <= 0.0001) { st = 'pending'; pct = 0; }
+          else if (w.dead) { st = t >= state.windows[plan.failIndex].settle ? 'blocked' : 'pending'; }
+          else if (t < w.start) { st = 'pending'; }
+          else if (t < w.settle - 0.0001) {
+            st = w.out === 'skipped' ? 'skipped' : 'running';
+            pct = ((t - w.start) / Math.max(0.001, w.settle - w.start)) * 100;
+            running = i; latest = i;
+          } else { st = w.out; pct = 100; latest = i; done++; }
+
+          n.dataset.status = st;
+          const pill = n.querySelector('[data-pill]'), ptxt = n.querySelector('[data-ptxt]'), fill = n.querySelector('[data-fill]');
+          pill.className = `status-pill ${st}`;
+          ptxt.textContent = st === 'running' ? 'Executing' : st;
+          fill.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+
+          const c = state.conns[i];
+          if (c) {
+            if (w.dead || w.out === 'failed' || w.end <= w.settle || t <= w.settle) {
+              c.pr.style.strokeDashoffset = `${c.len}`;
+              c.pr.setAttribute('class', 'conn-progress');
+              c.dt.style.opacity = '0';
+            } else if (t < w.end) {
+              const p = (t - w.settle) / Math.max(0.001, w.end - w.settle);
+              c.pr.style.strokeDashoffset = `${c.len * (1 - p)}`;
+              c.pr.setAttribute('class', `conn-progress ${w.out === 'skipped' ? 'is-skipped' : ''}`);
+              if (!state.reducedMotion && w.out !== 'skipped') {
+                const pt = c.pr.getPointAtLength(p * c.len);
+                c.dt.setAttribute('cx', pt.x); c.dt.setAttribute('cy', pt.y); c.dt.style.opacity = '1';
+              } else c.dt.style.opacity = '0';
+            } else {
+              c.pr.style.strokeDashoffset = '0';
+              c.pr.setAttribute('class', `conn-progress ${w.out === 'skipped' ? 'is-skipped' : 'is-done'}`);
+              c.dt.style.opacity = '0';
+            }
+          }
+        }
+
+        const focus = running >= 0 ? running : latest;
+        if (t > 0.0001 && focus !== state.activeStage) {
+          state.activeStage = focus;
+          state.selectedStage = focus;
+          updateSelectedNode();
+          renderInspector(focus);
+        } else if (t <= 0.0001) {
+          state.activeStage = 0;
+          renderInspector(state.selectedStage);
+        } else {
+          const livePill = document.getElementById('inspStatus');
+          const selSt = nodes[state.selectedStage]?.dataset.status || 'pending';
+          if (livePill) {
+            livePill.className = `status-pill ${selSt}`;
+            livePill.innerHTML = `<span class="status-dot"></span><span>${selSt === 'running' ? 'Executing' : selSt}</span>`;
+          }
+        }
+
+        const range = document.getElementById('scrubberRange');
+        if (document.activeElement !== range) range.value = String(total > 0 ? Math.round((t / total) * 1000) : 0);
+        const lbl = document.getElementById('scrubberLabel');
+        const cnt = document.getElementById('scrubberCount');
+        if (t <= 0.0001) {
+          lbl.textContent = 'Ready — Press Play or click any stage';
+          cnt.textContent = `0 / ${STAGES.length}`;
+          if (!state.isPlaying) updatePlayBtn();
+        } else {
+          const st = STAGES[focus];
+          const curStatus = nodes[focus]?.dataset.status || 'pending';
+          lbl.textContent = `Stage ${st.num}: ${st.shortName} · ${curStatus === 'running' ? 'Executing' : curStatus}`;
+          cnt.textContent = `${Math.max(focus + 1, done)} / ${STAGES.length}`;
+        }
+        renderConsole(t);
+      }
+
+      function updateSelectedNode() {
+        document.querySelectorAll('.stage-node').forEach((n, i) => n.classList.toggle('is-selected', i === state.selectedStage));
+      }
+
+      function selectStage(idx, seek) {
+        state.selectedStage = idx;
+        updateSelectedNode();
+        renderInspector(idx);
+        if (seek && tl) {
+          tl.pause(); state.isPlaying = false; updatePlayBtn();
+          const w = state.windows[idx];
+          const target = w.dead ? state.windows[SCENARIOS[state.scenario].failIndex].settle : w.settle;
+          if (state.reducedMotion) tl.time(target); else tl.tweenTo(target, { duration: 0.42, ease: 'power2.inOut' });
+        }
+      }
+
+      function renderInspector(idx) {
+        const st = STAGES[idx];
+        const curStatus = document.querySelector(`.stage-node[data-idx="${idx}"]`)?.dataset.status || 'pending';
+        const kindTxt = st.kind === 'executable' ? 'Executable' : st.kind === 'runtime' ? 'Runtime Loop' : 'REST API';
+
+        document.getElementById('stageInspector').innerHTML = `
+          <div class="inspector-kicker">
+            <span class="kicker-left">Stage ${st.num} of ${STAGES.length} <span class="source-tag">${esc(st.source)}</span></span>
+            <span id="inspStatus" class="status-pill ${curStatus}"><span class="status-dot"></span><span>${curStatus === 'running' ? 'Executing' : curStatus}</span></span>
+          </div>
+          <h2>${esc(st.title)}</h2>
+          <p class="inspector-summary">${esc(st.description)}</p>
+          ${st.warning ? `<div class="caution-note"><i data-lucide="alert-triangle" class="icon-sm" style="margin-top:2px;"></i><span><strong>Caution:</strong> ${esc(st.warning)}</span></div>` : ''}
+          <div class="code-box">
+            <div class="code-head">
+              <span class="code-head-left">${st.lang.toUpperCase()} <span class="kind-pill ${st.kind}">${kindTxt}</span></span>
+              <button class="copy-btn" type="button" id="inspCopy"><i data-lucide="copy" class="icon-sm"></i><span>Copy</span></button>
+            </div>
+            <pre class="code-pre language-${st.lang}"><code class="language-${st.lang}">${highlight(st.command, st.lang)}</code></pre>
+          </div>
+          <div class="spec-list">
+            <div class="spec-row"><span class="spec-key">Inputs</span><span class="spec-val">${esc(st.inputs)}</span></div>
+            <div class="spec-row"><span class="spec-key">Outputs</span><span class="spec-val">${esc(st.outputs)}</span></div>
+            <div class="spec-row"><span class="spec-key">Dependencies</span><span class="spec-val"><span class="dep-list">${st.dependencies.map(d => `<span class="dep-tag">${esc(d)}</span>`).join('')}</span></span></div>
+            <div class="spec-row"><span class="spec-key ok">Success</span><span class="spec-val">${esc(st.success)}</span></div>
+            <div class="spec-row"><span class="spec-key err">Failure Guard</span><span class="spec-val">${esc(st.failure)}</span></div>
+          </div>
+          <div class="inspector-nav">
+            <button class="btn" type="button" id="inspPrev" ${idx === 0 ? 'disabled' : ''}><i data-lucide="arrow-left" class="icon-sm"></i>Previous Stage</button>
+            <button class="btn" type="button" id="inspNext" ${idx === STAGES.length - 1 ? 'disabled' : ''}>Next Stage<i data-lucide="arrow-right" class="icon-sm"></i></button>
+          </div>
+        `;
+        document.getElementById('inspCopy').addEventListener('click', (e) => copyText(st.command, e.currentTarget));
+        document.getElementById('inspPrev').addEventListener('click', () => selectStage(Math.max(0, idx - 1), true));
+        document.getElementById('inspNext').addEventListener('click', () => selectStage(Math.min(STAGES.length - 1, idx + 1), true));
+        icons();
+      }
+
+      function renderConsole(t) {
+        const body = document.getElementById('consoleBody');
+        const exitEl = document.getElementById('consoleExit');
+        const strip = document.getElementById('artifactStrip');
+        const lines = [];
+        const arts = [];
+        let overall = 'IDLE';
+
+        if (t <= 0.0001) {
+          lines.push({ t: 'dim', s: 'PS FrekiHub.app> # Press Play, Step Forward, or click any stage node' });
+          STAGES.slice(0, 6).forEach((s) => arts.push({ s: s.artifact, cls: '' }));
+        } else {
+          const cmd = state.scenario === 'dryrun' ? '.\\publish_release.ps1 -DryRun -Notes "Preview"' : '.\\publish_release.ps1 -Notes "- Improved update flow"';
+          lines.push({ t: 'dim', s: `PS FrekiHub.app> ${cmd}` });
+          overall = 'RUNNING';
+          for (let i = 0; i < STAGES.length; i++) {
+            const st = STAGES[i], w = state.windows[i];
+            if (w.dead || t < w.start) { arts.push({ s: st.artifact, cls: '' }); continue; }
+            if (w.out === 'skipped') {
+              arts.push({ s: `${st.shortName}: skipped`, cls: 'warn' });
+              if (i === 2 && t >= w.settle - 0.001) lines.push({ t: 'warn', s: 'DryRun active: Stages 3–8 skipped cleanly.' });
+              continue;
+            }
+            const logs = st.logs[state.scenario] || st.logs.happy || [];
+            const ratio = Math.max(0, Math.min(1, (t - w.start) / Math.max(0.001, w.settle - w.start)));
+            const count = Math.max(1, Math.ceil(ratio * logs.length));
+            for (let k = 0; k < count; k++) lines.push(logs[k]);
+            if (t >= w.settle - 0.001) {
+              if (w.out === 'failed') { arts.push({ s: `${st.shortName}: FAILED`, cls: 'err' }); overall = 'EXIT 1'; }
+              else arts.push({ s: st.artifact, cls: 'ok' });
+            } else arts.push({ s: `${st.shortName}...`, cls: 'warn' });
+          }
+          if (overall === 'RUNNING' && t >= tl.duration() - 0.005) overall = 'EXIT 0';
+        }
+
+        body.innerHTML = lines.map(l => `<div class="log-line ${l.t}">${esc(l.s)}</div>`).join('');
+        body.scrollTop = body.scrollHeight;
+        strip.innerHTML = arts.map(a => `<span class="art-chip ${a.cls}">${esc(a.s)}</span>`).join('');
+        exitEl.textContent = overall;
+        exitEl.className = `exit-pill ${overall === 'EXIT 0' ? 'ok' : overall === 'EXIT 1' ? 'err' : overall === 'RUNNING' ? 'run' : ''}`;
+      }
+
+      function updatePlayBtn() {
+        const btn = document.getElementById('playPauseBtn');
+        const atEnd = tl && tl.time() >= tl.duration() - 0.01;
+        if (state.isPlaying) {
+          btn.innerHTML = '<i data-lucide="pause" class="icon-sm"></i><span id="playPauseLabel">Pause</span>';
+        } else {
+          const txt = tl && tl.time() > 0.01 && !atEnd ? 'Resume' : 'Play';
+          btn.innerHTML = `<i data-lucide="play" class="icon-sm"></i><span id="playPauseLabel">${txt}</span>`;
+        }
+        icons();
+      }
+
+      function togglePlay() {
+        if (!tl) return;
+        if (state.isPlaying) { tl.pause(); state.isPlaying = false; }
+        else { if (tl.time() >= tl.duration() - 0.01) tl.time(0); tl.timeScale(state.speed); tl.play(); state.isPlaying = true; }
+        updatePlayBtn();
+      }
+
+      function stepForward() {
+        if (!tl) return;
+        tl.pause(); state.isPlaying = false; updatePlayBtn();
+        const stops = state.windows.filter(w => !w.dead).map(w => w.settle);
+        const next = stops.find(s => s > tl.time() + 0.03);
+        if (next !== undefined) {
+          const idx = state.windows.findIndex(w => Math.abs(w.settle - next) < 0.001);
+          if (idx >= 0) state.selectedStage = idx;
+          if (state.reducedMotion) tl.time(next); else tl.tweenTo(next, { duration: 0.45, ease: 'power2.inOut' });
+        }
+      }
+
+      function stepBackward() {
+        if (!tl) return;
+        tl.pause(); state.isPlaying = false; updatePlayBtn();
+        const stops = [0, ...state.windows.filter(w => !w.dead).map(w => w.settle)];
+        const prevs = stops.filter(s => s < tl.time() - 0.03);
+        const prev = prevs.length ? prevs[prevs.length - 1] : 0;
+        const idx = state.windows.findIndex(w => Math.abs(w.settle - prev) < 0.001);
+        state.selectedStage = idx >= 0 ? idx : 0;
+        if (state.reducedMotion) tl.time(prev); else tl.tweenTo(prev, { duration: 0.42, ease: 'power2.inOut' });
+      }
+
+      function restart() {
+        if (!tl) return;
+        tl.pause(); state.isPlaying = false; state.selectedStage = 0;
+        if (state.reducedMotion) {
+          tl.time(0);
+          updatePlayBtn();
+        } else {
+          tl.tweenTo(0, { duration: 0.48, ease: 'power2.inOut', onComplete: updatePlayBtn });
+          updatePlayBtn();
+        }
+      }
+
+      function renderCommands() {
+        const q = state.search.trim().toLowerCase();
+        const list = COMMANDS.filter((c) => {
+          if (state.cat !== 'all' && c.cat !== state.cat) return false;
+          if (state.kind === 'executable' && c.kind !== 'executable') return false;
+          if (state.kind === 'example' && c.kind !== 'example') return false;
+          if (state.kind === 'warning' && !c.warning) return false;
+          if (!q) return true;
+          return [c.title, c.desc, c.code, c.syntax, c.params, c.prereqs, c.output, c.errors, c.source, c.warning || ''].join(' ').toLowerCase().includes(q);
+        });
+
+        document.getElementById('explorerCount').textContent = `${list.length} of ${COMMANDS.length}`;
+        const host = document.getElementById('cmdRows');
+        if (!list.length) {
+          host.innerHTML = `<div class="empty-msg"><p style="margin:0 0 8px; font-weight:600; color:var(--ink);">No matching commands</p><button class="btn" type="button" id="resetCmds">Reset Filters</button></div>`;
+          document.getElementById('resetCmds').addEventListener('click', () => {
+            state.search = ''; state.cat = 'all'; state.kind = 'all';
+            document.getElementById('cmdSearch').value = '';
+            updateCmdFilterUI(); renderCommands();
+          });
+          return;
+        }
+
+        host.innerHTML = list.map((c) => {
+          const open = state.expanded.has(c.id);
+          return `
+            <article class="cmd-row">
+              <div class="cmd-row-head">
+                <div class="cmd-row-title-wrap">
+                  <h3 class="cmd-row-title">${esc(c.title)}</h3>
+                  <span class="kind-pill ${c.kind}">${c.kind === 'executable' ? 'Executable' : 'Example'}</span>
+                  ${c.warning ? `<span class="kind-pill caution" title="${esc(c.warning)}">Caution</span>` : ''}
+                </div>
+                <div class="cmd-row-actions">
+                  <span class="source-tag">${esc(c.source)}</span>
+                  <button class="btn" type="button" data-toggle="${c.id}" aria-expanded="${open}">
+                    <span>Details</span>
+                    <i data-lucide="chevron-down" class="icon-sm" style="transform:${open ? 'rotate(180deg)' : 'none'}; transition:transform 160ms;"></i>
+                  </button>
+                </div>
+              </div>
+              <p class="cmd-row-desc">${esc(c.desc)}</p>
+              <div class="code-box">
+                <div class="code-head">
+                  <span class="code-head-left">${c.lang.toUpperCase()}</span>
+                  <button class="copy-btn" type="button" data-copy="${c.id}"><i data-lucide="copy" class="icon-sm"></i><span>Copy</span></button>
+                </div>
+                <pre class="code-pre language-${c.lang}"><code class="language-${c.lang}">${highlight(c.code, c.lang)}</code></pre>
+              </div>
+              <div class="details-drawer ${open ? 'open' : ''}">
+                ${c.warning ? `<div class="caution-note" style="margin-bottom:8px;"><i data-lucide="alert-triangle" class="icon-sm" style="margin-top:2px;"></i><span>${esc(c.warning)}</span></div>` : ''}
+                <div class="spec-list">
+                  <div class="spec-row"><span class="spec-key">Syntax</span><span class="spec-val"><code>${esc(c.syntax)}</code></span></div>
+                  <div class="spec-row"><span class="spec-key">Parameters</span><span class="spec-val">${esc(c.params)}</span></div>
+                  <div class="spec-row"><span class="spec-key">Prerequisites</span><span class="spec-val">${esc(c.prereqs)}</span></div>
+                  <div class="spec-row"><span class="spec-key ok">Expected Output</span><span class="spec-val">${esc(c.output)}</span></div>
+                  <div class="spec-row"><span class="spec-key err">Error Handling</span><span class="spec-val">${esc(c.errors)}</span></div>
+                </div>
+              </div>
+            </article>
+          `;
+        }).join('');
+
+        host.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => {
+          const item = COMMANDS.find(x => x.id === b.dataset.copy);
+          if (item) copyText(item.code, b);
+        }));
+        host.querySelectorAll('[data-toggle]').forEach((b) => b.addEventListener('click', () => {
+          const id = b.dataset.toggle;
+          if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+          renderCommands();
+        }));
+        icons();
+      }
+
+      function updateCmdFilterUI() {
+        document.querySelectorAll('#catPills .pill-filter').forEach(p => p.classList.toggle('active', p.dataset.cat === state.cat));
+        document.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.kind === state.kind)));
+      }
+
+      function renderFlags() {
+        const body = document.getElementById('flagsBody');
+        body.innerHTML = FLAGS.map((f) => `
+          <tr data-flag="${f.name}" class="${state.activeFlag === f.name ? 'is-active' : ''}" tabindex="0">
+            <td><span class="flag-name">${esc(f.name)}</span></td>
+            <td><span style="font-family:var(--font-mono); font-size:11px; color:var(--ink-3);">${esc(f.meta)}</span></td>
+            <td>${f.stages.map(s => `<span class="stage-badge">S${s}</span>`).join('')}</td>
+            <td>${esc(f.desc)}</td>
+          </tr>
+        `).join('');
+        body.querySelectorAll('tr').forEach((r) => {
+          const hit = () => {
+            const name = r.dataset.flag;
+            state.activeFlag = state.activeFlag === name ? null : name;
+            applyFlagHit();
+            renderFlags();
+            if (state.activeFlag) {
+              switchView('pipeline');
+              toast(`Highlighted stages for ${state.activeFlag}`);
+            }
+          };
+          r.addEventListener('click', hit);
+          r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hit(); } });
+        });
+      }
+
+      function applyFlagHit() {
+        const f = FLAGS.find(x => x.name === state.activeFlag);
+        document.getElementById('clearFlagBtn').hidden = !f;
+        document.querySelectorAll('.stage-node').forEach((n, i) => n.classList.toggle('is-flag-hit', f ? f.stages.includes(i + 1) : false));
+      }
+
+      function switchView(view) {
+        state.view = view;
+        document.querySelectorAll('.seg-tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.view === view)));
+        document.querySelectorAll('.view-panel').forEach(p => p.classList.toggle('active', p.id === `view-${view}`));
+        if (view === 'pipeline') requestAnimationFrame(layoutConnectors);
+      }
+
+      function init() {
+        document.getElementById('tabCmdCount').textContent = String(COMMANDS.length);
+
+        document.querySelectorAll('.seg-tab').forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
+
+        const motionBtn = document.getElementById('motionToggleBtn');
+        const applyMotion = () => {
+          document.body.classList.toggle('reduced-motion', state.reducedMotion);
+          motionBtn.setAttribute('aria-pressed', String(state.reducedMotion));
+          motionBtn.querySelector('span').textContent = state.reducedMotion ? 'Reduced' : 'Motion';
+        };
+        applyMotion();
+        motionBtn.addEventListener('click', () => { state.reducedMotion = !state.reducedMotion; applyMotion(); toast(state.reducedMotion ? 'Reduced motion on' : 'Standard motion on'); });
+
+        document.getElementById('quickCopyBtn').addEventListener('click', (e) => copyText('.\\publish_release.ps1 -Notes "- Your release notes"', e.currentTarget));
+
+        document.getElementById('scenarioSelect').addEventListener('change', (e) => {
+          state.scenario = e.target.value;
+          buildTimeline();
+          renderInspector(0);
+        });
+
+        document.getElementById('clearFlagBtn').addEventListener('click', () => { state.activeFlag = null; applyFlagHit(); renderFlags(); });
+
+        document.getElementById('playPauseBtn').addEventListener('click', togglePlay);
+        document.getElementById('stepForwardBtn').addEventListener('click', stepForward);
+        document.getElementById('stepBackBtn').addEventListener('click', stepBackward);
+        document.getElementById('restartBtn').addEventListener('click', restart);
+
+        document.getElementById('scrubberRange').addEventListener('input', (e) => {
+          if (!tl) return;
+          tl.pause(); state.isPlaying = false; updatePlayBtn();
+          tl.time((Number(e.target.value) / 1000) * tl.duration());
+        });
+
+        document.querySelectorAll('.speed-btn').forEach((b) => b.addEventListener('click', () => {
+          state.speed = Number(b.dataset.speed);
+          document.querySelectorAll('.speed-btn').forEach(x => x.classList.toggle('active', x === b));
+          if (tl) tl.timeScale(state.speed);
+        }));
+
+        const searchEl = document.getElementById('cmdSearch');
+        searchEl.addEventListener('input', () => { state.search = searchEl.value; renderCommands(); });
+        document.querySelectorAll('#catPills .pill-filter').forEach(p => p.addEventListener('click', () => { state.cat = p.dataset.cat; updateCmdFilterUI(); renderCommands(); }));
+        document.querySelectorAll('[data-kind]').forEach(b => b.addEventListener('click', () => { state.kind = b.dataset.kind; updateCmdFilterUI(); renderCommands(); }));
+        document.getElementById('expandAllBtn').addEventListener('click', () => { COMMANDS.forEach(c => state.expanded.add(c.id)); renderCommands(); });
+        document.getElementById('collapseAllBtn').addEventListener('click', () => { state.expanded.clear(); renderCommands(); });
+
+        document.addEventListener('keydown', (e) => {
+          const tag = document.activeElement?.tagName || '';
+          const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+          if (e.key === '/' && !typing) { e.preventDefault(); switchView('commands'); searchEl.focus(); return; }
+          if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; state.search = ''; searchEl.blur(); renderCommands(); return; }
+          if (typing || state.view !== 'pipeline') return;
+          if (e.code === 'Space') { e.preventDefault(); togglePlay(); }
+          else if (e.key === 'ArrowRight') { e.preventDefault(); stepForward(); }
+          else if (e.key === 'ArrowLeft') { e.preventDefault(); stepBackward(); }
+          else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); restart(); }
+        });
+
+        renderPipeline();
+        renderInspector(0);
+        renderCommands();
+        renderFlags();
+        buildTimeline();
+        requestAnimationFrame(() => {
+          layoutConnectors();
+          if (typeof ResizeObserver !== 'undefined') new ResizeObserver(layoutConnectors).observe(document.getElementById('pipelineCanvas'));
+          else window.addEventListener('resize', layoutConnectors);
+        });
+        icons();
+      }
+
+      window.addEventListener('DOMContentLoaded', init);
+    })();
+  </script>
+</body>
+</html>
