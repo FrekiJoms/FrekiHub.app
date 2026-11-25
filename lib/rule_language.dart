@@ -50,6 +50,12 @@ abstract final class RuleCatalog {
             'map.current_location_sample_epoch',
             'map.current_location_accuracy',
           ].contains(field));
+  static String fieldType(String field) {
+    if (booleanFields.contains(field)) return 'bool';
+    if (numericField(field)) return 'number';
+    return 'string';
+  }
+
   static const targets = [
     'session_page',
     'sessions_page',
@@ -178,6 +184,9 @@ abstract final class RuleCatalog {
       'session.active': current != null,
       'session.kind': current?.kind ?? '',
       'session.count': data.sessions.length,
+      'session.duration_seconds': current == null
+          ? 0
+          : math.max(0, (now.millisecondsSinceEpoch - current.started) ~/ 1000),
       'session.note': current?.note ?? '',
       'session.today_seconds': data.sessions
           .where((s) => s.day == dayKey(now))
@@ -288,11 +297,37 @@ abstract final class RuleCatalog {
 /// A bounded, declarative language. Source is parsed into data, never evaluated as JavaScript.
 class RuleCompiler {
   static final _cache = <String, Map<String, dynamic>>{};
+  static final _stripCommentsAndStrings = RegExp(
+    r'//[^\n]*|"(?:\\.|[^"\\\r\n])*"|"(?:\\.|[^"\\])*',
+  );
+  static final _locationPredicate = RegExp(r'\blocation\.(?:inside|outside)\b');
+
+  static dynamic _freeze(dynamic value) {
+    if (value is Map) {
+      return Map<String, dynamic>.unmodifiable({
+        for (final entry in value.entries)
+          entry.key.toString(): _freeze(entry.value),
+      });
+    }
+    if (value is List) {
+      return List<dynamic>.unmodifiable(value.map(_freeze));
+    }
+    return value;
+  }
+
   static Map<String, dynamic> compile(String source) {
     if (_cache.containsKey(source)) return _cache[source]!;
-    final program = _Parser(source).parse();
+    final program = _freeze(_Parser(source).parse()) as Map<String, dynamic>;
     if (_cache.length >= 100) _cache.remove(_cache.keys.first);
     return _cache[source] = program;
+  }
+
+  /// Checks whether [source] references `location.inside` or `location.outside`
+  /// outside of `//` comments and string literals.
+  static bool usesLocation(String source) {
+    if (source.isEmpty) return false;
+    final stripped = source.replaceAll(_stripCommentsAndStrings, ' ');
+    return _locationPredicate.hasMatch(stripped);
   }
 
   static String visual({required String kind, required String exit}) =>
@@ -318,12 +353,17 @@ class _Parser {
   _Parser(this.source) {
     if (source.length > 8192) throw const FormatException('Rule exceeds 8 KB.');
     final pattern = RegExp(
-      r'\s+|//[^\n]*|"(?:\\.|[^"\\])*"|==|!=|>=|<=|&&|\|\||[{}\[\](),;!<>]|-?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z_0-9.]*',
+      r'\s+|//[^\n]*|"(?:\\.|[^"\\\r\n])*"|==|!=|>=|<=|&&|\|\||[{}\[\](),;!=<>]|-?\d+(?:\.\d+)?|[A-Za-z_][A-Za-z_0-9.]*',
     );
     int offset = 0;
     while (offset < source.length) {
       final match = pattern.matchAsPrefix(source, offset);
-      if (match == null) fail('Unexpected character', offset);
+      if (match == null) {
+        if (source[offset] == '"') {
+          fail('Unterminated string literal', offset);
+        }
+        fail('Unexpected character', offset);
+      }
       final value = match.group(0)!;
       if (value.trim().isNotEmpty && !value.startsWith('//')) {
         tokens.add(_Token(value, offset));
@@ -364,48 +404,86 @@ class _Parser {
     }
   }
 
+  List<Map<String, dynamic>> _parseIfChain(String target) {
+    final branches = <Map<String, dynamic>>[];
+    branches.add(branch(target));
+    while (take('else')) {
+      if (take('if')) {
+        branches.add(branch(target));
+      } else {
+        branches.add({
+          'condition': {'op': 'literal', 'value': true},
+          'actions': actions(target),
+        });
+        break;
+      }
+    }
+    return branches;
+  }
+
   Map<String, dynamic> parse() {
     final targets = <Map<String, dynamic>>[];
     final schedules = <Map<String, dynamic>>[];
     int blocks = 0;
     while (next != '<end>') {
       need('target');
+      if (next == '=') {
+        fail('Use "==" after target');
+      }
       need('==');
       final target = next;
+      if (target == '<end>' ||
+          target.startsWith('"') ||
+          const {'{', '}', '(', ')', '[', ']', ',', ';'}.contains(target)) {
+        fail('Expected a target name');
+      }
       cursor++;
       if (!RuleCatalog.targets.contains(target)) {
         fail('Unknown target "$target"');
       }
       need('{');
-      if (next == 'schedule') {
-        if (target != 'notifications') {
-          fail('Schedules require the notifications target');
-        }
-        while (take('schedule')) {
-          final value = schedule();
-          if (schedules.any((s) => s['name'] == value['name'])) {
-            fail('Schedule names must be unique within a rule');
+      if (target == 'notifications') {
+        var hasBranches = false;
+        var hasScheduleInBlock = false;
+        while (!take('}')) {
+          if (take('schedule')) {
+            hasScheduleInBlock = true;
+            final value = schedule();
+            if (schedules.any((s) => s['name'] == value['name'])) {
+              fail('Schedule names must be unique within a rule');
+            }
+            schedules.add(value);
+            if (schedules.length > 16) fail('Use at most sixteen schedules');
+          } else if (take('if')) {
+            if (hasBranches) {
+              fail('Use "else if" or start a new target block');
+            }
+            hasBranches = true;
+            targets.add({'target': target, 'branches': _parseIfChain(target)});
+          } else {
+            fail(
+              hasBranches || hasScheduleInBlock
+                  ? 'Expected "}", found "$next"'
+                  : 'Expected "if" or "schedule", found "$next"',
+            );
           }
-          schedules.add(value);
-          if (schedules.length > 16) fail('Use at most sixteen schedules');
         }
-        need('}');
+        if (!hasBranches && !hasScheduleInBlock) {
+          fail('Add an if condition or schedule block');
+        }
         if (++blocks > 16) fail('Use at most sixteen target blocks');
         continue;
       }
+      if (next == 'schedule') {
+        fail('Schedules require the notifications target');
+      }
       need('if');
-      final branches = <Map<String, dynamic>>[];
-      branches.add(branch(target));
-      while (take('else')) {
-        if (take('if')) {
-          branches.add(branch(target));
-        } else {
-          branches.add({
-            'condition': {'op': 'literal', 'value': true},
-            'actions': actions(target),
-          });
-          break;
-        }
+      final branches = _parseIfChain(target);
+      if (next == 'if') {
+        fail('Use "else if" or start a new target block');
+      }
+      if (next == 'schedule') {
+        fail('Schedules require the notifications target');
       }
       need('}');
       targets.add({'target': target, 'branches': branches});
@@ -619,6 +697,9 @@ class _Parser {
 
   Map<String, dynamic> comparison(String field) {
     final operator = next;
+    if (operator == '=') {
+      fail('Use "==" to compare $field');
+    }
     if (!['==', '!=', '>', '<', '>=', '<='].contains(operator)) {
       fail('Add a comparison operator after $field');
     }

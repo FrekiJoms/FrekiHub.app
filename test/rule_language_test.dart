@@ -401,4 +401,83 @@ target == settings_page {
       throwsFormatException,
     );
   });
+
+  test('Snapshot includes session.duration_seconds, immutable AST cache, usesLocation, and mixed notifications blocks', () {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final idleSnap = RuleCatalog.snapshot(AppData([], [], [], {}));
+    expect(idleSnap['session.duration_seconds'], 0);
+    final activeSnap = RuleCatalog.snapshot(
+      AppData(
+        [
+          Session(
+            id: 's1',
+            day: dayKey(DateTime.now()),
+            kind: 'Work',
+            started: now - 125000,
+            ended: null,
+            note: 'Coding',
+          ),
+        ],
+        [],
+        [],
+        {},
+      ),
+    );
+    expect(activeSnap['session.duration_seconds'], greaterThanOrEqualTo(124));
+    expect(RuleCatalog.fieldType('session.active'), 'bool');
+    expect(RuleCatalog.fieldType('budget.expenses'), 'number');
+    expect(RuleCatalog.fieldType('session.kind'), 'string');
+
+    // Compiler cache returns immutable maps/lists.
+    final compiled = RuleCompiler.compile(
+      'target == app { if (true) { app.toast("Immutable"); } }',
+    );
+    expect(() => compiled['version'] = 2, throwsUnsupportedError);
+    expect(() => (compiled['targets'] as List).clear(), throwsUnsupportedError);
+
+    // usesLocation ignores comments and string literals.
+    expect(
+      RuleCompiler.usesLocation(
+        '// location.inside()\ntarget == app { if (true) { log("location.outside()"); } }',
+      ),
+      isFalse,
+    );
+    expect(
+      RuleCompiler.usesLocation(
+        'target == session_page { if (location.inside()) { session.clock_in("Work"); } }',
+      ),
+      isTrue,
+    );
+
+    // Notifications block supports both schedule and conditional if chain.
+    final mixed = RuleCompiler.compile('''
+target == notifications {
+  schedule("morning") {
+    at("08:00");
+    notification.show("Morning", "Start");
+  }
+  if (location.inside()) {
+    notification.show("Arrived", "At workplace");
+  }
+}
+''');
+    expect((mixed['schedules'] as List).length, 1);
+    expect((mixed['targets'] as List).length, 1);
+    expect(mixed['needsNotifications'], isTrue);
+    expect(mixed['needsLocation'], isTrue);
+
+    // Unterminated strings, single '=', and duplicate top-level if inside one block fail cleanly.
+    for (final invalid in [
+      'target = app { if (true) { log("A"); } }',
+      'target == app { if (budget.expenses = 10) { log("A"); } }',
+      'target == app { if (true) { log("unterminated); } }',
+      'target == app { if (true) { log("A"); } if (false) { log("B"); } }',
+    ]) {
+      expect(
+        () => RuleCompiler.compile(invalid),
+        throwsFormatException,
+        reason: invalid,
+      );
+    }
+  });
 }

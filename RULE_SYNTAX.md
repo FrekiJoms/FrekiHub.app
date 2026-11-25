@@ -1,6 +1,6 @@
 # FrekiHub rule language
 
-Open Settings → Syntax builder to enter its full-screen workspace, select a saved rule or enable Structured syntax, name the rule, then edit its source. Activity logs open separately. Use the check icon to validate, the play icon to run, and the square icon to stop. Saving structured source leaves it paused. Running saves and enables it. Stopping pauses automation without ending an existing session. The plus icon starts a new rule; other running rules stay enabled.
+Open Settings → Syntax builder to enter its full-screen workspace, select a saved rule or enable Structured syntax, name the rule, then edit its source (or start from **Templates** and insert typed fields/commands via **Fields & actions**). Activity logs open separately. Saved rules can also be paused or enabled directly from the Saved automations list. Use the check icon (or tap the incomplete-syntax status pill) to validate in the top diagnostic pill and jump the cursor to any offending line/column, the play icon to run, and the square icon to stop. Saving structured source leaves it paused. Running saves and enables it. Stopping pauses automation without ending an existing session. The plus icon starts a new rule; other running rules stay enabled.
 
 The compiler produces a bounded JSON program. Android interprets this program; source is never executed as JavaScript.
 
@@ -22,7 +22,7 @@ Configure this rule's place and radius in the builder. Both the time window and 
 
 ### Scheduled reminders
 
-Schedules run independently of conditional branch changes and work with the app closed. Put them in a `notifications` target block. A rule can also contain separate conditional target blocks.
+Schedules run independently of conditional branch changes and work with the app closed. Put them in a `notifications` target block; the same `notifications` block (or separate target blocks) may also include an `if` / `else if` / `else` conditional chain.
 
 ```javascript
 target == notifications {

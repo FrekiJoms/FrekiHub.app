@@ -74,12 +74,14 @@ object Automation {
         if ((config.optBoolean("locationEnabled") && allowed(c)) || hasPrograms) scheduler.schedule(JobInfo.Builder(91, ComponentName(c, LocationLogJob::class.java)).setPeriodic(15 * 60 * 1000L).setPersisted(true).build()) else scheduler.cancel(91)
         RuleProgram.refresh(c)
     }
+    private fun ruleUsesLocation(rule: JSONObject) = rule.optJSONObject("program")?.optBoolean("needsLocation", true) != false
+
     fun requestLocation(c: Context, done: (Location?) -> Unit) {
         MapLocation.request(c) { location, _ -> done(location) }
     }
     fun locationJson(c: Context, location: Location): JSONObject {
         val rules = config(c).optJSONArray("rules") ?: JSONArray(); var name = "${location.latitude}, ${location.longitude}"
-        for (i in 0 until rules.length()) { val r = rules.getJSONObject(i); val result = FloatArray(1); Location.distanceBetween(location.latitude, location.longitude, r.getDouble("lat"), r.getDouble("lng"), result); if (result[0] <= r.getDouble("radius")) { name = r.getString("name"); break } }
+        for (i in 0 until rules.length()) { val r = rules.getJSONObject(i); if (!r.optBoolean("enabled", true) || !ruleUsesLocation(r)) continue; val result = FloatArray(1); Location.distanceBetween(location.latitude, location.longitude, r.getDouble("lat"), r.getDouble("lng"), result); if (result[0] <= r.getDouble("radius")) { name = r.getString("name"); break } }
         return JSONObject().put("location", name).put("lat", location.latitude).put("lng", location.longitude).put("accuracy", location.accuracy).put("locationTime", location.time)
     }
     @Synchronized fun updateStay(c: Context, location: Location, minimumDwellMs: Long = 0L): Pair<Boolean, Long> {
@@ -127,7 +129,7 @@ object Automation {
         val dist = FloatArray(1)
         for (i in 0 until rules.length()) {
             val r = rules.getJSONObject(i)
-            if (!r.optBoolean("enabled", true)) continue
+            if (!r.optBoolean("enabled", true) || !ruleUsesLocation(r)) continue
             Location.distanceBetween(location.latitude, location.longitude, r.getDouble("lat"), r.getDouble("lng"), dist)
             if (dist[0] <= r.getDouble("radius")) return true
         }
@@ -171,7 +173,9 @@ object Automation {
     fun recheck(c: Context, location: Location) {
         val rules = config(c).optJSONArray("rules") ?: return
         for (i in 0 until rules.length()) {
-            val rule = rules.getJSONObject(i); val distance = FloatArray(1)
+            val rule = rules.getJSONObject(i)
+            if (!ruleUsesLocation(rule)) continue
+            val distance = FloatArray(1)
             Location.distanceBetween(location.latitude, location.longitude, rule.getDouble("lat"), rule.getDouble("lng"), distance)
             val radius = rule.getDouble("radius")
             if (location.accuracy > radius || System.currentTimeMillis() - location.time > 120000) continue
